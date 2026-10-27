@@ -1,0 +1,17 @@
+%% Lifecycle of an entry in procedural memory (skill, playbook, convention)
+
+stateDiagram-v2
+    [*] --> Candidate: lesson from a run, with evidence and provenance
+    Candidate --> Trial: validated by replay or user approval
+    Candidate --> Discarded: contradicted or no evidence
+    Trial --> Active: succeeds over N uses, no regressions
+    Trial --> Candidate: failed, needs revision
+    Active --> Revised: repeated failures or user correction
+    Revised --> Trial: patched version, old one kept
+    Active --> Deprecated: superseded or unused for long
+    Deprecated --> Active: rollback
+    Deprecated --> [*]: pruned from the index
+    Discarded --> [*]
+
+    note right of Trial: indexed in the manifest, flagged as unproven
+    note right of Active: indexed in the manifest, body loaded on demand

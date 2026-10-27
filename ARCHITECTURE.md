@@ -1,0 +1,110 @@
+# Sophon runtime architecture
+
+Sophon has one assistant runtime. Chat, coding, desktop actions, research and
+visual explanations share its conversation, run manager, model client and tool
+execution path. Capabilities depend on settings and permissions, not task modes.
+This document is the architectural reference; the linked feature documents
+describe components of this runtime.
+
+```mermaid
+flowchart TD
+  UI[React chat or shortcut] --> IPC[Validated preload and IPC]
+  IPC --> SESSION[Conversation session]
+  SESSION --> RUN[One active cancellable run]
+  RUN --> CONTEXT[Instructions, history, memory, tool schemas and checkpoints]
+  CONTEXT --> CLIENT[Shared model client]
+  CLIENT <--> PROVIDER[Local server or hosted provider]
+  CLIENT --> LOOP[Assistant chat loop]
+  LOOP --> GATE[Validate, authorize, bind target, approve and revalidate]
+  GATE --> TOOLS[Files, commands, desktop, web and MCP]
+  TOOLS --> EVIDENCE[Workflow evidence and coding checks]
+  EVIDENCE --> CONTEXT
+  LOOP --> SESSION
+  SESSION --> UI
+```
+
+## Ownership
+
+| Component                                                     | Responsibility                                                                        |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `src/main/chat/session.ts`                                    | Conversation events, streaming updates, persistence and run lifetime                  |
+| `src/main/security/run-manager.ts`                            | One active run, cancellation, policy revocation, shared model-call and action budgets |
+| `src/main/llm/chat.ts`                                        | Context assembly, inference/tool iteration, optional consultations and completion     |
+| `src/main/llm/client.ts` and `providers.ts`                   | Shared inference transport, provider formats, streaming and usage                     |
+| `src/main/llm/context.ts`, `compaction.ts` and `retention.ts` | Context budgeting, summaries and checkpoint-based retention                           |
+| `src/main/llm/tool-discovery.ts`                              | Load relevant schemas from the policy-filtered capability catalog                     |
+| `src/main/llm/run-tool.ts`                                    | Shared assistant action gate and approval lifecycle                                   |
+| `src/main/tools/index.ts`                                     | Dispatch tools after authorization and argument validation                            |
+| `src/main/workflow`                                           | Evidence, coding checkpoints, project verification and bounded repairs                |
+| `src/main/llm/specialists.ts`                                 | Optional sequential consultations using the same model, client and run budget         |
+| `src/main/memory` and `harness`                               | Personal recall and separately managed procedural guidance                            |
+
+## Request lifecycle
+
+1. A validated IPC request enters the conversation session and starts one run.
+2. The coordinator assembles instructions, current evidence, relevant recall,
+   history and permitted tool schemas within the context budget.
+3. The shared client calls the selected provider. Provider adapters change wire
+   formats, not workflow or authorization.
+4. Structured tool batches are validated before actions execute. Each ordinary
+   tool passes through `runTool`: policy, budget, concrete target binding,
+   approval when required, and target revalidation immediately before dispatch.
+5. Results return as untrusted evidence. The workflow tracks observed, reported,
+   verified, failed, denied and uncertain outcomes. The coordinator continues or
+   responds according to the evidence and remaining budget.
+6. The session persists the outcome and releases the run. Stop and policy changes
+   cancel the same run, including specialist calls and verification work.
+
+Discovery, questions, design suggestions, coding checkpoints and resource sizing
+are coordinator operations handled by the chat loop. They do not provide an
+alternative route to execute file, command, desktop or connected-service actions.
+
+## Coding within the same loop
+
+Coding adds change tracking, project checks and resumable checkpoints to the
+coordinator. It does not start another agent engine. Simple edits require no
+saved plan, specialist review or procedural learning. When a plan is saved, its
+task statuses and revision must be current before completion. Project edits
+invalidate earlier check results; only host-observed checks establish verified
+status. Existing code is patched with `edit_file`.
+
+The coordinator assesses its own results. It can request an optional Reviewer
+consultation through `consult_specialist`, just like other consultations. There
+is no separate mandatory edge/final/repair reviewer pipeline or reserved review
+slot. Specialist findings are suggestions from the same model, not independent
+verification.
+
+## Authorization and external effects
+
+Tool permissions, coding edit policy, workspace restrictions, web enablement and
+GitHub account/repository scope remain enforced by the host. A schema being loaded
+does not grant permission. Commands, npm, deletion and MCP operations retain their
+one-use approvals. Guidance, memories, summaries and tool output cannot authorize
+actions or alter policy.
+
+Direct user actions in settings and the GitHub workspace have explicit IPC
+handlers and their own authorization checks. They are user interface operations,
+not another model runtime. Assistant-issued operations always use its tool gate.
+
+## Persistence and compatibility
+
+The persisted `mode: 'assistant'` field is a fixed contract marker. No mode-switch
+API is exposed. Older saved conversation and workflow modes are normalized at the
+storage boundary; the run manager rejects unsupported modes. There are no runtime
+offline/desktop/research branches. Research remains a task category, with web
+access controlled by settings and tool permissions.
+
+Old coding checkpoints remain readable. Restoring a coding session copies only
+the current fields, dropping obsolete forced-review state and invalidating old
+verification. Markdown checkpoint files are diagnostic mirrors; encrypted
+workflow state is authoritative. Memory and procedural guidance affect context,
+never model weights.
+
+## Validation
+
+`npm run build`, `npm run lint` and `npm test` cover compilation and offline
+regressions. Security fixtures reject old runtime modes and retain policy,
+approval, cancellation and batch-validation coverage. Coding and workflow
+fixtures cover optional planning, verification invalidation, checkpoint
+restoration and migration of legacy stored modes. Live provider quality and real
+desktop behavior require the corresponding opt-in smoke checks.

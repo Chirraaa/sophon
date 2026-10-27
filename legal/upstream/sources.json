@@ -1,0 +1,42 @@
+[
+  {
+    "file": "whisper-cpp.txt",
+    "url": "https://raw.githubusercontent.com/ggml-org/whisper.cpp/d1be6fde11ac6e0407606b4e42fe72d34add8037/LICENSE",
+    "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+  },
+  {
+    "file": "whisper-model.txt",
+    "url": "https://raw.githubusercontent.com/openai/whisper/main/LICENSE",
+    "sha256": "b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d"
+  },
+  {
+    "file": "remark-math.txt",
+    "url": "https://raw.githubusercontent.com/remarkjs/remark-math/main/license",
+    "sha256": "b4c9077a6fe03b40387623026f4de8c05ad819f1f86e7e0ad3230976bbf3fd90"
+  },
+  {
+    "file": "cpp-httplib.txt",
+    "url": "https://raw.githubusercontent.com/yhirose/cpp-httplib/v0.20.0/LICENSE",
+    "sha256": "4b45cbe16d7b71b89ae6127e26e0d90a029198ca5e958ad8e3d0b8bbed364d8b"
+  },
+  {
+    "file": "nlohmann-json.txt",
+    "url": "https://raw.githubusercontent.com/nlohmann/json/v3.11.2/LICENSE.MIT",
+    "sha256": "86b998c792894ccb911a1cb7994f7a9652894e7a094c0b5e45be2f553f45cf14"
+  },
+  {
+    "file": "miniaudio.h.license.txt",
+    "url": "https://github.com/ggml-org/whisper.cpp/blob/d1be6fde11ac6e0407606b4e42fe72d34add8037/examples/miniaudio.h",
+    "sha256": "0ae82b2be3f766999fd71fd97fcfd67970c789059eb0cee14c2efaee7967635c"
+  },
+  {
+    "file": "stb_vorbis.c.license.txt",
+    "url": "https://github.com/ggml-org/whisper.cpp/blob/d1be6fde11ac6e0407606b4e42fe72d34add8037/examples/stb_vorbis.c",
+    "sha256": "69d306ebf450dca7d714cb9a4555dfe4db36da73756ba980a6281fa5e285d453"
+  },
+  {
+    "file": "nlohmann-additional.txt",
+    "url": "https://github.com/ggml-org/whisper.cpp/blob/d1be6fde11ac6e0407606b4e42fe72d34add8037/examples/json.hpp",
+    "sha256": "984c37a890199cd84cc66aa88848583f109c7d81946280c0b267ee3bcca36ede"
+  }
+]

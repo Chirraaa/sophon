@@ -1,0 +1,16 @@
+out
+dist
+node_modules
+.cache
+.local
+scripts/local
+*.local.*
+.vscode
+.idea
+.codex
+.agents
+.aws
+resources/whisper
+LICENSE
+tsconfig.json
+tsconfig.*.json

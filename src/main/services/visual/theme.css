@@ -1,0 +1,310 @@
+:root {
+  color-scheme: dark;
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff20 transparent;
+  font:
+    13px/1.55 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  color: #e4e4e7;
+  background: #151516;
+  --text: #e4e4e7;
+  --muted: #96969f;
+  --border: #ffffff14;
+  --surface: #1c1c1f;
+  --blue: #7aacf5;
+  --purple: #b39aeb;
+  --green: #76c6ac;
+  --orange: #e9af78;
+  --radius: 16px;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 24px;
+  overflow-wrap: break-word;
+}
+svg,
+canvas {
+  max-width: 100%;
+}
+svg text {
+  font-family: inherit;
+}
+svg text:not([fill]) {
+  fill: var(--muted);
+}
+h1,
+h2,
+h3,
+h4 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 550;
+  letter-spacing: -0.025em;
+  line-height: 1.4;
+}
+p {
+  margin: 0 0 20px;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 9px 14px;
+  border-radius: 10px;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+button:hover {
+  background: #27272b;
+  border-color: #ffffff30;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 4px;
+}
+input:not([type='range']):not([type='checkbox']):not([type='radio']),
+select {
+  max-width: 100%;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+input[type='range'] {
+  display: block;
+  width: 100%;
+  margin: 14px 0 4px;
+  height: 5px;
+  accent-color: var(--purple);
+  cursor: pointer;
+}
+output {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+a {
+  color: var(--blue);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+th,
+td {
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.sophon-muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+.sophon-stack {
+  display: grid;
+  gap: 24px;
+}
+.sophon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 16px;
+}
+.sophon-card {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.sophon-metric {
+  display: grid;
+  gap: 4px;
+}
+.sophon-stack > *,
+.sophon-grid > * {
+  min-width: 0;
+}
+.sophon-heading p,
+.sophon-stack > p {
+  margin-bottom: 0;
+}
+.sophon-select {
+  display: grid;
+  gap: 8px;
+}
+.sophon-select label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.sophon-select select {
+  width: 100%;
+  border-radius: 12px;
+}
+.sophon-segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.sophon-segments button {
+  flex: 1;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.sophon-segments button[aria-pressed='true'] {
+  color: var(--text);
+  background: #ffffff0e;
+  border-color: #ffffff18;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.sophon-metric > :first-child {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.sophon-metric > :last-child {
+  font-size: clamp(20px, 4vw, 28px);
+  font-weight: 550;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+.sophon-explorer {
+  gap: 20px;
+}
+.sophon-controls {
+  gap: 16px;
+}
+.sophon-controls input[type='range'] {
+  margin-top: 10px;
+}
+.sophon-control {
+  display: block;
+}
+.sophon-control > label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sophon-chart {
+  width: 100%;
+  min-width: 0;
+}
+.sophon-chart svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+  touch-action: pan-y;
+}
+.sophon-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 11px;
+  margin: 0 0 12px;
+}
+.sophon-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.sophon-legend i {
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+}
+.sophon-chart-detail {
+  min-height: 25px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.sophon-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.sophon-flow button {
+  flex: 1;
+  min-width: 0;
+  padding: 18px 10px;
+  text-align: left;
+  border-color: color-mix(in srgb, var(--node-color) 28%, transparent);
+  background: color-mix(in srgb, var(--node-color) 8%, #151516);
+}
+.sophon-flow button:hover,
+.sophon-flow button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--node-color) 18%, #151516);
+  border-color: var(--node-color);
+}
+.sophon-flow strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--node-color);
+}
+.sophon-flow small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 5px;
+}
+.sophon-flow-arrow {
+  align-self: center;
+  color: #62626c;
+}
+@media (max-width: 460px) {
+  body {
+    padding: 18px;
+  }
+  .sophon-flow {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sophon-flow button {
+    text-align: center;
+    padding: 12px;
+  }
+  .sophon-flow-arrow {
+    transform: rotate(90deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

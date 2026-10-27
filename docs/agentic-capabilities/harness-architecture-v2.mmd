@@ -1,0 +1,20 @@
+%% Implemented single assistant runtime; see ../../ARCHITECTURE.md.
+flowchart TD
+  USER[User request] --> SESSION[Conversation session]
+  SESSION --> RUN[One cancellable run and shared budgets]
+  RUN --> CTX[Assemble instructions, history, memory and permitted schemas]
+  CTX --> MODEL[Shared model client and selected provider]
+  MODEL --> RESPONSE{Structured response}
+  RESPONSE -->|ordinary tool calls| GATE[Validate, authorize, bind, approve, revalidate]
+  GATE --> TOOLS[Files, commands, desktop, web, MCP]
+  TOOLS --> EVIDENCE[Workflow evidence and project checks]
+  EVIDENCE --> CTX
+  RESPONSE -->|optional consultation| SPECIALIST[Sequential specialist on same model and budget]
+  SPECIALIST -->|research web calls| GATE
+  SPECIALIST -->|bounded findings| CTX
+  RESPONSE -->|optional checkpoint| CHECKPOINT[Coding session state]
+  CHECKPOINT --> CTX
+  RESPONSE -->|answer| VERIFY[Assess completion against evidence]
+  VERIFY -->|repair within budget| CTX
+  VERIFY -->|final progress and limits| SAVE[Persist result and finish run]
+  SAVE --> UI[Chat or shortcut]

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "source": "ggml-org/whisper.cpp@d1be6fde11ac6e0407606b4e42fe72d34add8037",
+  "files": {
+    "whisper-server.exe": "2be0be4f8134829bc19ad36f11309a75b48d9f81410e2f40601f373e738d2037",
+    "whisper.dll": "64337b8e4ebb1fac4541caff313790a81426e9a3f584e235a885af146b6cf597",
+    "ggml.dll": "fc2260de4cd39b07bbf1aae0b9ec9bafbe20e9ab5485a57eb2fe985fb3b925c1",
+    "ggml-base.dll": "be3bdef0e43523538dc2ef7172a786d802a9cbac6f75459dcad7169ad0fb4323",
+    "ggml-cpu.dll": "3f15c093d52753b3982137cf09e366cfe3ed2a823c57652c25e45d5e429dcb1f",
+    "ggml-base.bin": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe"
+  }
+}

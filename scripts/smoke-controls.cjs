@@ -1,0 +1,324 @@
+const assert = require('node:assert/strict')
+const crypto = require('node:crypto')
+const path = require('node:path')
+const { load } = require('./security/load.cjs')
+let run = {
+  id: 'controls-run',
+  mode: 'assistant',
+  endpoint: 'http://127.0.0.1:1234/v1',
+  workspace: '',
+  signal: new AbortController().signal,
+  tools: 0
+}
+const runs = {
+  currentRun: () => run,
+  assertRun: (r) => {
+    assert.equal(r, run)
+    r.signal.throwIfAborted()
+  },
+  consumeToolBudget: () => {
+    run.tools++
+  }
+}
+let foreground = 0
+let pidOffset = 100
+let protectedTarget = false
+let blocked = false
+let rect = { left: 0, top: 0, right: 500, bottom: 400 }
+const native = {
+  enumTopLevelWindows: () => [1, 2],
+  foregroundWindow: () => foreground,
+  getProcess: (hwnd) => ({ pid: pidOffset + hwnd, exe: 'fixture.exe' }),
+  getTitle: () => 'Same title',
+  getVisibleRect: () => rect,
+  isCloaked: () => false,
+  isMaximized: () => false,
+  isMinimized: () => false,
+  isToolWindow: () => false,
+  isVisible: () => true,
+  requestClose: () => true
+}
+const permissions = {
+  protectedWindowRule: () => (protectedTarget ? 'protected' : null),
+  blockedAppRule: () => (blocked ? 'blocked' : null),
+  toolPermission: () => 'ask'
+}
+const windows = load('src/main/tools/windows.ts', {
+  crypto,
+  '../security/run-manager': runs,
+  '../permissions': permissions,
+  './monitors': { monitorsText: () => 'Monitor 1', monitorOf: () => ({ index: 1 }) },
+  './window-move': { POSITIONS: ['left_half'] },
+  './win32': native
+})
+const schema = load('src/main/tools/schemas.ts', {
+  '../harness/schemas': load('src/main/harness/schemas.ts'),
+  './windows': windows
+})
+const contracts = load('src/main/security/tool-contracts.ts', { '../tools/schemas': schema })
+const envelope = load('src/main/llm/untrusted-data.ts', { crypto })
+const sample = {
+  runtime: [42, 1, 9],
+  name: 'Draft field',
+  automationId: 'draft',
+  role: 'Edit',
+  enabled: true,
+  value: 'Original',
+  valueHash: 'hash',
+  valueTruncated: false,
+  selected: '',
+  toggle: '',
+  expanded: '',
+  vertical: -1,
+  bounds: [10, 10, 200, 25],
+  actions: ['set_value']
+}
+let observed = [sample]
+let result = { status: 'verified' }
+const workerCalls = []
+const controls = load('src/main/tools/automation/controls.ts', {
+  crypto,
+  '../../security/run-manager': runs,
+  '../win32': native,
+  '../../llm/untrusted-data': envelope,
+  './worker': {
+    automationWorker: async (request) => {
+      workerCalls.push(request)
+      return request.operation === 'inspect'
+        ? { status: 'observed', controls: observed, truncated: false }
+        : result
+    }
+  }
+})
+const local = load('src/main/security/local-action.ts', {
+  '../network/search-provider': {},
+  '../tools/openApp': {},
+  '../tools/windows': windows,
+  '../tools/win32': native,
+  '../permissions': permissions,
+  '../tools/automation/controls': controls,
+  '../tools/files': {},
+  '../tools/screen': {},
+  'fs/promises': {},
+  path,
+  './run-manager': runs,
+  './workspace-policy': {}
+})
+const registry = load('src/main/tools/registry.ts')
+const settings = {
+  tools: registry.defaultToolPermissions(),
+  model: { endpoint: run.endpoint },
+  files: { workspace: '' },
+  research: { enabled: false }
+}
+const policy = load('src/main/security/policy.ts', {
+  '../settings': { getSettings: () => settings, settingsRecovery: () => ({ required: false }) },
+  '../tools/registry': registry,
+  './run-manager': runs
+})
+const tools = load('src/main/tools/index.ts', {
+  '../settings': { getSettings: () => settings },
+  '../harness/store': {},
+  '../harness/python': {},
+  './wait': load('src/main/tools/wait.ts', {
+    'node:timers/promises': require('node:timers/promises'),
+    'node:perf_hooks': require('node:perf_hooks'),
+    '../security/run-manager': { assertRun: (run) => run.signal.throwIfAborted() }
+  }),
+  './schemas': schema,
+  './files': {
+    editWorkspaceFile: async () => {
+      throw Object.assign(new Error('No unique match; no write.'), { code: 'PATCH_NOT_APPLIED' })
+    }
+  },
+  './npm': {},
+  './command': {},
+  '../permissions': permissions,
+  '../security/policy': policy,
+  '../security/run-manager': runs,
+  '../security/tool-contracts': contracts,
+  '../network/search-provider': {},
+  '../network/public-page': {},
+  './openApp': {},
+  './app-catalog': {},
+  './windows': windows,
+  './screen': {},
+  './interact': {},
+  './automation/controls': controls
+})
+let decision = 'once'
+let approvalHook = () => {}
+const runner = load('src/main/llm/run-tool.ts', {
+  '../harness/store': {},
+  '../settings': {},
+  '../services/screen-glow': { hideScreenGlow: () => {} },
+  '../tools': tools,
+  '../permissions': {
+    toolPermission: () => settings.tools.act_on_control,
+    requestApproval: async () => {
+      approvalHook()
+      return decision
+    }
+  },
+  '../security/policy': policy,
+  '../security/run-manager': runs,
+  '../security/tool-contracts': contracts,
+  '../security/audit': { securityEvent: () => {} },
+  '../security/local-action': local
+}).runTool
+const events = []
+const execute = (name, args) => runner(name, args, crypto.randomUUID(), (e) => events.push(e))
+const unwrap = (text) => JSON.parse(JSON.parse(text).content)
+async function main() {
+  await assert.rejects(
+    tools.executeTool('edit_file', { path: 'fixture.ts', old_text: 'old', new_text: 'new' }, run),
+    (error) => error.code === 'PATCH_NOT_APPLIED'
+  )
+  settings.memory = { enabled: false }
+  assert(!tools.activeToolSchemas().some((s) => s.function.name === 'harness_manage'))
+  settings.memory.enabled = true
+  assert(tools.activeToolSchemas().some((s) => s.function.name === 'harness_manage'))
+  settings.memory.enabled = false
+  assert.equal(windows.activeWindow(), null, 'Never choose an arbitrary app')
+  assert.equal(windows.findWindow('Same title'), null)
+  const listing = windows.listWindowsText()
+  const refs = listing.match(/win-[\da-f-]{36}/g)
+  assert.equal(refs.length, 2)
+  assert.equal(windows.findWindow(refs[1]).hwnd, 2)
+  foreground = 1
+  windows.rememberExternalWindow()
+  foreground = 0
+  assert.equal(windows.activeWindow().hwnd, 1)
+  pidOffset = 200
+  assert.equal(windows.activeWindow(), null)
+  assert.equal(windows.findWindow(refs[0]), null)
+  pidOffset = 100
+  const view = unwrap(await execute('inspect_app', { window: refs[1] }))
+  assert.equal(workerCalls[0].hwnd, 2, 'Exact duplicate-title window reaches the worker')
+  assert.equal(view.controls[0].control, 'c1')
+  assert.match(view.observation, /^obs-[a-f0-9]{12}$/)
+  assert.deepEqual(view.windowSize, { width: 500, height: 400 })
+  assert.deepEqual(view.controls[0].bounds, { x: 10, y: 10, width: 200, height: 25 })
+  const args = {
+    observation: view.observation,
+    control: 'c1',
+    action: 'set_value',
+    text: 'New text'
+  }
+  assert.equal(controls.controlTarget(args, run).window.hwnd, 2)
+  assert.throws(
+    () => contracts.validateToolArguments('act_on_control', { ...args, action: 'invoke' }),
+    /Text/
+  )
+  assert.throws(
+    () => contracts.validateToolArguments('act_on_control', { ...args, text: '\u001b' }),
+    /control characters/
+  )
+  contracts.validateToolArguments('act_on_control', { ...args, text: '' })
+  const callsBeforeDenial = workerCalls.length
+  assert.equal(windows.findWindow(refs[1] + ' "Same title"').hwnd, 2)
+  assert.equal(windows.findWindow(refs[1] + ' "Same title" ' + refs[0]), null)
+  assert.match(await execute('inspect_app', { window: 'Same title' }), /^Target not found:/)
+  assert.equal(
+    workerCalls.length,
+    callsBeforeDenial,
+    'Ambiguous targets never reach native automation'
+  )
+  decision = 'deny'
+  assert.match(await execute('act_on_control', args), /^Denied/)
+  assert.equal(workerCalls.length, callsBeforeDenial)
+  decision = 'once'
+
+  assert.match(await execute('act_on_control', args), /^Verified control action/)
+  assert.equal(workerCalls.at(-1).text, 'New text')
+  assert(
+    events.some(
+      (e) =>
+        e.type === 'tool_preview' &&
+        e.preview.includes('Draft field') &&
+        e.preview.includes('New text')
+    )
+  )
+  assert.match(await execute('act_on_control', args), /^Denied: Control reference/)
+  let next = unwrap(await execute('inspect_app', { window: refs[1] }))
+  const nextArgs = { ...args, observation: next.observation }
+  approvalHook = () => {
+    rect = { ...rect, right: 600 }
+  }
+  const beforeChange = workerCalls.length
+  assert.match(await execute('act_on_control', nextArgs), /^Denied: The target window changed/)
+  assert.equal(workerCalls.length, beforeChange)
+  approvalHook = () => {}
+  rect = { ...rect, right: 500 }
+  protectedTarget = true
+  assert.match(await execute('inspect_app', { window: refs[1] }), /^Denied/)
+  protectedTarget = false
+  blocked = true
+  assert.match(await execute('inspect_app', { window: refs[1] }), /^Denied/)
+  blocked = false
+  const now = Date.now
+  try {
+    Date.now = () => now() + 121000
+    assert.throws(() => controls.controlTarget(nextArgs, run), /expired/)
+  } finally {
+    Date.now = now
+  }
+  observed = Array.from({ length: 50 }, (_, i) => ({
+    ...sample,
+    name: 'x'.repeat(240),
+    value: 'y'.repeat(240),
+    runtime: [42, i]
+  }))
+  next = unwrap(await execute('inspect_app', { window: refs[1] }))
+  assert(next.truncated)
+  assert(JSON.stringify(next).length < 12000)
+  observed = [sample]
+  next = unwrap(await execute('inspect_app', { window: refs[1] }))
+  result = { status: 'uncertain', message: 'Changed after the action' }
+  assert.match(
+    await execute('act_on_control', { ...args, observation: next.observation }),
+    /^Unverified/
+  )
+  assert.throws(
+    () => controls.controlTarget({ ...args, observation: next.observation }, run),
+    /expired/
+  )
+  run = { ...run, id: 'next-run' }
+  assert.equal(windows.findWindow(refs[1]), null)
+  let editorTitle = 'Blank editor'
+  native.getTitle = (hwnd) => (hwnd === 1 ? editorTitle : 'Other app')
+  const blank = windows.findWindow('Blank editor')
+  editorTitle = '*Draft - Editor'
+  windows.rememberEditedWindow(blank, native.getProcess(blank.hwnd).pid)
+  assert.equal(windows.findWindow('Blank editor').hwnd, blank.hwnd)
+  editorTitle = 'Externally switched document'
+  assert.equal(
+    windows.findWindow('Blank editor'),
+    null,
+    'Unrelated title changes cannot retarget an old document'
+  )
+  const switched = windows.findWindow(editorTitle)
+  editorTitle = 'Replacement process'
+  windows.rememberEditedWindow(switched, native.getProcess(switched.hwnd).pid + 1)
+  assert.equal(
+    windows.findWindow(switched.title),
+    null,
+    'Process identity must match before recording a title change'
+  )
+  run = { ...run, id: 'after-title-edit' }
+  editorTitle = '*Draft - Editor'
+  assert.equal(
+    windows.findWindow('Blank editor'),
+    null,
+    'Edited title aliases expire with their request'
+  )
+  run = { ...run, mode: 'assistant' }
+  assert(tools.activeToolSchemas().some((s) => s.function.name === 'inspect_app'))
+  console.log(
+    'PASS exact duplicate-title targeting, active-app identity, approval/binding/dispatch path, field previews, denied/stale actions, reference expiry/replay/scope, blocked apps, compact output; no model or app interaction'
+  )
+}
+main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})

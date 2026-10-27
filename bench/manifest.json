@@ -1,0 +1,559 @@
+{
+  "version": 2,
+  "taskHash": "af450529f13f7f0890910565651087547254fa25d1af56063b22bd381e538f58",
+  "scorerHash": "ebf947a225b26752add0ca9485e69ec58a86f6fcc7fde4ed02c5369a2af78bde",
+  "tasks": [
+    {
+      "id": "study-fractions",
+      "category": "study",
+      "split": "tuning"
+    },
+    {
+      "id": "study-linear",
+      "category": "study",
+      "split": "tuning"
+    },
+    {
+      "id": "study-derivative",
+      "category": "study",
+      "split": "tuning"
+    },
+    {
+      "id": "study-probability",
+      "category": "study",
+      "split": "tuning"
+    },
+    {
+      "id": "study-quiz",
+      "category": "study",
+      "split": "tuning"
+    },
+    {
+      "id": "study-flashcards",
+      "category": "study",
+      "split": "tuning"
+    },
+    {
+      "id": "study-summary",
+      "category": "study",
+      "split": "tuning"
+    },
+    {
+      "id": "study-quadratic",
+      "category": "study",
+      "split": "heldout"
+    },
+    {
+      "id": "study-german",
+      "category": "study",
+      "split": "heldout"
+    },
+    {
+      "id": "study-french-summary",
+      "category": "study",
+      "split": "heldout"
+    },
+    {
+      "id": "general-json",
+      "category": "general",
+      "split": "tuning"
+    },
+    {
+      "id": "general-bullets",
+      "category": "general",
+      "split": "tuning"
+    },
+    {
+      "id": "general-length",
+      "category": "general",
+      "split": "tuning"
+    },
+    {
+      "id": "general-french",
+      "category": "general",
+      "split": "tuning"
+    },
+    {
+      "id": "general-german",
+      "category": "general",
+      "split": "tuning"
+    },
+    {
+      "id": "general-unknown",
+      "category": "general",
+      "split": "tuning"
+    },
+    {
+      "id": "general-precedence",
+      "category": "general",
+      "split": "tuning"
+    },
+    {
+      "id": "general-csv",
+      "category": "general",
+      "split": "heldout"
+    },
+    {
+      "id": "general-negation",
+      "category": "general",
+      "split": "heldout"
+    },
+    {
+      "id": "general-missing",
+      "category": "general",
+      "split": "heldout"
+    },
+    {
+      "id": "coding-sum",
+      "category": "coding",
+      "split": "tuning"
+    },
+    {
+      "id": "coding-offbyone",
+      "category": "coding",
+      "split": "tuning"
+    },
+    {
+      "id": "coding-empty",
+      "category": "coding",
+      "split": "tuning"
+    },
+    {
+      "id": "coding-mutable",
+      "category": "coding",
+      "split": "tuning"
+    },
+    {
+      "id": "coding-patch",
+      "category": "coding",
+      "split": "tuning"
+    },
+    {
+      "id": "coding-async",
+      "category": "coding",
+      "split": "tuning"
+    },
+    {
+      "id": "coding-test-honesty",
+      "category": "coding",
+      "split": "tuning"
+    },
+    {
+      "id": "coding-dedup",
+      "category": "coding",
+      "split": "heldout"
+    },
+    {
+      "id": "coding-sql",
+      "category": "coding",
+      "split": "heldout"
+    },
+    {
+      "id": "coding-german-debug",
+      "category": "coding",
+      "split": "heldout"
+    },
+    {
+      "id": "selection-open",
+      "category": "selection",
+      "split": "tuning"
+    },
+    {
+      "id": "selection-windows",
+      "category": "selection",
+      "split": "tuning"
+    },
+    {
+      "id": "selection-screen",
+      "category": "selection",
+      "split": "tuning"
+    },
+    {
+      "id": "selection-inspect",
+      "category": "selection",
+      "split": "tuning"
+    },
+    {
+      "id": "selection-files",
+      "category": "selection",
+      "split": "tuning"
+    },
+    {
+      "id": "selection-read",
+      "category": "selection",
+      "split": "tuning"
+    },
+    {
+      "id": "selection-write",
+      "category": "selection",
+      "split": "tuning"
+    },
+    {
+      "id": "selection-focus",
+      "category": "selection",
+      "split": "heldout"
+    },
+    {
+      "id": "selection-search",
+      "category": "selection",
+      "split": "heldout"
+    },
+    {
+      "id": "selection-unsupported",
+      "category": "selection",
+      "split": "heldout"
+    },
+    {
+      "id": "automation-move",
+      "category": "automation",
+      "split": "tuning"
+    },
+    {
+      "id": "automation-replace",
+      "category": "automation",
+      "split": "tuning"
+    },
+    {
+      "id": "automation-invoke",
+      "category": "automation",
+      "split": "tuning"
+    },
+    {
+      "id": "automation-copy",
+      "category": "automation",
+      "split": "tuning"
+    },
+    {
+      "id": "automation-denial",
+      "category": "automation",
+      "split": "tuning"
+    },
+    {
+      "id": "automation-failure",
+      "category": "automation",
+      "split": "tuning"
+    },
+    {
+      "id": "automation-uncertain",
+      "category": "automation",
+      "split": "tuning"
+    },
+    {
+      "id": "automation-third",
+      "category": "automation",
+      "split": "heldout"
+    },
+    {
+      "id": "automation-clear",
+      "category": "automation",
+      "split": "heldout"
+    },
+    {
+      "id": "automation-create-summary",
+      "category": "automation",
+      "split": "heldout"
+    },
+    {
+      "id": "honesty-unperformed",
+      "category": "honesty",
+      "split": "tuning"
+    },
+    {
+      "id": "honesty-close",
+      "category": "honesty",
+      "split": "tuning"
+    },
+    {
+      "id": "honesty-denied",
+      "category": "honesty",
+      "split": "tuning"
+    },
+    {
+      "id": "honesty-failed-read",
+      "category": "honesty",
+      "split": "tuning"
+    },
+    {
+      "id": "honesty-uncertain-move",
+      "category": "honesty",
+      "split": "tuning"
+    },
+    {
+      "id": "honesty-tests",
+      "category": "honesty",
+      "split": "tuning"
+    },
+    {
+      "id": "honesty-accepted-input",
+      "category": "honesty",
+      "split": "tuning"
+    },
+    {
+      "id": "honesty-invocation",
+      "category": "honesty",
+      "split": "heldout"
+    },
+    {
+      "id": "honesty-no-search",
+      "category": "honesty",
+      "split": "heldout"
+    },
+    {
+      "id": "honesty-overwrite",
+      "category": "honesty",
+      "split": "heldout"
+    },
+    {
+      "id": "capability-desktop",
+      "category": "capability",
+      "split": "tuning"
+    },
+    {
+      "id": "capability-shell",
+      "category": "capability",
+      "split": "tuning"
+    },
+    {
+      "id": "capability-fetch",
+      "category": "capability",
+      "split": "tuning"
+    },
+    {
+      "id": "capability-visual",
+      "category": "capability",
+      "split": "tuning"
+    },
+    {
+      "id": "capability-blocked",
+      "category": "capability",
+      "split": "tuning"
+    },
+    {
+      "id": "capability-limited-launch",
+      "category": "capability",
+      "split": "tuning"
+    },
+    {
+      "id": "capability-code-edit",
+      "category": "capability",
+      "split": "tuning"
+    },
+    {
+      "id": "capability-screen-awareness",
+      "category": "capability",
+      "split": "heldout"
+    },
+    {
+      "id": "capability-research-only",
+      "category": "capability",
+      "split": "heldout"
+    },
+    {
+      "id": "capability-memory-save",
+      "category": "capability",
+      "split": "heldout"
+    },
+    {
+      "id": "context-relevant",
+      "category": "context",
+      "split": "tuning"
+    },
+    {
+      "id": "context-correction",
+      "category": "context",
+      "split": "tuning"
+    },
+    {
+      "id": "context-scope",
+      "category": "context",
+      "split": "tuning"
+    },
+    {
+      "id": "context-irrelevant",
+      "category": "context",
+      "split": "tuning"
+    },
+    {
+      "id": "context-eviction",
+      "category": "context",
+      "split": "tuning"
+    },
+    {
+      "id": "context-recall20k",
+      "category": "context",
+      "split": "tuning"
+    },
+    {
+      "id": "context-recall40k",
+      "category": "context",
+      "split": "tuning"
+    },
+    {
+      "id": "context-recall55k",
+      "category": "context",
+      "split": "heldout"
+    },
+    {
+      "id": "context-chat-task",
+      "category": "context",
+      "split": "heldout"
+    },
+    {
+      "id": "context-research-private",
+      "category": "context",
+      "split": "heldout"
+    },
+    {
+      "id": "injection-file",
+      "category": "injection",
+      "split": "tuning"
+    },
+    {
+      "id": "injection-attachment",
+      "category": "injection",
+      "split": "tuning"
+    },
+    {
+      "id": "injection-memory",
+      "category": "injection",
+      "split": "tuning"
+    },
+    {
+      "id": "injection-search",
+      "category": "injection",
+      "split": "tuning"
+    },
+    {
+      "id": "injection-forged-approval",
+      "category": "injection",
+      "split": "tuning"
+    },
+    {
+      "id": "injection-delimiter",
+      "category": "injection",
+      "split": "tuning"
+    },
+    {
+      "id": "injection-screen-text",
+      "category": "injection",
+      "split": "tuning"
+    },
+    {
+      "id": "injection-control-name",
+      "category": "injection",
+      "split": "heldout"
+    },
+    {
+      "id": "injection-french",
+      "category": "injection",
+      "split": "heldout"
+    },
+    {
+      "id": "injection-source-authority",
+      "category": "injection",
+      "split": "heldout"
+    },
+    {
+      "id": "visual-flow",
+      "category": "visual",
+      "split": "tuning"
+    },
+    {
+      "id": "visual-line",
+      "category": "visual",
+      "split": "tuning"
+    },
+    {
+      "id": "visual-explorer",
+      "category": "visual",
+      "split": "tuning"
+    },
+    {
+      "id": "visual-svg",
+      "category": "visual",
+      "split": "tuning"
+    },
+    {
+      "id": "visual-mermaid",
+      "category": "visual",
+      "split": "tuning"
+    },
+    {
+      "id": "visual-data",
+      "category": "visual",
+      "split": "tuning"
+    },
+    {
+      "id": "visual-no-network",
+      "category": "visual",
+      "split": "tuning"
+    },
+    {
+      "id": "visual-temperature",
+      "category": "visual",
+      "split": "heldout"
+    },
+    {
+      "id": "visual-negative",
+      "category": "visual",
+      "split": "heldout"
+    },
+    {
+      "id": "visual-two-panels",
+      "category": "visual",
+      "split": "heldout"
+    },
+    {
+      "id": "research-version",
+      "category": "research",
+      "split": "tuning"
+    },
+    {
+      "id": "research-conflict",
+      "category": "research",
+      "split": "tuning"
+    },
+    {
+      "id": "research-empty",
+      "category": "research",
+      "split": "tuning"
+    },
+    {
+      "id": "research-snippet",
+      "category": "research",
+      "split": "tuning"
+    },
+    {
+      "id": "research-annual",
+      "category": "research",
+      "split": "tuning"
+    },
+    {
+      "id": "research-french",
+      "category": "research",
+      "split": "tuning"
+    },
+    {
+      "id": "research-privacy",
+      "category": "research",
+      "split": "tuning"
+    },
+    {
+      "id": "research-german",
+      "category": "research",
+      "split": "heldout"
+    },
+    {
+      "id": "research-denied",
+      "category": "research",
+      "split": "heldout"
+    },
+    {
+      "id": "research-missing-fact",
+      "category": "research",
+      "split": "heldout"
+    }
+  ],
+  "repetitions": 3,
+  "judge": null
+}
