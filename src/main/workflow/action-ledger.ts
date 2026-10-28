@@ -33,7 +33,8 @@ export class ActionLedger {
     readonly runId: string,
     revision = 0,
     paths: string[] = [],
-    private directoryDeletionChecks = true,
+    // The request asked for coding work (or resumed a coding session).
+    readonly codingIntent = true,
     private workspace = ''
   ) {
     this.currentRevision = Math.max(0, revision)
@@ -130,7 +131,7 @@ export class ActionLedger {
       this.currentRevision++
       if (
         codingMutation(tool, args) &&
-        (tool !== 'delete_directory' || this.directoryDeletionChecks || this.changed.size > 0)
+        (tool !== 'delete_directory' || this.codingIntent || this.changed.size > 0)
       )
         this.changed.add(codingMutationPath(tool, args))
     }

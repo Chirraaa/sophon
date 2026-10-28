@@ -1,12 +1,14 @@
 import type { ToolOutcome } from './tool-outcome'
 
-type Retry = 'session' | 'gate' | 'arguments' | 'completion' | 'protocol'
+type Retry = 'session' | 'gate' | 'arguments' | 'completion' | 'protocol' | 'stall' | 'evidence'
 const RETRY_LIMITS: Record<Retry, number> = {
   session: 3,
   gate: 3,
   arguments: 3,
   completion: 1,
-  protocol: 1
+  protocol: 1,
+  stall: 1,
+  evidence: 1
 }
 type Progress = 'checkpoint' | 'inspection' | 'mutation' | 'file-read' | 'arguments'
 

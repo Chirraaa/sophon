@@ -28,6 +28,10 @@ const parent = (value: string): string =>
   value.includes('/') ? value.slice(0, value.lastIndexOf('/')) : '.'
 const file = (folder: string): string =>
   folder === '.' ? 'package.json' : `${folder}/package.json`
+// Non-npm build systems. Their presence makes a check command mandatory even
+// when the request did not read as coding work.
+const BUILD_SYSTEM =
+  /(?:^|[\s\]/\\])(?:CMakeLists\.txt|[Mm]akefile|meson\.build|pom\.xml|build\.gradle(?:\.kts)?|settings\.gradle(?:\.kts)?|Cargo\.toml|go\.mod|pyproject\.toml|setup\.py|tox\.ini|composer\.json|Gemfile|mix\.exs|deno\.jsonc?|[^\s/\\]+\.(?:sln|csproj|fsproj|vcxproj))\s*$/m
 
 export class CodingVerification {
   constructor(readonly ledger = new ActionLedger('standalone')) {}
@@ -47,6 +51,7 @@ export class CodingVerification {
   private missingCommand?: string
   private htmlChecks = new Map<string, string | undefined>()
   private htmlRepair?: string
+  private buildSystem = false
   get active(): boolean {
     return this.ledger.paths().length > 0
   }
@@ -124,8 +129,10 @@ export class CodingVerification {
         })
       }
     }
-    if (successful && tool === 'list_files')
+    if (successful && tool === 'list_files') {
       this.listings.set(path, text.split(/\r?\n/).includes('[file] package.json'))
+      if (BUILD_SYSTEM.test(text)) this.buildSystem = true
+    }
     if (successful && tool === 'read_file' && /(?:^|\/)package\.json$/i.test(path)) {
       try {
         const envelope = JSON.parse(text)
@@ -217,6 +224,9 @@ export class CodingVerification {
               this.htmlRepair = `${changed}: ${issue}`
               return { blocked: this.htmlRepair }
             }
+            // Plain documents in a folder without a build system (copying
+            // notes, writing a CSV) have nothing to check.
+            if (!this.ledger.codingIntent && !this.buildSystem) break
             this.missingCommand = changed
             return {
               blocked: `No build/test command has been recorded for ${changed}. Inspect the project's build instructions and run its relevant checks with run_command purpose check.`

@@ -14,6 +14,13 @@ existing files; ordinary tool policy and workspace validation still apply.
 `coding_checkpoint` maintains application state; it cannot execute project tools,
 grant permissions or mark checks passed.
 
+Verification follows every mutation regardless of file extension. Changes under a
+`package.json` run its discovered scripts. Elsewhere, a check command is required
+when the request reads as coding work or the workspace listing shows a build system
+(CMake, Make, Maven, Gradle, Cargo, Go, Python project files, .NET solutions and
+similar). Plain documents written outside any build system without coding intent
+need no check, and the reply then carries no "Project checks" footer.
+
 | Design stage | Runtime behavior                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Awareness    | Each call receives a capability manifest with actual tools, specialist profiles, procedural catalog and limits. Project inspection uses approved file tools.                                                                                                                                                                                                                                          |
