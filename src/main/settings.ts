@@ -258,9 +258,14 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
         )
         return [
           t.name,
-          ['run_npm', 'run_command', 'delete_file', 'delete_directory', 'notes_delete'].includes(
-            t.name
-          ) && permission === 'allow'
+          [
+            'run_npm',
+            'run_command',
+            'delete_file',
+            'delete_directory',
+            'notes_delete',
+            'calendar_delete'
+          ].includes(t.name) && permission === 'allow'
             ? 'ask'
             : permission
         ]

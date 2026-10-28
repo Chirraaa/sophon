@@ -1,7 +1,7 @@
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { PatchPreview } from './PatchPreview'
-import { NotePreview } from './DesktopCards'
+import { EventPreview, NotePreview } from './DesktopCards'
 import { patchEdits } from '@/lib/coding'
 function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -35,6 +35,23 @@ export function ActionPreview({ preview }: { preview?: string }): React.JSX.Elem
       </div>
     )
   const text = (value: unknown): string => (typeof value === 'string' ? value : '')
+  const event = record(data?.event)
+  if (event)
+    return (
+      <div className="space-y-2">
+        <EventPreview event={event} />
+        <Collapsible>
+          <CollapsibleTrigger className="cursor-pointer text-[10px] opacity-65">
+            Exact action details
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <pre className="selectable mt-2 whitespace-pre-wrap break-all text-[11px]">
+              {preview}
+            </pre>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+    )
   const note = record(data?.note)
   if (note)
     return (

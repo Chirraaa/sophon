@@ -406,6 +406,21 @@ async function main() {
     'other accounts are unaffected'
   )
 
+  // Tools pick an account explicitly: an exact email, the active account, or the only usable one
+  assert.throws(() => auth.microsoftAccountFor(), /Several Microsoft accounts/)
+  assert.throws(
+    () => auth.microsoftAccountFor(' TWO@example.test'),
+    /More than one connected account uses/,
+    'the same address in two tenants is never guessed'
+  )
+  assert.throws(() => auth.microsoftAccountFor('one@example.test'), /signed out/)
+  assert.throws(
+    () => auth.microsoftAccountFor('nobody@example.test'),
+    /No connected Microsoft account matches/
+  )
+  auth.selectMicrosoftAccount(secondId)
+  assert.deepEqual(auth.microsoftAccountFor(), { id: secondId, email: 'two@example.test' })
+
   // Application ID is locked while accounts exist
   assert.throws(
     () => auth.setMicrosoftClientId('22222222-2222-4222-8222-222222222222'),

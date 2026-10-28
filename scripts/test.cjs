@@ -7,6 +7,7 @@ const suites = [
   'apps',
   'awareness',
   'browser',
+  'calendar',
   'capabilities',
   'chatgpt',
   'coding',

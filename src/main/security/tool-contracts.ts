@@ -159,6 +159,25 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
     if (object.target !== undefined && !String(object.target).trim())
       throw new Error('Audio target cannot be empty.')
   }
+  if (['calendar_update', 'calendar_delete'].includes(name)) {
+    if (!/^[A-Za-z0-9_=+/-]{1,512}$/.test(String(object.id)))
+      throw new Error('Use the exact event id from calendar_list.')
+    if (!/^[!-~]{1,200}$/.test(String(object.revision)))
+      throw new Error('Use the exact event revision from calendar_list.')
+  }
+  if (
+    name === 'calendar_update' &&
+    !['title', 'start', 'end', 'all_day', 'location', 'notes'].some((key) =>
+      Object.hasOwn(object, key)
+    )
+  )
+    throw new Error('Supply at least one field to change.')
+  if (
+    name === 'calendar_list' &&
+    object.limit !== undefined &&
+    (!Number.isInteger(object.limit) || Number(object.limit) < 1 || Number(object.limit) > 100)
+  )
+    throw new Error('limit must be an integer from 1 to 100.')
   if (name === 'harness_manage' && object.action !== 'list') {
     if (typeof object.category !== 'string' || typeof object.name !== 'string')
       throw new Error(

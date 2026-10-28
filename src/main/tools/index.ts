@@ -119,6 +119,11 @@ export async function executeTool(
       )
     }
   }
+  if (name.startsWith('calendar_')) {
+    const { executeCalendarTool } = await import('./calendar')
+    assertRun(run)
+    return await executeCalendarTool(name, scope.calendar, run)
+  }
   if (name.startsWith('notes_')) {
     const { executeNotesTool } = await import('./notes')
     assertRun(run)

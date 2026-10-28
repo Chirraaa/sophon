@@ -3,6 +3,7 @@ import { harnessSchemas } from '../harness/schemas'
 import { pluginSchemas } from '../plugins/schemas'
 import { browserSchemas } from './browser/schemas'
 import { notesSchemas } from './notes-schemas'
+import { calendarSchemas } from './calendar-schemas'
 import { CODE_TEXT_MAX_CHARS } from '../../shared/coding-resources'
 export { CODE_TEXT_MAX_CHARS, TOOL_ARGUMENT_MAX_CHARS } from '../../shared/coding-resources'
 export const toolSchemas = [
@@ -109,6 +110,7 @@ export const toolSchemas = [
     }
   },
   ...notesSchemas,
+  ...calendarSchemas,
   ...harnessSchemas,
   {
     type: 'function',
