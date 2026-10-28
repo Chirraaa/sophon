@@ -78,7 +78,7 @@ export function GeneralTab({ settings }: { settings: AppSettings }): React.JSX.E
                     className={cn(
                       'size-6 p-0 rounded-full outline-none transition-[transform,box-shadow] hover:scale-110 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-card',
                       settings.accent === a.id
-                        ? 'ring-2 ring-white/80 ring-offset-2 ring-offset-transparent'
+                        ? 'ring-2 ring-foreground/80 ring-offset-2 ring-offset-transparent'
                         : ''
                     )}
                     style={{ background: a.color }}
@@ -125,7 +125,7 @@ export function GeneralTab({ settings }: { settings: AppSettings }): React.JSX.E
                     className={cn(
                       'size-6 p-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring',
                       settings.screenGlow.color === color &&
-                        'ring-2 ring-white/80 ring-offset-2 ring-offset-card'
+                        'ring-2 ring-foreground/80 ring-offset-2 ring-offset-card'
                     )}
                     style={{ background: color }}
                   />

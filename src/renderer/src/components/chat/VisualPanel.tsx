@@ -33,7 +33,7 @@ export function VisualPanel({
       className="overflow-hidden rounded-2xl border border-border bg-card text-left"
       data-visual-panel
     >
-      <div className="flex items-center justify-between gap-2 border-b border-white/6 px-3 py-2">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
           {title}
         </span>
@@ -84,7 +84,7 @@ export function VisualPanel({
       {error && (
         <div
           role="alert"
-          className="space-y-2 border-b border-white/6 px-4 py-3 text-xs text-muted-foreground"
+          className="space-y-2 border-b border-border px-4 py-3 text-xs text-muted-foreground"
         >
           <p>This visual needs a correction.</p>
           <p className="break-words font-mono text-[11px]">{error}</p>
@@ -122,7 +122,7 @@ export function VisualPanel({
     <Dialog open={expanded} onOpenChange={setExpanded}>
       <figure ref={figure} className="my-4 w-full min-w-0">
         {expanded && (
-          <div className="rounded-xl border border-white/8 p-6 text-xs text-muted-foreground">
+          <div className="rounded-xl border border-border p-6 text-xs text-muted-foreground">
             Visual open in expanded view.
           </div>
         )}

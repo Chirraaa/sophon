@@ -251,7 +251,7 @@ export function ConversationList({ onSelect }: { onSelect: () => void }): React.
                       onDrop={(event) => drop(event, category.id, chat.id)}
                       className={cn(
                         'group relative flex min-w-0 items-center rounded-lg',
-                        chat.id === chatId && 'bg-white/4',
+                        chat.id === chatId && 'bg-muted/40',
                         dragged === chat.id && 'opacity-40',
                         dropTarget === chat.id && 'border-t-2 border-tint'
                       )}

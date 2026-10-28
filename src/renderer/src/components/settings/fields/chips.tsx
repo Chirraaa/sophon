@@ -27,7 +27,7 @@ export function ChipList({
           {items.map((item) => (
             <span
               key={item}
-              className="flex items-center gap-2 rounded-lg border border-white/7 bg-white/4 py-1 pr-1 pl-2.5 text-[11px]"
+              className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 py-1 pr-1 pl-2.5 text-[11px]"
             >
               {item}
               <Button
