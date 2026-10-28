@@ -2,6 +2,7 @@ import { POSITIONS } from './windows'
 import { harnessSchemas } from '../harness/schemas'
 import { pluginSchemas } from '../plugins/schemas'
 import { browserSchemas } from './browser/schemas'
+import { notesSchemas } from './notes-schemas'
 import { CODE_TEXT_MAX_CHARS } from '../../shared/coding-resources'
 export { CODE_TEXT_MAX_CHARS, TOOL_ARGUMENT_MAX_CHARS } from '../../shared/coding-resources'
 export const toolSchemas = [
@@ -107,6 +108,7 @@ export const toolSchemas = [
       }
     }
   },
+  ...notesSchemas,
   ...harnessSchemas,
   {
     type: 'function',

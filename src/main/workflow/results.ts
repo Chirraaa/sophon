@@ -4,6 +4,9 @@ export const MUTATIONS = new Set([
   'mcp_call',
   'set_volume',
   'set_radio',
+  'notes_create',
+  'notes_edit',
+  'notes_delete',
   'act_on_control',
   'open_app',
   'move_window',
@@ -71,6 +74,20 @@ export function assessResult(
         summary: confirmed
           ? 'Read back the requested Windows device setting after the change.'
           : 'Windows did not confirm the requested device setting. Inspect before retrying.'
+      }
+    } catch {
+      return { status: 'uncertain', summary: text.slice(0, 240) }
+    }
+  }
+  if (tool === 'notes_create' || tool === 'notes_edit' || tool === 'notes_delete') {
+    try {
+      const change = JSON.parse(text)
+      const confirmed = change.kind === 'note-change' && change.verified === true
+      return {
+        status: confirmed ? 'verified' : 'uncertain',
+        summary: confirmed
+          ? 'Read the note store back after the change.'
+          : 'The note store did not confirm the change. Read the note again before retrying.'
       }
     } catch {
       return { status: 'uncertain', summary: text.slice(0, 240) }

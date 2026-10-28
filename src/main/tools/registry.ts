@@ -90,6 +90,36 @@ export const TOOL_INFO: ToolInfo[] = [
     default: 'ask'
   },
   {
+    name: 'notes_list',
+    label: 'List notes',
+    description: "Search and list titles and previews of Sophon's own notes.",
+    default: 'ask'
+  },
+  {
+    name: 'notes_read',
+    label: 'Read notes',
+    description: 'Read the full text of one Sophon note.',
+    default: 'ask'
+  },
+  {
+    name: 'notes_create',
+    label: 'Create notes',
+    description: 'Save a new note in Sophon. The text is shown before it is saved.',
+    default: 'ask'
+  },
+  {
+    name: 'notes_edit',
+    label: 'Edit notes',
+    description: 'Change a note after reading it. You see the before and after.',
+    default: 'ask'
+  },
+  {
+    name: 'notes_delete',
+    label: 'Delete notes',
+    description: 'Permanently delete one note. Always asks for approval.',
+    default: 'ask'
+  },
+  {
     name: 'edit_file',
     label: 'Edit project files',
     description:

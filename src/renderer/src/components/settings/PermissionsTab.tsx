@@ -20,7 +20,8 @@ const ONE_USE = [
   'delete_file',
   'delete_directory',
   'mcp_call',
-  'mcp_read'
+  'mcp_read',
+  'notes_delete'
 ]
 const GROUPS = [
   {
@@ -84,6 +85,11 @@ const GROUPS = [
     title: 'Plugins & connections',
     description: 'Discover skills and use connected MCP services.',
     names: ['plugins_list', 'plugin_read', 'mcp_catalog', 'mcp_call', 'mcp_read']
+  },
+  {
+    title: 'Notes',
+    description: "Read and change Sophon's own notes, stored encrypted on this computer.",
+    names: ['notes_list', 'notes_read', 'notes_create', 'notes_edit', 'notes_delete']
   },
   {
     title: 'Audio & wireless',
