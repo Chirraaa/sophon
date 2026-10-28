@@ -23,6 +23,7 @@ const suites = [
   'github-history-cache',
   'github-restore',
   'harness',
+  'harness-store',
   'icons',
   'licenses',
   'long-task-memory',
