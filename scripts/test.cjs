@@ -17,6 +17,7 @@ const suites = [
   'compaction',
   'controls',
   'conversation',
+  'desktop-cards',
   'exa',
   'github',
   'github-api',
