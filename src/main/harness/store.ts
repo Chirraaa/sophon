@@ -17,6 +17,9 @@ type Category = (typeof CATEGORIES)[number]
 const root = (): string => join(app.getPath('userData'), 'harness')
 const digest = (text: string): string => createHash('sha256').update(text).digest('hex')
 const probes = new Map<string, string>()
+const MAX_RUN_OUTCOMES = 64
+type RunOutcome = { runId: string; version: number; success: boolean }
+
 type LifecycleState = 'candidate' | 'trial' | 'active' | 'revised' | 'deprecated' | 'discarded'
 interface Lifecycle {
   format?: 1
@@ -31,6 +34,7 @@ interface Lifecycle {
   archivedState?: LifecycleState
   evidence: string[]
   runs: string[]
+  outcomes?: RunOutcome[]
 }
 function lifecyclePath(category: string, name: string): string {
   location(category, name)
@@ -62,6 +66,21 @@ export function harnessLifecycle(category: string, name: string): Lifecycle {
     !Array.isArray(value.runs) ||
     value.runs.length > 12 ||
     !value.runs.every((s) => typeof s === 'string' && /^[a-zA-Z0-9-]{1,80}$/.test(s)) ||
+    (value.outcomes !== undefined &&
+      (!Array.isArray(value.outcomes) ||
+        value.outcomes.length > MAX_RUN_OUTCOMES ||
+        !value.outcomes.every(
+          (outcome) =>
+            outcome &&
+            typeof outcome.runId === 'string' &&
+            /^[a-zA-Z0-9-]{1,80}$/.test(outcome.runId) &&
+            outcome.version === value.version &&
+            typeof outcome.success === 'boolean'
+        ) ||
+        new Set(value.outcomes.map((outcome) => outcome.runId)).size !== value.outcomes.length ||
+        value.uses !== value.outcomes.length ||
+        value.successes !== value.outcomes.filter((outcome) => outcome.success).length ||
+        value.failures !== value.outcomes.filter((outcome) => !outcome.success).length)) ||
     (value.candidate !== undefined && !/^[a-f0-9]{64}$/.test(value.candidate)) ||
     (value.archivedState !== undefined &&
       !['candidate', 'trial', 'active', 'revised', 'deprecated', 'discarded'].includes(
@@ -79,6 +98,19 @@ export function harnessLifecycle(category: string, name: string): Lifecycle {
   )
     throw new Error('Inconsistent procedural manifest.')
   if (value.content) versionContent(category, name, value)
+  if (value.outcomes === undefined) {
+    // Old counters cannot prove that a counted success had no later failure.
+    if (value.uses > 0) {
+      if (['active', 'trial'].includes(value.state))
+        value.state = value.failures > 0 ? 'candidate' : 'trial'
+      if (value.archivedState === 'active') value.archivedState = 'trial'
+      value.successes = value.failures = value.uses = 0
+      value.runs = []
+      value.evidence = []
+    }
+    value.outcomes = []
+    saveLifecycle(category, name, value)
+  }
   return value
 }
 function versionPath(category: string, name: string, value: Lifecycle): string {
@@ -134,6 +166,9 @@ function migrateLifecycle(category: string, name: string, value: Lifecycle): Lif
     throw new Error('Missing legacy procedural content; recovery refused.')
   }
   value.format = 1
+  value.outcomes = []
+  value.successes = value.failures = value.uses = 0
+  value.runs = []
   saveLifecycle(category, name, value)
   return value
 }
@@ -149,28 +184,62 @@ export function recordHarnessUse(
   name: string,
   runId: string,
   success: boolean,
-  evidence: string
+  evidence: string,
+  version?: number
 ): void {
   if (!/^[a-zA-Z0-9-]{1,80}$/.test(runId)) throw new Error('Invalid procedural evidence ID.')
   const entry = harnessLifecycle(category, name)
-  if (!['trial', 'active', 'revised'].includes(entry.state) || entry.runs.includes(runId)) return
-  entry.uses++
-  entry.runs = [...entry.runs, runId].slice(-12)
+  if (version !== undefined && version !== entry.version) return
+  const outcomes = entry.outcomes ?? []
+  const previous = outcomes.find((outcome) => outcome.runId === runId)
+  if (previous && (!previous.success || success)) return
+  if (!previous) {
+    if (!['trial', 'active', 'revised'].includes(entry.state)) return
+    // Bound the manifest without evicting IDs: eviction would let a repeated run count twice.
+    // Fail closed at capacity instead of silently dropping failures or counting IDs twice.
+    if (outcomes.length >= MAX_RUN_OUTCOMES) {
+      entry.state = 'revised'
+      entry.evidence = [
+        ...entry.evidence,
+        'Run tracking limit reached. Compose a fresh trial version before further use.'
+      ].slice(-12)
+      saveLifecycle(category, name, entry)
+      return
+    }
+    outcomes.push({ runId, version: entry.version, success })
+    entry.uses++
+    if (success) entry.successes++
+    else entry.failures++
+  } else {
+    previous.success = false
+    entry.successes--
+    entry.failures++
+  }
+  entry.outcomes = outcomes
+  entry.runs = [...entry.runs.filter((id) => id !== runId), runId].slice(-12)
   entry.evidence = [
-    ...entry.evidence,
+    ...entry.evidence.filter(
+      (item) => !item.startsWith(`pass ${runId}:`) && !item.startsWith(`fail ${runId}:`)
+    ),
     `${success ? 'pass' : 'fail'} ${runId}: ${evidence.slice(0, 380)}`
   ].slice(-12)
+  // Apply corrections even after quarantine or archival; an in-flight call can finish later.
+  let state = entry.state === 'deprecated' ? entry.archivedState : entry.state
   if (success) {
-    entry.successes++
-    if (entry.state === 'trial' && entry.successes >= 3 && entry.failures === 0)
-      entry.state = 'active'
+    if (state === 'trial' && entry.successes >= 3 && entry.failures === 0) state = 'active'
   } else {
-    entry.failures++
-    if (entry.state === 'trial') entry.state = 'candidate'
-    else if (entry.failures >= 2) entry.state = 'revised'
+    if (
+      state === 'trial' ||
+      (state === 'active' && previous && entry.version > 0 && entry.successes < 3)
+    )
+      state = 'candidate'
+    else if (state === 'active' && entry.failures >= 2) state = 'revised'
   }
+  if (entry.state === 'deprecated') entry.archivedState = state
+  else if (state) entry.state = state
   saveLifecycle(category, name, entry)
 }
+
 export function readHarnessProposal(category: string, name: string): string {
   return readFileSync(location(category, name, true), 'utf8')
 }
@@ -312,7 +381,7 @@ export function scriptExpression(text: string): string {
 export function harnessContext(
   query: string,
   phase: string,
-  onRecall?: (names: string[]) => void
+  onRecall?: (names: string[], versions: Record<string, number>) => void
 ): string {
   initializeHarness()
   const docs: string[] = []
@@ -355,7 +424,10 @@ export function harnessContext(
       .filter((doc) => doc.score > 0 && ['trial', 'active'].includes(doc.lifecycle.state))
       .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
     const selected = ranked.slice(0, 2)
-    onRecall?.(selected.map((doc) => doc.name))
+    onRecall?.(
+      selected.map((doc) => doc.name),
+      Object.fromEntries(selected.map((doc) => [doc.name, doc.lifecycle.version]))
+    )
     docs.push(
       ...selected.map(
         (doc) =>
@@ -499,6 +571,7 @@ export async function manageHarness(
   entry.uses = 0
   entry.evidence = []
   entry.runs = []
+  entry.outcomes = []
   entry.candidate = undefined
   storeVersion(category, name, entry, content)
   saveLifecycle(category, name, entry)
