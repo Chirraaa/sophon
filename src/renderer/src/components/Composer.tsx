@@ -78,7 +78,10 @@ export function Composer({
     }
   }
   useEffect(() => {
-    void window.api.settingsRecovery().then(setRecovery)
+    void window.api
+      .settingsRecovery()
+      .then(setRecovery)
+      .catch(() => setRecovery(null))
   }, [])
   const recording = voice.phase === 'starting' || voice.phase === 'listening'
   const voiceBusy = recording || voice.phase === 'transcribing'
