@@ -119,9 +119,10 @@ async function renderer() {
   fs.writeFileSync(
     entry,
     `import { renderToStaticMarkup } from 'react-dom/server'
-import { DesktopResults, NotePreview } from '@/components/chat/DesktopCards'
+import { DesktopResults, EventPreview, NotePreview } from '@/components/chat/DesktopCards'
 export const results = (actions: ToolAction[]): string => renderToStaticMarkup(<DesktopResults actions={actions} />)
 export const preview = (note: Record<string, unknown>): string => renderToStaticMarkup(<NotePreview note={note} />)
+export const eventPreview = (event: Record<string, unknown>): string => renderToStaticMarkup(<EventPreview event={event} />)
 `
   )
   await build({
@@ -201,6 +202,134 @@ export const preview = (note: Record<string, unknown>): string => renderToStatic
   assert.match(
     render.preview({ operation: 'delete', title: 'Gone', body: 'b' }),
     /Permanently delete/
+  )
+
+  // Calendar results show their account, the local day, and what a change will do
+  const late = new Date(2026, 9, 29, 23, 30)
+  const lateEvent = event({
+    id: 'late',
+    title: 'Late call',
+    start: late.toISOString(),
+    end: new Date(2026, 9, 30, 0, 15).toISOString()
+  })
+  const agenda = parseDesktopCard(
+    json({
+      kind: 'events',
+      total: 9,
+      truncated: true,
+      account: 'me@example.test',
+      events: [lateEvent]
+    })
+  )
+  assert.equal(agenda.account, 'me@example.test')
+  assert.equal(agenda.truncated, true)
+  assert.equal(
+    parseDesktopCard(
+      json({
+        kind: 'event-change',
+        operation: 'edit',
+        verified: true,
+        account: 'a@b.test',
+        event: lateEvent
+      })
+    ).account,
+    'a@b.test'
+  )
+  const calendarHtml = render.results([
+    action(
+      'c1',
+      json({
+        kind: 'events',
+        total: 1,
+        truncated: true,
+        account: 'me@example.test',
+        events: [lateEvent]
+      })
+    ),
+    action(
+      'c2',
+      json({
+        kind: 'event-change',
+        operation: 'create',
+        verified: true,
+        account: 'me@example.test',
+        event: lateEvent
+      })
+    ),
+    action(
+      'c3',
+      json({
+        kind: 'event-change',
+        operation: 'delete',
+        verified: false,
+        account: 'me@example.test',
+        id: 'x'
+      })
+    )
+  ])
+  assert.match(calendarHtml, /me@example\.test/)
+  assert.match(calendarHtml, /more events exist than were read/)
+  assert.match(calendarHtml, /Late call/)
+  assert(
+    calendarHtml.includes(cards.formatDay('2026-10-29')),
+    'a late-evening event is filed under its local day, not its UTC day'
+  )
+  assert.match(calendarHtml, /Created/)
+  assert.match(calendarHtml, /Not confirmed/)
+  const shown = (over = {}) => ({
+    id: 'e',
+    title: 'Sync',
+    start: '2026-11-09T09:00:00.000Z',
+    end: '2026-11-09T10:00:00.000Z',
+    allDay: false,
+    ...over
+  })
+  const update = render.eventPreview({
+    operation: 'update',
+    account: 'me@example.test',
+    before: shown(),
+    after: shown({ title: 'Sync <script>x</script>', location: 'HQ' }),
+    notify: '3 attendees will be sent an update.',
+    warning: 'This is one occurrence of a repeating event; only this occurrence is changed.'
+  })
+  assert.match(update, /Before/)
+  assert.match(update, /After/)
+  assert.match(update, /HQ/)
+  assert.match(update, /3 attendees will be sent an update/)
+  assert.match(update, /Account: me@example\.test/)
+  assert(!update.includes('<script>'), 'event text is escaped in approvals')
+  const invite = render.eventPreview({
+    operation: 'create',
+    account: 'me@example.test',
+    after: shown({ id: 'new' }),
+    notes: 'Agenda',
+    notify: ['alex@example.test', 'sam@example.test'],
+    warning: 'Invitations will be emailed to these people.'
+  })
+  assert.match(invite, /New event/)
+  assert.match(invite, /Invitations will be emailed to these people\./)
+  assert.match(invite, /alex@example\.test, sam@example\.test/)
+  assert.match(invite, /Agenda/)
+  const removal = render.eventPreview({
+    operation: 'delete',
+    account: 'me@example.test',
+    before: shown()
+  })
+  assert.match(removal, /Delete this event/)
+  assert.doesNotMatch(removal, /After/)
+  assert.match(
+    render.eventPreview({
+      operation: 'read',
+      account: 'me@example.test',
+      start: '2026-10-29',
+      end: '2026-10-30'
+    }),
+    /Read events/
+  )
+  assert.equal(
+    render.eventPreview({ operation: 'update', before: { id: 'bad' } }).includes('Before'),
+    false,
+    'malformed events are not drawn'
   )
   fs.rmSync(out, { recursive: true, force: true })
   console.log('desktop cards smoke passed')

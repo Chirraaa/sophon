@@ -90,6 +90,33 @@ export const TOOL_INFO: ToolInfo[] = [
     default: 'ask'
   },
   {
+    name: 'calendar_list',
+    label: 'Read calendar',
+    description:
+      'Read events from a connected Outlook / Microsoft 365 calendar. Event text can come from other people.',
+    default: 'ask'
+  },
+  {
+    name: 'calendar_create',
+    label: 'Add calendar events',
+    description:
+      'Add an event. You see it before it is saved. Events with attendees send invitations and always ask.',
+    default: 'ask'
+  },
+  {
+    name: 'calendar_update',
+    label: 'Change calendar events',
+    description:
+      'Change an event after reading it. You see the before and after. Events with attendees send updates and always ask.',
+    default: 'ask'
+  },
+  {
+    name: 'calendar_delete',
+    label: 'Delete calendar events',
+    description: 'Delete one event. Always asks for approval.',
+    default: 'ask'
+  },
+  {
     name: 'notes_list',
     label: 'List notes',
     description: "Search and list titles and previews of Sophon's own notes.",

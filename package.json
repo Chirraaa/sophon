@@ -23,6 +23,7 @@
     "setup:voice": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-whisper.ps1",
     "smoke:voice": "node scripts/smoke-voice.cjs",
     "smoke:memory": "node scripts/smoke-memory.cjs",
+    "smoke:calendar": "node scripts/smoke-calendar.cjs",
     "smoke:notes": "node scripts/smoke-notes.cjs",
     "smoke:desktop-cards": "node scripts/smoke-desktop-cards.cjs",
     "smoke:microsoft": "node scripts/smoke-microsoft.cjs",

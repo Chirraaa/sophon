@@ -309,6 +309,38 @@ export async function signInMicrosoft(accountId?: string): Promise<MicrosoftStat
   }
 }
 
+/**
+ * The account a tool should use. An email must match a connected account exactly; otherwise the
+ * active account is used, or the only signed-in one. Never guesses between several.
+ */
+export function microsoftAccountFor(selector?: string): { id: string; email: string } {
+  const store = readStore()
+  const usable = store.accounts.filter((a) => a.refreshToken)
+  const wanted = selector?.trim().toLowerCase()
+  const matches = wanted ? store.accounts.filter((a) => a.email.toLowerCase() === wanted) : []
+  if (matches.length > 1)
+    throw new Error(
+      `More than one connected account uses ${selector}. Choose it as the active account in Settings > Plugins.`
+    )
+  const account = wanted
+    ? matches[0]
+    : (store.accounts.find((a) => a.id === store.activeId && a.refreshToken) ??
+      (usable.length === 1 ? usable[0] : undefined))
+  if (!account) {
+    const known = store.accounts.map((a) => a.email).filter(Boolean)
+    throw new Error(
+      wanted
+        ? `No connected Microsoft account matches ${selector}. Connected: ${known.join(', ') || 'none'}.`
+        : usable.length > 1
+          ? `Several Microsoft accounts are connected (${usable.map((a) => a.email).join(', ')}). Ask which one to use, or choose an active account in Settings > Plugins.`
+          : 'No Microsoft account is connected. Connect one in Settings > Plugins.'
+    )
+  }
+  if (!account.refreshToken)
+    throw new Error(`${account.email} is signed out. Reconnect it in Settings > Plugins.`)
+  return { id: account.id, email: account.email }
+}
+
 /** A valid access token for an account (default: the active one), renewed when it is close to expiry. */
 export async function microsoftAccessToken(
   accountId?: string,
