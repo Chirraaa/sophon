@@ -272,7 +272,7 @@ async function review() {
     'PASS bounded recall, untrusted envelopes, whole-turn eviction, preserved tool pairs, output/schema budgets, small windows and oversized request rejection'
   )
 
-  let mode = 'assistant'
+  const mode = 'assistant'
   let enabled = true
   let memoryReads = 0
   const requests = []
@@ -289,6 +289,7 @@ async function review() {
     '../settings': {
       getSettings: () => ({
         model: { ...model, contextWindow: 16384 },
+        research: { enabled: true },
         memory: { enabled, maxTokens: 600 }
       })
     },
@@ -329,9 +330,24 @@ async function review() {
   await chat('Sophon tests', (event) => reports.push(event), [], [], chatId)
   assert(JSON.stringify(requests.at(-1)).includes(project.id))
   assert(reports.some((e) => e.type === 'context' && e.report.memories.length))
+  const researchHistory = [
+    [
+      { role: 'user', content: 'PRIVATE_HISTORY_CANARY' },
+      { role: 'assistant', content: 'Prior conversation.' }
+    ]
+  ]
+  await chat('Research the latest Sophon tests', () => {}, researchHistory, [], chatId)
+  const researchRequest = JSON.stringify(requests.at(-1))
+  assert(researchRequest.includes(project.id), 'Research can recall matching saved memories')
+  assert(
+    researchRequest.includes('PRIVATE_HISTORY_CANARY'),
+    'Research retains conversation history'
+  )
+  assert(researchRequest.includes('PRIVATE_PROMPT_CANARY'), 'Research retains custom instructions')
+  assert(researchRequest.includes('Research: verify'), 'The research guide must be selected')
   enabled = false
-  await chat('Sophon tests', () => {}, [], [], chatId)
-  assert.equal(memoryReads, 1)
+  await chat('Research the latest Sophon tests', () => {}, [], [], chatId)
+  assert.equal(memoryReads, 2)
   assert(!JSON.stringify(requests.at(-1)).includes(project.id))
   let networkCalls = 0
   const transport = load('src/main/llm/client.ts', {
@@ -366,7 +382,7 @@ async function review() {
   await assert.rejects(transport.callLLM('fixture', enormous), /context budget/)
   assert.equal(networkCalls, 0)
   console.log(
-    'PASS actual chat-loop recall, research/private separation, disabled recall and transport rejects overflow before network'
+    'PASS actual chat-loop recall, shared research memory/history/instructions, disabled recall and transport rejects overflow before network'
   )
   console.log('All memory/harness checks passed without a model, network or Electron process.')
 }
