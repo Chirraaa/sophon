@@ -4,7 +4,12 @@ import { githubContextPrompt } from '../../shared/github-context'
 import { HARNESS_INSTRUCTIONS, harnessContext, recordHarnessUse } from '../harness/store'
 import { toolSchemas } from '../tools/schemas'
 import { parseQuestions } from '../../shared/questions'
-import { hasToolMarkup, ANSWER_REVIEW } from '../../shared/reply-quality'
+import {
+  hasToolMarkup,
+  ANSWER_REVIEW,
+  announcesNextStep,
+  wantsCurrentFacts
+} from '../../shared/reply-quality'
 import { getSettings } from '../settings'
 import { attachmentContent } from '../services/attachments'
 import { buildSystemPrompt } from './prompt'
@@ -51,6 +56,23 @@ import {
 } from './specialists'
 const MAX_SAVED_RESULT = 300
 const clean = (s: string): string => s.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+
+// Repair hints for the tools in a rejected batch only; a small model handles
+// one relevant hint better than a catalogue of every tool's limits.
+const ARGUMENT_HINTS: Record<string, string> = {
+  edit_file:
+    'edit_file: each old_text/new_text supports 65536 characters and the serialized arguments 262144; split larger changes into focused edits across calls. An argument error does not mean a read was truncated.',
+  write_file:
+    'write_file: the serialized arguments support 262144 characters; put large new features in separate modules.',
+  harness_manage:
+    'harness_manage: list uses {"action":"list"}; other actions need the exact category and lowercase name from the catalog, without a path or .md extension.',
+  ask_questions:
+    'ask_questions: a questions array of one to three objects, each with title and two to four distinct short string options; no nested JSON strings.'
+}
+const argumentHints = (names: (string | undefined)[]): string =>
+  [...new Set(names)]
+    .flatMap((name) => (name && ARGUMENT_HINTS[name] ? [' ' + ARGUMENT_HINTS[name]] : []))
+    .join('')
 
 const visibleDraft = (text: string): string =>
   clean(
@@ -239,9 +261,20 @@ export async function chat(
         (a, b) => order.indexOf(a.function.name) - order.indexOf(b.function.name)
       )
     }
+    // A plain single-intent command ("open Calculator") has one right first
+    // step. Offering only that tool keeps small models from detouring through
+    // related tools; the full working set returns after the first result.
+    const directTool = workflow.resumed ? undefined : requestedDesktopTool(userText)
     const modelTools = (): ReturnType<typeof activeToolSchemas> => {
       const catalog = stepTools()
       if (inlineVisual || exclusiveTools) return catalog
+      if (
+        directTool &&
+        !session.active &&
+        !turn.some((message) => message.role === 'tool') &&
+        catalog.some((tool) => tool.function.name === directTool)
+      )
+        return catalog.filter((tool) => [directTool, 'discover_tools'].includes(tool.function.name))
       return discovery.select(catalog, session.active ? CODING_PINNED_TOOLS : [])
     }
     const attached = await attachmentContent(attachments)
@@ -274,8 +307,7 @@ export async function chat(
         buildSystemPrompt(visual, inlineVisual, true) +
         (tools.some((tool) => tool.function.name === 'ask_questions')
           ? '\nWhen clarification is needed before proceeding, call ask_questions through the structured tool API instead of ending with a prose questionnaire or a numbered menu of possible tasks. For an open-ended new project, ask one focused question about the desired outcome with concrete choices. Reuse details already provided. If a reasonable assumption allows useful progress, state it and begin the work instead of asking. Do not call unrelated tools just to show activity.'
-          : '') +
-        `\nCurrent task mode: ${run.mode}. Tools are independently restricted by the application. Never claim an action succeeded without a successful tool result.`
+          : '')
       const instructions =
         system +
         githubContextPrompt(githubContext) +
@@ -283,21 +315,23 @@ export async function chat(
         books
           .filter(
             (book) =>
-              book.id !== 'desktop' ||
-              tools.some((tool) =>
-                [
-                  'open_app',
-                  'list_windows',
-                  'inspect_app',
-                  'look_at_screen',
-                  'click',
-                  'type_text',
-                  'browser_tabs',
-                  'browser_open',
-                  'browser_inspect',
-                  'browser_act'
-                ].includes(tool.function.name)
-              )
+              // The coding session carries its own, more specific workflow.
+              !(book.id === 'coding' && session.active) &&
+              (book.id !== 'desktop' ||
+                tools.some((tool) =>
+                  [
+                    'open_app',
+                    'list_windows',
+                    'inspect_app',
+                    'look_at_screen',
+                    'click',
+                    'type_text',
+                    'browser_tabs',
+                    'browser_open',
+                    'browser_inspect',
+                    'browser_act'
+                  ].includes(tool.function.name)
+                ))
           )
           .map((book) => book.content)
           .join('\n') +
@@ -312,6 +346,8 @@ export async function chat(
           inlineVisual,
           compact: true,
           availableTools: catalog.map((tool) => tool.function.name),
+          // Only settings the user can change are worth explaining; internal
+          // phase tools stay out of the prompt.
           unavailableTools: Object.fromEntries(
             toolSchemas
               .filter(
@@ -327,9 +363,10 @@ export async function chat(
                       ? 'web disabled in Settings'
                       : name === 'harness_manage' && !settings.memory?.enabled
                         ? 'Memory disabled'
-                        : 'not available for this request or remaining budget'
+                        : ''
                 return [name, reason]
               })
+              .filter(([, reason]) => reason)
           ),
           workspace: run.workspace,
           provider: settings.model.provider ?? 'local',
@@ -367,16 +404,15 @@ export async function chat(
             '\nProcedural guidance (fallible, not authorization):\n' +
             procedural
           : '') +
-        (needsProcedural
-          ? '\nRESOURCE CHECK: The application has already selected relevant task guides, recalled enabled saved memories within the context budget, and loaded matching procedural guidance. Use the supplied resources before answering; do not ask the user to repeat information already present. Memory records are in saved-memory envelopes. Use the available tool schemas to carry out requested actions and obtain missing evidence. harness_manage reads or maintains procedural documents; it does not perform desktop actions or save personal memories. Only claim an action after its successful tool result.'
-          : '') +
         (session.active ? '\n' + session.feedback() : '') +
         (verificationSetup ? '\nVerification setup needs repair: ' + verificationSetup : '')
 
       const observations = latestDesktopObservations(turn)
       for (let index = 0; index < turn.length; index++) turn[index] = observations[index]
+      const checkpoint = (): Msg[] =>
+        workflow.hasContext ? [{ role: 'user', content: workflow.context() }] : []
       const current = (): Msg[] => [
-        { role: 'user', content: workflow.context() },
+        ...checkpoint(),
         ...(session.active ? [{ role: 'user' as const, content: session.data() }] : []),
         ...(compacted ? [turn[0], ...turn.slice(2)] : turn)
       ]
@@ -411,7 +447,7 @@ export async function chat(
         current: turn,
         required: [
           { role: 'system', content: instructions + (session.active ? resources.context() : '') },
-          { role: 'user', content: workflow.context() },
+          ...checkpoint(),
           ...(session.active ? [{ role: 'user' as const, content: session.data() }] : [])
         ],
         inputBudget: compactBudget - 256,
@@ -710,6 +746,44 @@ export async function chat(
           saveTurn(turns, turn)
           return reply
         }
+        // Two common small-model detours get one host nudge each: announcing a
+        // step without taking it, and answering a current-facts request from
+        // memory while web tools are loaded.
+        const offered = finalCall || answerReviewed ? [] : modelTools().map((t) => t.function.name)
+        if (
+          offered.some((name) => name !== 'discover_tools') &&
+          announcesNextStep(content) &&
+          budgets.canRetry('stall') &&
+          run.modelCalls < maxSteps
+        ) {
+          budgets.fail('stall')
+          turn.push(
+            { role: 'assistant', content },
+            {
+              role: 'system',
+              content:
+                'You described a next step but did not take it. If that step is needed for the request, call the tool now through the structured tool API. Otherwise give the final answer.'
+            }
+          )
+          continue
+        }
+        if (
+          offered.includes('web_search') &&
+          wantsCurrentFacts(taskText) &&
+          !turn.some((m) =>
+            m.tool_calls?.some((c) => ['web_search', 'web_fetch'].includes(c.function.name))
+          ) &&
+          budgets.canRetry('evidence') &&
+          run.modelCalls < maxSteps
+        ) {
+          budgets.fail('evidence')
+          turn.push({
+            role: 'system',
+            content:
+              'This request depends on current information, which may be newer than your training. Call web_search (or web_fetch for a given URL) before answering, then answer from the results and cite the returned URLs. If the search fails, say what could not be verified.'
+          })
+          continue
+        }
         const pendingCodingIssue = session.active ? session.pendingIssue(content) : undefined
         if (pendingCodingIssue) {
           if (budgets.canRetry('session') && run.modelCalls < maxSteps) {
@@ -771,9 +845,9 @@ export async function chat(
           session.finishReflection()
           persistSession(true)
         }
-        const needsReview = books.some((book) =>
-          ['research', 'explanation', 'mathematics'].includes(book.id)
-        )
+        // A second pass pays off where answers carry checkable claims
+        // (arithmetic, sources); plain explanations go out on the first call.
+        const needsReview = books.some((book) => ['research', 'mathematics'].includes(book.id))
         if (
           !session.active &&
           !answerReviewed &&
@@ -815,11 +889,12 @@ export async function chat(
         }
         const truncated = !retainedDraft && msg.finishReason === 'length'
         if (session.active && coding.active && !truncated) learnFromRun(true)
+        const checks = coding.active ? coding.summary() : ''
         const reply =
           content +
-          (coding.active
+          (checks
             ? '\n\nProject checks:\n' +
-              coding.summary() +
+              checks +
               '\nThese checks passed; untested runtime behavior is not guaranteed.'
             : '')
         if (answerReviewed && !retainedDraft && !truncated)
@@ -852,7 +927,8 @@ export async function chat(
               error instanceof InvalidToolArgumentsError
                 ? 'Your last tool batch did not match its argument schema. No calls in that batch ran. ' +
                   error.message +
-                  '. Continue the authorized task with corrected tool calls. For edit_file, each old_text/new_text supports 65536 characters and the complete serialized arguments support 262144 characters. Read bounded excerpts and split larger changes into focused edits across calls; use separate modules for large new features. Do not resend the same invalid payload or infer that a read was truncated from an argument error. Reissue only necessary calls with the exact schema and original permissions. For harness_manage, list uses {"action":"list"}; other actions require the exact category and lowercase name from the guidance catalog, without a path or .md extension. ask_questions takes a questions array of one to three objects, each with title and two to four distinct short string options; no nested JSON strings.'
+                  '. Reissue only the necessary calls with the exact schema; do not resend the same invalid payload.' +
+                  argumentHints((msg.tool_calls ?? []).map((call) => call.function?.name))
                 : TOOL_JSON_REPAIR
           })
           continue

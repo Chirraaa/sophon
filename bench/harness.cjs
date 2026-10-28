@@ -360,7 +360,7 @@ function createHarness(task = {}, repetition = 0, modelOverrides = {}) {
     tools,
     stop: () => manager.stopRun(),
     async run() {
-      const run = manager.startRun(task.mode ?? 'assistant', settings.model.endpoint, scratch)
+      const run = manager.startRun('assistant', settings.model.endpoint, scratch)
       const history = structuredClone(task.history ?? [])
       const start = performance.now()
       let reply, error

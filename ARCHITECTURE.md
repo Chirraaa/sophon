@@ -70,6 +70,31 @@ desktop identity map or separately updating three mutation histories.
 6. The session persists the outcome and releases the run. Stop and policy changes
    cancel the same run, including specialist calls and verification work.
 
+## Proportionate paths
+
+The harness keeps the model's decisions small, which matters most for small local
+models. The core prompt states one choice: answer directly, or use tools step by
+step and answer from the evidence. Guidance is attached only when it applies: the
+generic coding playbook gives way to the coding-session procedure, plugin and
+procedural notes appear once those schemas are loaded, the task-checkpoint envelope
+appears only after evidence exists or on resume, and GitHub context only when
+selected. "Unavailable" entries list only reasons the user can change in Settings.
+
+A plain single-intent desktop command recognised by `requestedDesktopTool` (for
+example "Open Calculator") is offered only that tool, plus discovery, on its first
+step; the normal working set returns after the first result. The bounded answer
+review runs for mathematics and research drafts, where it checks arithmetic and
+sources, and not for ordinary explanations.
+
+Two common small-model detours get one host nudge each per request (`LoopBudgets`
+`stall` and `evidence`). A short reply that only announces a next step ("Let me read
+the file.") while task tools are loaded is sent back once to take the step or answer.
+A request for current information answered without any web call while `web_search`
+is loaded is sent back once to search first. Both are prompts, not permissions;
+tool policy and approvals are unchanged. Desktop guidance lives in one ordered
+playbook (target, observe, act, check), and argument-repair messages carry hints only
+for the tools in the rejected batch.
+
 Discovery, questions, design suggestions, coding checkpoints and resource sizing
 are coordinator operations handled by the chat loop. They do not provide an
 alternative route to execute file, command, desktop or connected-service actions.

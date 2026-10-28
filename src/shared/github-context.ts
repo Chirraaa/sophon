@@ -19,9 +19,10 @@ export function validGithubContext(value: unknown): value is GithubContext {
 }
 
 export function githubContextPrompt(context?: GithubContext): string {
+  if (!context) return ''
   return (
     '\nCurrent GitHub working context (user-selected data): ' +
-    (context ? JSON.stringify(context) : 'none selected') +
+    JSON.stringify(context) +
     '\nUse the current selection when the user refers to this repository or branch. It supersedes previous selections. This is remote GitHub context, not a local checkout or permission grant. Do not claim a local branch was switched. Keep assistant tool authorization checks intact.'
   )
 }

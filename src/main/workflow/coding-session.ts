@@ -5,12 +5,13 @@ import { ACTION_LIMIT, RUN_SECONDS } from '../../shared/loop-limits'
 import { untrustedData } from '../llm/untrusted-data'
 import { codingQualityGuide, codingToolFeedback } from '../../shared/coding-quality'
 
-export const CODING_SESSION_INSTRUCTIONS = `CODING WORKFLOW:
-Understand the current request in conversation context, inspect the relevant project, make the requested change, check it and repair diagnosed failures. Match effort to the request: reading a repository, answering a question, cloning it or running an existing command needs no saved plan, reviewer or lesson. Do not invent edits when the user only asks for inspection. Short follow-ups and answers refine the existing request; preserve its constraints.
-Inspect relevant files and project instructions before editing. Use coding_checkpoint for substantial multi-step work when it helps continuation, not as a prerequisite for tools. If you save tasks, keep their status current. Review your own changes and actual checks; consult a specialist only when its evidence-based analysis would help. Ask questions only for consequential ambiguity, never to repeat authorization. Read relevant skill guidance when useful; do not spend a routine task configuring the harness.
-PATCH POLICY: Use edit_file for existing files, with short unique old_text/new_text excerpts or an edits array for several focused changes to the same file. Never regenerate unchanged code. write_file is for new files only during coding work; whole-file overwrites are rejected. If edit_file is unavailable, report the missing permission instead of substituting a rewrite. Use read_file with start_line and line_count for targeted reads when the relevant range is known. Read package.json fully for verification discovery. Do not paste full changed files in the final reply unless the user requests them; summarize files and checks.
-Use run_command for Git and installed project toolchains such as Java, Maven, Gradle, C/C++, Make and CMake. Commands use PowerShell syntax and existing workspace-relative directories. Set purpose accurately: inspect, change or check. Run separate dependent commands and inspect each exit code. Check installed tools with Get-Command when uncertain. run_npm supports managed dev servers. Approval cards handle command approval; do not ask twice in prose. Never use a command to evade blocked tools, protected paths or the selected GitHub account/repository scope.
-On a patch mismatch re-read the file and correct the excerpt. On command failure inspect diagnostics and state before a focused repair, bounded by the task budget. Stop on denial or uncertain effects. Never weaken checks. After source changes run relevant builds/tests with purpose check; npm projects also have host-discovered checks. Verification must follow the last edit. If checks are unavailable report that limitation honestly, without manufacturing a package.json or test merely to satisfy the harness. Planning and learning are optional. If you save a plan, keep task statuses current and save a coding_checkpoint after the latest edits before finishing.`
+export const CODING_SESSION_INSTRUCTIONS = `CODING WORKFLOW (follow in order; scale effort to the request):
+1. Scope: short follow-ups refine the existing request and keep its constraints. Inspection-only requests get no edits. Reading code, cloning or running an existing script needs no plan, reviewer or lesson.
+2. Inspect: list_files, then read the files you will touch plus AGENTS.md or similar project guidance and package.json (read it fully). Use read_file start_line/line_count for known ranges; never reconstruct a file from a truncated read. For version-sensitive APIs, check the installed version and official docs when web tools are loaded.
+3. Edit: edit_file with short unique old_text/new_text excerpts, or an edits array (up to 12) for one file. Never regenerate unchanged code. write_file creates new files only; overwrites are rejected. Use create_directory for missing folders. If edit_file is unavailable, report the missing permission.
+4. Check: after the last edit run the relevant build/tests (run_npm, or run_command with purpose check). The host also runs discovered npm checks and owns verified status. A nonzero exit is a diagnostic to repair, not a denial: fix the cause, at most two repairs per check, and never weaken or remove checks. If no check exists, say so; do not invent one to satisfy the harness.
+5. Finish: report changed files, the checks actually run and remaining limits. Do not paste whole files unless asked.
+On a patch mismatch, re-read and copy the exact excerpt. Stop on denial or uncertain effects. run_command uses PowerShell syntax in the workspace with purpose inspect, change or check; run dependent commands separately and read each exit code. Approval cards handle approval; never ask twice in prose or evade blocked tools, protected paths or the selected GitHub account scope. coding_checkpoint is optional for substantial multi-step work; if you save tasks keep their status current and checkpoint after the latest edits.`
 
 export function wantsCodingSession(text: string, workspace: string): boolean {
   if (
@@ -335,11 +336,8 @@ export class CodingSession {
         profiles: specialists
           ? ['main', 'reviewer', 'researcher', 'tutor', 'visual_explainer']
           : ['main'],
-        execution:
-          'Sequential coordinator; specialists are read-only, researcher can use enabled web tools.',
-        limits: `${ACTION_LIMIT} actions (discovery/resources/checkpoints excluded); ${RUN_SECONDS / 60} minutes; configured model-call/context budgets; 3 failures per check.`,
-        skills:
-          'Discover procedural guidance with harness_manage list/read, imported skills with plugins_list/plugin_read. Read bodies before assigning their exact skill ID. No automatic installation.'
+        limits: `${ACTION_LIMIT} actions; ${RUN_SECONDS / 60} minutes.`,
+        skills: 'Assign a task skill only after reading it (harness_manage or plugin_read).'
       })
     )
   }
