@@ -41,7 +41,7 @@ const native = {
 const permissions = {
   protectedWindowRule: () => (protectedTarget ? 'protected' : null),
   blockedAppRule: () => (blocked ? 'blocked' : null),
-  toolPermission: () => 'ask'
+  toolPermission: (name) => settings.tools[name]
 }
 const windows = load('src/main/tools/windows.ts', {
   crypto,
@@ -117,6 +117,8 @@ const policy = load('src/main/security/policy.ts', {
   '../tools/registry': registry,
   './run-manager': runs
 })
+let captures = 0,
+  invalidatedCaptures = 0
 const tools = load('src/main/tools/index.ts', {
   '../settings': { getSettings: () => settings },
   '../harness/store': {},
@@ -143,8 +145,17 @@ const tools = load('src/main/tools/index.ts', {
   './openApp': {},
   './app-catalog': {},
   './windows': windows,
-  './screen': {},
-  './interact': {},
+  './screen': {
+    invalidateScreenCoordinates: () => {
+      invalidatedCaptures++
+    },
+    captureScreen: async (_args, _guard, window) => {
+      captures++
+      assert.equal(window.hwnd, 2)
+      return { text: 'Fresh fixture image', image: 'data:image/png;base64,fixture' }
+    }
+  },
+  './interact': { clickScreen: async () => 'Clicked left at (1, 1).' },
   './automation/controls': controls
 })
 let decision = 'once'
@@ -275,7 +286,55 @@ async function main() {
   next = unwrap(await execute('inspect_app', { window: refs[1] }))
   assert(next.truncated)
   assert(JSON.stringify(next).length < 12000)
+  assert.equal(
+    next.nextOffset,
+    next.controls.length,
+    'Paging does not skip controls omitted by the host character budget'
+  )
+  const offsetPage = unwrap(
+    await execute('inspect_app', { window: refs[1], query: 'Draft', offset: 7 })
+  )
+  assert.equal(workerCalls.at(-1).offset, 7)
+  assert.equal(offsetPage.nextOffset, 7 + offsetPage.controls.length)
+  assert.throws(() => contracts.validateToolArguments('inspect_app', { offset: -1 }))
+  assert.throws(() => contracts.validateToolArguments('inspect_app', { offset: 1001 }))
+  assert.throws(() => contracts.validateToolArguments('inspect_app', { offset: 1.5 }))
   observed = [sample]
+  for (const permission of ['ask', 'block', 'allow']) {
+    settings.tools.inspect_app = 'ask'
+    const before = unwrap(await execute('inspect_app', { window: refs[1] }))
+    settings.tools.inspect_app = permission
+    const start = workerCalls.length
+    const combined = await runner(
+      'act_on_control',
+      { ...args, observation: before.observation, readback_query: 'Draft' },
+      crypto.randomUUID()
+    )
+    assert.equal(combined.status, 'verified')
+    assert.equal(workerCalls.length - start, permission === 'allow' ? 2 : 1)
+    if (permission === 'allow') {
+      assert(combined.observation)
+      assert.equal(workerCalls.at(-1).hwnd, 2)
+      assert.equal(workerCalls.at(-1).query, 'Draft')
+      assert.equal(
+        controls.controlTarget({ ...args, observation: combined.observation.id }, run).window.hwnd,
+        2
+      )
+    } else assert(!combined.observation, 'Read permission is not implied by action approval')
+  }
+  settings.tools.inspect_app = 'ask'
+  assert(invalidatedCaptures > 0, 'Control actions invalidate screenshot coordinates')
+  for (const permission of ['ask', 'block', 'allow']) {
+    settings.tools.look_at_screen = permission
+    const start = captures
+    const clicked = await tools.executeTool('click', { x: 1, y: 1, capture_after: true }, run, {
+      window: windows.listWindows().find((w) => w.hwnd === 2)
+    })
+    assert.equal(clicked.status, 'reported')
+    assert.equal(captures - start, permission === 'allow' ? 1 : 0)
+    assert.equal(Boolean(clicked.image), permission === 'allow')
+  }
+  settings.tools.look_at_screen = 'ask'
   next = unwrap(await execute('inspect_app', { window: refs[1] }))
   result = { status: 'uncertain', message: 'Changed after the action' }
   assert.match(

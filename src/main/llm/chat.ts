@@ -291,7 +291,11 @@ export async function chat(
                   'inspect_app',
                   'look_at_screen',
                   'click',
-                  'type_text'
+                  'type_text',
+                  'browser_tabs',
+                  'browser_open',
+                  'browser_inspect',
+                  'browser_act'
                 ].includes(tool.function.name)
               )
           )

@@ -6,6 +6,8 @@
   "main": "./out/main/index.js",
   "author": "Sophon contributors",
   "scripts": {
+    "smoke:browser": "node scripts/smoke-browser.cjs",
+    "smoke:browser:native": "node scripts/smoke-browser-native.cjs",
     "smoke:updates": "node scripts/smoke-updates.cjs",
     "smoke:updates:ui": "electron scripts/smoke-updates-ui.cjs --hidden",
     "test": "node scripts/test.cjs",
@@ -85,7 +87,8 @@
     "jose": "^6.2.13",
     "koffi": "^3.3.3",
     "parse5": "7.3.0",
-    "pdfjs-dist": "^6.4.299"
+    "pdfjs-dist": "^6.4.299",
+    "playwright-core": "^1.64.1"
   },
   "devDependencies": {
     "@base-ui/react": "^1.9.0",

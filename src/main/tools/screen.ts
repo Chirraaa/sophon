@@ -26,6 +26,7 @@ export type CaptureArgs = {
   monitor?: string | number
   window?: string
   region?: Rect
+  if_changed?: boolean
 }
 export type CapturedScreen = {
   text: string
@@ -41,7 +42,12 @@ let lastCapture: {
     height: number
   }
   window: WinInfo | null
+  encoded: string
+  clickable: boolean
 } | null = null
+export function invalidateScreenCoordinates(): void {
+  if (lastCapture) lastCapture.clickable = false
+}
 export function captureCoordinates(
   x: number,
   y: number
@@ -52,6 +58,7 @@ export function captureCoordinates(
 } | null {
   if (
     !lastCapture ||
+    !lastCapture.clickable ||
     lastCapture.runId !== (currentRun()?.id ?? '') ||
     Date.now() - lastCapture.at > 120000 ||
     !Number.isFinite(x) ||
@@ -119,6 +126,7 @@ export async function captureScreen(
   guard?: () => void,
   bound?: WinInfo
 ): Promise<CapturedScreen | string> {
+  const previous = lastCapture
   lastCapture = null
   hideScreenGlow()
   guard?.()
@@ -241,20 +249,49 @@ export async function captureScreen(
         quality: 'best'
       })
     const imageSize = image.getSize()
+    checkRun()
+    guard?.()
+    if (win) {
+      const current = listWindows().find((candidate) => candidate.hwnd === win.hwnd)
+      if (
+        !current ||
+        current.exe !== win.exe ||
+        current.x !== win.x ||
+        current.y !== win.y ||
+        current.width !== win.width ||
+        current.height !== win.height ||
+        current.state === 'minimized'
+      )
+        return 'Could not capture stable window bounds. Refresh the window and capture again.'
+    }
+    const encoded = image.toJPEG(88).toString('base64')
     lastCapture = {
       runId: currentRun()?.id ?? '',
       at: Date.now(),
       pid: win ? getProcess(win.hwnd).pid : 0,
       bounds,
       image: imageSize,
-      window: win ? { ...win } : null
+      window: win ? { ...win } : null,
+      encoded,
+      clickable: true
     }
     const label = win ? `"${win.title}" on monitor ${display.index}` : `monitor ${display.index}`
     const run = currentRun()
     if (run) showScreenGlow(display.id, run.signal)
+    if (
+      args.if_changed &&
+      previous &&
+      previous.runId === lastCapture.runId &&
+      previous.pid === lastCapture.pid &&
+      previous.window?.hwnd === lastCapture.window?.hwnd &&
+      JSON.stringify(previous.bounds) === JSON.stringify(bounds) &&
+      JSON.stringify(previous.image) === JSON.stringify(imageSize) &&
+      previous.encoded === encoded
+    )
+      return `Observed ${label}: the fresh screenshot is pixel-identical to the preceding capture of this same region. No duplicate image was sent. Image is ${imageSize.width}×${imageSize.height} pixels; its coordinates have been refreshed. Use the preceding image only if it remains available, otherwise call look_at_screen without if_changed. Unchanged pixels alone do not establish whether an action succeeded.`
     return {
       text: `Captured ${label}${args.region ? ' (zoomed region)' : ''}. Image is ${imageSize.width}×${imageSize.height} pixels. Click coordinates are local to THIS image: x=0..${imageSize.width - 1}, y=0..${imageSize.height - 1}; origin is top-left. Do not use normalized 0–1000 coordinates or desktop coordinates. To zoom, request region in the full overview's image pixels; the region is captured at higher detail. Use inspect_app and act_on_control for named buttons and text instead of estimating clicks.`,
-      image: `data:image/jpeg;base64,${image.toJPEG(88).toString('base64')}`
+      image: `data:image/jpeg;base64,${encoded}`
     }
   } finally {
     for (const own of hidden) if (!own.isDestroyed()) own.showInactive()

@@ -103,7 +103,7 @@ export class ActionLedger {
     if (tool === 'act_on_control') this.observations.clear()
     for (const [id, entry] of this.observations)
       if (entry.expiresAt <= Date.now()) this.observations.delete(id)
-    if (outcome.observation && outcome.status === 'observed') {
+    if (outcome.observation && ['observed', 'reported', 'verified'].includes(outcome.status)) {
       while (this.observations.size >= 4)
         this.observations.delete(this.observations.keys().next().value!)
       this.observations.set(outcome.observation.id, outcome.observation)

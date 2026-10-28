@@ -3,8 +3,10 @@ const path = require('node:path')
 
 const suites = [
   'action-outcomes',
+  'app-routing',
   'apps',
   'awareness',
+  'browser',
   'capabilities',
   'chatgpt',
   'coding',

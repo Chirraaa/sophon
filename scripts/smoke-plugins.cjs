@@ -178,6 +178,46 @@ async function main() {
     await pluginTools.executePluginTool('mcp_catalog', { server: local, kind: 'tools' }, run())
   )
   assert.equal(catalogue.tools[0].name, 'echo')
+  const matching = decode(
+    await pluginTools.executePluginTool('plugins_list', { query: 'echo' }, run())
+  )
+  assert.equal(matching.servers.length, 1)
+  assert.deepEqual(
+    matching.servers[0].capabilities.map((tool) => tool.name),
+    ['echo']
+  )
+  assert.equal(
+    decode(await pluginTools.executePluginTool('plugins_list', { query: 'no-such-app' }, run()))
+      .servers.length,
+    0
+  )
+  const filtered = decode(
+    await pluginTools.executePluginTool(
+      'mcp_catalog',
+      { server: local, kind: 'tools', query: 'echo' },
+      run()
+    )
+  )
+  assert.deepEqual(
+    filtered.tools.map((tool) => tool.name),
+    ['echo']
+  )
+  assert(filtered.tools[0].inputSchema.properties.message)
+  assert.equal(
+    decode(
+      await pluginTools.executePluginTool(
+        'mcp_catalog',
+        { server: local, kind: 'tools', query: 'no-match' },
+        run()
+      )
+    ).tools.length,
+    0
+  )
+  assert.equal(
+    runtime.connected(local).tools.length,
+    3,
+    'Filtering does not mutate or disconnect the cached catalogue'
+  )
   const args = { server: local, tool: 'echo', arguments_json: '{"message":"hello"}' }
   const bound = pluginTools.bindPluginAction('mcp_call', args)
   bound.revalidate()

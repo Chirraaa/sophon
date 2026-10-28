@@ -45,6 +45,12 @@ export async function bindLocalAction(
   let revalidate = async (): Promise<void> => {
     assertRun(run)
   }
+  if (['browser_open', 'browser_tabs', 'browser_inspect', 'browser_act'].includes(name)) {
+    const { bindBrowserAction } = await import('../tools/browser/runtime')
+    const binding = await bindBrowserAction(name, args, run)
+    details.browser = binding.preview
+    revalidate = binding.revalidate
+  }
   if (name === 'set_volume' || name === 'set_radio') {
     const { prepareDeviceTarget, revalidateDeviceTarget } = await import('../tools/system-control')
     const target = await prepareDeviceTarget(name, args, run)

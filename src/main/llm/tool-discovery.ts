@@ -13,10 +13,17 @@ type Tool = { function: { name: string; description: string } }
 
 const DESKTOP_TOOLS = ['list_windows', 'inspect_app', 'act_on_control', 'look_at_screen']
 const RELATED: Record<string, string[]> = {
+  browser_open: ['browser_inspect', 'browser_act', 'browser_tabs'],
+  browser_tabs: ['browser_inspect', 'browser_act', 'browser_open', 'inspect_app', 'list_windows'],
+  browser_inspect: ['browser_act', 'browser_tabs', 'browser_open'],
+  browser_act: ['browser_inspect', 'browser_tabs'],
+  plugins_list: ['mcp_catalog', 'mcp_call', 'plugin_read', 'list_windows', 'inspect_app'],
+  mcp_catalog: ['mcp_call', 'mcp_read', 'plugins_list'],
+  mcp_call: ['mcp_catalog', 'mcp_read', 'plugins_list'],
   open_app: DESKTOP_TOOLS,
   inspect_app: DESKTOP_TOOLS,
   act_on_control: DESKTOP_TOOLS,
-  look_at_screen: DESKTOP_TOOLS,
+  look_at_screen: ['click', 'scroll', 'press_keys', 'type_text', ...DESKTOP_TOOLS],
   click: ['look_at_screen', 'inspect_app', 'list_windows'],
   type_text: ['inspect_app', 'press_keys', 'list_windows']
 }
@@ -26,6 +33,21 @@ export class ToolDiscovery {
 
   constructor(query: string) {
     const groups: [RegExp, string[]][] = [
+      [
+        /\b(discord|spotify|slack|notion|teams|outlook|calendar|gmail|jira|confluence|github)\b/i,
+        [
+          'plugins_list',
+          'mcp_catalog',
+          'browser_tabs',
+          'list_windows',
+          'inspect_app',
+          'act_on_control'
+        ]
+      ],
+      [
+        /\b(browser|web app|website|webpage|chrome|edge)\b/i,
+        ['browser_tabs', 'browser_open', 'browser_inspect', 'browser_act']
+      ],
       [/\b(open|launch|start|ouvrir)\b/i, ['open_app', 'list_apps', ...DESKTOP_TOOLS]],
       [
         /\b(window|windows|screen|desktop|click|button|type|scroll|notepad|fenêtre|écran)\b/i,

@@ -65,6 +65,21 @@ async function main() {
     )
     assert(group.controls.some((c) => c.name === 'Apply draft' && c.container === 'Draft controls'))
     assert(!group.controls.some((c) => c.name === 'Fixture option'))
+    assert.equal(group.scanLimit, 1200, 'Focused inspection has a larger bounded traversal')
+    const page = await worker(
+      { ...identity, operation: 'inspect', query: 'Draft controls', offset: 1 },
+      signal
+    )
+    assert.deepEqual(
+      page.controls.map((c) => c.runtime),
+      group.controls.slice(1).map((c) => c.runtime)
+    )
+    const noMatch = await worker(
+      { ...identity, operation: 'inspect', query: 'Missing fixture element' },
+      signal
+    )
+    assert.equal(noMatch.diagnostic, 'no-match')
+    assert.equal(noMatch.controls.length, 0)
     const field = view.controls.find((c) => c.name === 'Draft message')
     assert(field?.actions.includes('set_value'), JSON.stringify(view))
     assert.equal(
