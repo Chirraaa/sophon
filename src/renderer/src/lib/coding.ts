@@ -1,3 +1,5 @@
+import { replyActivity } from './activity'
+
 export function previewData(preview?: string): Record<string, unknown> | undefined {
   try {
     const data = JSON.parse((preview ?? '').slice((preview ?? '').indexOf('{')))
@@ -53,6 +55,8 @@ export function codingView(item: ChatItem): {
   const active = session?.tasks.find((task) => task.status === 'active')
   const attention = ['needs_review', 'interrupted', 'blocked'].includes(outcome ?? '')
   let stage = !session?.plan ? 0 : active ? 1 : 2
+  if (item.pending && ['write_file', 'edit_file'].includes(item.modelProgress?.toolName ?? ''))
+    stage = 1
   if (item.specialists?.some((agent) => agent.status === 'running')) stage = 3
   if (
     item.actions.some(
@@ -88,7 +92,7 @@ export function codingView(item: ChatItem): {
           )?.[1] ??
           item.workflow?.nextStep ??
           'Work stopped before completion. Open the task evidence for details.')
-        : (active?.title ??
+        : ((item.pending && item.modelProgress ? replyActivity(item) : active?.title) ??
           (!session?.plan
             ? item.pending
               ? 'Working on the request'

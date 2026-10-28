@@ -41,7 +41,11 @@ for (const byte of wire) parser.write(Buffer.from([byte]))
 parser.end()
 assert.deepEqual(updates, ['Bonjour 🌍', 'Bonjour 🌍 — hello'])
 assert.equal(completion.reply().content, 'Bonjour 🌍 — hello')
-const tools = completionStream(() => {})
+const progress = []
+const tools = completionStream(
+  () => {},
+  (value) => progress.push(value)
+)
 tools.accept(
   JSON.stringify({
     choices: [
@@ -61,6 +65,7 @@ tools.accept(
   })
 )
 assert.throws(() => tools.reply(), /before completing/)
+assert.deepEqual(progress, [{ toolName: 'read_file', generatedChars: 4 }])
 tools.accept(
   JSON.stringify({
     choices: [
@@ -78,6 +83,8 @@ assert.deepEqual(tools.reply().tool_calls, [
     function: { name: 'read_file', arguments: '{"path":"notes.txt"}' }
   }
 ])
+assert.deepEqual(progress.at(-1), { toolName: 'read_file', generatedChars: 20 })
+assert(progress.every((value) => !Object.hasOwn(value, 'arguments')))
 assert.throws(() => completionStream(() => {}).accept('{bad json'))
 assert.throws(
   () =>
@@ -109,6 +116,33 @@ finishOnly.accept(JSON.stringify({ choices: [{ delta: { content: 'Answer' } }] }
 finishOnly.accept(JSON.stringify({ choices: [{ delta: null, finish_reason: 'stop' }] }))
 assert.equal(finishOnly.reply().content, 'Answer')
 const providers = load('src/main/llm/providers.ts')
+const responseProgress = []
+const progressingResponse = providers.responsesStream(
+  () => {},
+  'fixture',
+  undefined,
+  undefined,
+  (value) => responseProgress.push(value)
+)
+progressingResponse.accept(
+  JSON.stringify({
+    type: 'response.output_item.added',
+    output_index: 0,
+    item: { type: 'function_call', name: 'write_file' }
+  })
+)
+progressingResponse.accept(
+  JSON.stringify({
+    type: 'response.function_call_arguments.delta',
+    output_index: 0,
+    delta: '{"content":"'
+  })
+)
+assert.deepEqual(responseProgress, [
+  { toolName: 'write_file', generatedChars: 0 },
+  { toolName: 'write_file', generatedChars: 12 }
+])
+assert.throws(() => progressingResponse.reply(), /before completing/)
 const toolItem = (id) => ({
   type: 'function_call',
   id: 'fc_' + id,

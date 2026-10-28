@@ -62,7 +62,11 @@ const plan = (status = 'active') => ({
   tasks: [task(status)]
 })
 const names = schemas.toolSchemas.map((t) => t.function.name)
-const codingUi = load('src/renderer/src/lib/coding.ts')
+const codingUi = load('src/renderer/src/lib/coding.ts', {
+  './activity': load('src/renderer/src/lib/activity.ts', {
+    '../../../shared/visuals': load('src/shared/visuals.ts')
+  })
+})
 for (const plan of ['', 'Implement the feature']) {
   const stopped = codingUi.codingView({
     pending: false,
