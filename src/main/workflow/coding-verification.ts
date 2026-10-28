@@ -90,7 +90,14 @@ export class CodingVerification {
     if (record.outcome.execution === 'not-started') return
     const successful = !['denied', 'failed', 'uncertain'].includes(status)
     const path = pathName(args.path)
-    if (successful && tool === 'read_file' && /\.html?$/i.test(path)) {
+    if (
+      successful &&
+      tool === 'read_file' &&
+      /\.html?$/i.test(path) &&
+      args.max_chars === 60000 &&
+      args.start_line === undefined &&
+      args.line_count === undefined
+    ) {
       try {
         const envelope = JSON.parse(text)
         this.htmlChecks.set(
