@@ -88,16 +88,22 @@ export async function bindLocalAction(
     const control = name === 'act_on_control' ? controlTarget(args, run) : undefined
     const point = name === 'click' ? captureCoordinates(Number(args.x), Number(args.y)) : undefined
     if (name === 'click' && !point?.window)
-      throw new Error(
-        'Screenshot required: capture the intended target window again, then use coordinates inside the new image. No click was executed.'
+      throw Object.assign(
+        new Error(
+          'Screenshot required: capture the intended target window again, then use coordinates inside the new image. No click was executed.'
+        ),
+        { code: 'SCREENSHOT_REQUIRED' }
       )
     const win =
       point?.window ??
       control?.window ??
       targetWindow(String(args.title ?? args.window ?? '') || undefined)
     if (!win)
-      throw new Error(
-        'Target not found: the window is missing or ambiguous. No action was executed. Use list_windows for fresh win- references; ask the user if the intended window is still unclear.'
+      throw Object.assign(
+        new Error(
+          'Target not found: the window is missing or ambiguous. No action was executed. Use list_windows for fresh win- references; ask the user if the intended window is still unclear.'
+        ),
+        { code: 'TARGET_NOT_FOUND' }
       )
     if (protectedWindowRule(win.title, win.exe))
       throw new Error('No unambiguous, unprotected target window.')

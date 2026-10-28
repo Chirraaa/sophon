@@ -39,7 +39,11 @@ async function main() {
   await store.manageHarness({ ...args, action: 'compose' }, undefined, original)
   for (let i = 0; i < 3; i++)
     store.recordHarnessUse(args.category, args.name, `run-${i}`, true, 'Passed')
-  assert.equal(store.harnessLifecycle(args.category, args.name).state, 'active')
+  assert.equal(
+    store.harnessLifecycle(args.category, args.name).state,
+    'trial',
+    'Execution success does not establish guidance usefulness'
+  )
   for (const fault of ['write', 'rename']) {
     await prepare(store, replacement)
     const before = fs.readFileSync(manifest, 'utf8')
@@ -52,7 +56,11 @@ async function main() {
     store = restart()
     assert.equal(fs.readFileSync(manifest, 'utf8'), before)
     assert.equal(store.readHarness(args.category, args.name, true), original)
-    assert.equal(store.harnessLifecycle(args.category, args.name).state, 'active')
+    assert.equal(
+      store.harnessLifecycle(args.category, args.name).state,
+      'trial',
+      'Execution success does not establish guidance usefulness'
+    )
   }
   await prepare(store, replacement)
   await store.manageHarness({ ...args, action: 'compose' }, undefined, replacement)
@@ -72,8 +80,29 @@ async function main() {
   assert.equal(store.harnessLifecycle(args.category, args.name).state, 'deprecated')
   await store.manageHarness({ ...args, action: 'rollback' })
   assert.equal(store.harnessLifecycle(args.category, args.name).state, 'trial')
+  for (let i = 0; i < 3; i++)
+    store.recordHarnessUse(args.category, args.name, `migration-${i}`, true, 'Passed')
   const saved = fs.readFileSync(manifest, 'utf8')
   const metadata = JSON.parse(saved)
+  for (const archived of [false, true]) {
+    fs.writeFileSync(
+      manifest,
+      JSON.stringify({
+        ...metadata,
+        state: archived ? 'deprecated' : 'active',
+        archivedState: archived ? 'active' : undefined,
+        successes: 3,
+        uses: 3
+      })
+    )
+    const migrated = restart().harnessLifecycle(args.category, args.name)
+    assert.equal(migrated.state, archived ? 'deprecated' : 'trial')
+    if (archived) assert.equal(migrated.archivedState, 'trial')
+    assert.equal(migrated.successes, 3)
+    assert.equal(migrated.uses, 3)
+  }
+  fs.writeFileSync(manifest, saved)
+  assert.equal(restart().harnessLifecycle('loop-hooks', 'before-task').state, 'active')
   const version = path.join(
     directory,
     'harness/versions',
@@ -83,7 +112,7 @@ async function main() {
   assert.throws(() => restart().readHarness(args.category, args.name), /hash/)
   fs.writeFileSync(version, replacement)
   fs.writeFileSync(manifest, JSON.stringify({ ...metadata, version: metadata.version + 1 }))
-  assert.throws(() => restart().readHarness(args.category, args.name), /manifest/)
+  assert.throws(() => restart().readHarness(args.category, args.name), /manifest|metadata/)
   fs.writeFileSync(manifest, saved)
   fs.unlinkSync(version)
   assert.throws(() => restart().readHarness(args.category, args.name), /Missing/)

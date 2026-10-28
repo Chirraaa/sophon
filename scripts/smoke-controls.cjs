@@ -168,7 +168,8 @@ const runner = load('src/main/llm/run-tool.ts', {
   '../security/local-action': local
 }).runTool
 const events = []
-const execute = (name, args) => runner(name, args, crypto.randomUUID(), (e) => events.push(e))
+const execute = (name, args) =>
+  runner(name, args, crypto.randomUUID(), (e) => events.push(e)).then((outcome) => outcome.text)
 const unwrap = (text) => JSON.parse(JSON.parse(text).content)
 async function main() {
   await assert.rejects(

@@ -102,16 +102,18 @@ async function main() {
     '../services/screen-glow': { hideScreenGlow: () => {} }
   })
   assert.match(
-    await runner.runTool(
-      'write_file',
-      { path: 'missing-parent/file.ts', content: 'hello' },
-      'missing'
-    ),
+    (
+      await runner.runTool(
+        'write_file',
+        { path: 'missing-parent/file.ts', content: 'hello' },
+        'missing'
+      )
+    ).text,
     /^Missing workspace path: no action was executed/
   )
   assert.equal(executions, 0, 'Missing-parent preflight never executes the action')
   assert.equal(approvals, 0, 'Missing-parent recovery does not fabricate an approval')
-  assert.match(await runner.runTool('run_npm', { args: ['--version'] }, 'denied'), /Denied/)
+  assert.match((await runner.runTool('run_npm', { args: ['--version'] }, 'denied')).text, /Denied/)
   assert.equal(executions, 0)
   decision = 'once'
   await runner.runTool('run_npm', { args: ['--version'] }, 'approved')
@@ -120,14 +122,21 @@ async function main() {
   fs.writeFileSync(path.join(workspace, 'approved-delete.txt'), 'fixture')
   const deleting = { path: 'approved-delete.txt' }
   decision = 'deny'
-  assert.match(await runner.runTool('delete_file', deleting, 'delete-denied'), /Denied by the user/)
+  assert.match(
+    (await runner.runTool('delete_file', deleting, 'delete-denied')).text,
+    /Denied by the user/
+  )
   assert(fs.existsSync(path.join(workspace, deleting.path)))
   assert.equal(executions, 1)
   decision = 'once'
   executeDeletion = true
   const deletionEvents = []
   assert.match(
-    await runner.runTool('delete_file', deleting, 'delete-approved', (e) => deletionEvents.push(e)),
+    (
+      await runner.runTool('delete_file', deleting, 'delete-approved', (e) =>
+        deletionEvents.push(e)
+      )
+    ).text,
     /Verified path is absent/
   )
   assert(!fs.existsSync(path.join(workspace, deleting.path)))
@@ -139,7 +148,7 @@ async function main() {
     fs.utimesSync(path.join(workspace, 'stale-delete.txt'), new Date(), new Date(Date.now() + 2000))
   }
   assert.match(
-    await runner.runTool('delete_file', { path: 'stale-delete.txt' }, 'delete-stale'),
+    (await runner.runTool('delete_file', { path: 'stale-delete.txt' }, 'delete-stale')).text,
     /changed/
   )
   assert.equal(
@@ -391,11 +400,15 @@ async function main() {
     code: 'PATCH_NOT_APPLIED'
   })
   assert.match(
-    await runner.runTool('edit_file', badPatch, 'no-patch'),
+    (await runner.runTool('edit_file', badPatch, 'no-patch')).text,
     /^Patch not applied: no file was changed/
   )
   executionError = Object.assign(new Error('Access denied'), { code: 'EACCES' })
-  assert.match(await runner.runTool('edit_file', badPatch, 'access-denied'), /^Denied:/)
+  assert.equal(
+    (await runner.runTool('edit_file', badPatch, 'access-denied')).status,
+    'uncertain',
+    'A post-dispatch exception must not masquerade as a permission denial'
+  )
   executionError = undefined
   assert.equal(
     fs.readFileSync(path.join(workspace, args.path), 'utf8'),
@@ -469,7 +482,7 @@ async function deletionTests(binding, files, handles, workspace, run) {
   assert.match(bound.preview, /Permanent deletion/)
   await bound.revalidate()
   assert.match(
-    await files.deleteWorkspaceEntry(args, false, bound.scope.deletion),
+    (await files.deleteWorkspaceEntry(args, false, bound.scope.deletion)).text,
     /Verified path is absent/
   )
   assert(!fs.existsSync(path.join(workspace, args.path)))
@@ -503,7 +516,7 @@ async function deletionTests(binding, files, handles, workspace, run) {
   assert.equal(tree.scope.deletion.entries.length, 4)
   await tree.revalidate()
   assert.match(
-    await files.deleteWorkspaceEntry(treeArgs, true, tree.scope.deletion),
+    (await files.deleteWorkspaceEntry(treeArgs, true, tree.scope.deletion)).text,
     /Verified path is absent/
   )
   assert(!fs.existsSync(path.join(workspace, treeArgs.path)))

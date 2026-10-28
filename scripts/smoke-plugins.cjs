@@ -275,10 +275,10 @@ async function main() {
     },
     '../harness/store': {}
   })
-  assert.match(await execute.runTool('mcp_call', args, 'one'), /Denied/)
+  assert.match((await execute.runTool('mcp_call', args, 'one')).text, /Denied/)
   assert.equal(invoked, 0)
   decision = 'once'
-  assert.equal(await execute.runTool('mcp_call', args, 'two'), 'done')
+  assert.equal((await execute.runTool('mcp_call', args, 'two')).text, 'done')
   assert.equal(invoked, 1)
   assert.equal(approvals, 2, 'MCP must ask even when the generic permission is allow')
   const controller = new AbortController()

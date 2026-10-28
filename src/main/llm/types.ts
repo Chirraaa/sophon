@@ -60,5 +60,6 @@ export type ChatEvent =
       type: 'tool_end'
       id: string
       result: string
+      outcome?: Exclude<EvidenceStatus, 'pending'>
       image?: string
     }

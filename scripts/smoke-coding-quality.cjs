@@ -1,3 +1,4 @@
+const { record } = require('./security/action-fixture.cjs')
 const assert = require('node:assert/strict')
 const { load } = require('./security/load.cjs')
 const quality = load('src/shared/coding-quality.ts')
@@ -79,7 +80,7 @@ assert.equal(topics[0].id, 'auth', 'Security guidance takes priority when many t
 assert(quality.codingQualityGuide(all).length < 6500)
 
 const session = new sessions.CodingSession(true)
-session.record('list_files', {}, 'This folder is empty.', 'observed')
+record(session, 'list_files', {}, 'This folder is empty.', 'observed')
 session.checkpoint(
   {
     plan: 'Implement a helper',
@@ -152,9 +153,9 @@ assert.match(
 )
 assert.equal(quality.codingToolFeedback('run_npm', {}, 'Denied by the user.'), '')
 assert.equal(quality.codingToolFeedback('run_npm', {}, npmResult(1, 'no test specified', true)), '')
-resumed.record('run_npm', { args: ['init', '-y'] }, npmResult(0, 'Wrote package.json'), 'verified')
+record(resumed, 'run_npm', { args: ['init', '-y'] }, npmResult(0, 'Wrote package.json'), 'verified')
 assert.match(resumed.feedback(), /do not run initialization again/)
-resumed.record('run_npm', { args: ['run', 'test'] }, npmResult(0, 'pass'), 'verified')
+record(resumed, 'run_npm', { args: ['run', 'test'] }, npmResult(0, 'pass'), 'verified')
 assert.equal(resumed.feedback(), '', 'Successful checks clear obsolete scaffold repair advice')
 console.log(
   'PASS coding teacher: bounded relevant guides, auth/version/scaling priorities, checkpoint continuity, bounded checkpoint evidence and ordinary-chat isolation'

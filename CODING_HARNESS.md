@@ -76,8 +76,8 @@ and bounded evidence are stored in `harness/lifecycle/`.
   factual correctness.
 - Composition publishes a numbered **trial**, labeled unproven in recall. The
   previous document is retained in revisions.
-- Three successful distinct recorded runs with no regressions promote a trial to
-  active. Coding outcomes are attributed only to skills explicitly mapped to a
+- Successful recorded runs accumulate execution evidence without promoting a trial
+  to active. Coding outcomes are attributed only to skills explicitly mapped to a
   task and read in that run; recipe executions record their own worker outcomes.
   These are operational success signals, not proof that the advice caused success.
 - A failed trial returns to candidate and leaves recall. Two recorded failures
@@ -89,8 +89,10 @@ and bounded evidence are stored in `harness/lifecycle/`.
   rollback. Discard invalidates a candidate's probe and excludes it from recall.
 
 Saved-memory settings still disable procedural recall and learning. Personal
-memories remain separate and encrypted. Existing starter documents and previously
-composed documents retain their active status during migration.
+memories remain separate and encrypted. Trusted starter documents retain their
+status. Generated documents previously promoted by execution counts migrate back
+to trial with their history intact, including archived entries on rollback.
+Usefulness promotion remains disabled pending independent quality evaluation.
 
 ## Built-in coding teacher
 
