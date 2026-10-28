@@ -54,7 +54,7 @@ export function Section({
           </p>
         )}
       </CardHeader>
-      <CardContent className="mt-3 px-5 pb-3 [&>[data-setting-row]+[data-setting-row]]:border-t [&>[data-setting-row]+[data-setting-row]]:border-white/5">
+      <CardContent className="mt-3 px-5 pb-3 [&>[data-setting-row]+[data-setting-row]]:border-t [&>[data-setting-row]+[data-setting-row]]:border-border">
         {children}
       </CardContent>
     </Card>
@@ -134,7 +134,7 @@ export function Notice({
         'rounded-xl px-3.5 py-3 text-[11px] leading-relaxed',
         tone === 'warn'
           ? 'border-amber-300/15 bg-amber-300/5 text-amber-200'
-          : 'border-white/7 bg-white/3 text-muted-foreground'
+          : 'border-border bg-muted/40 text-muted-foreground'
       )}
     >
       <Info className="mt-0.5 size-3.5 shrink-0 opacity-70" strokeWidth={1.5} />

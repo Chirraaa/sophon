@@ -83,7 +83,7 @@ export function CodingRun({
       ) : (
         <Card
           className={cn(
-            'w-full gap-0 overflow-hidden rounded-2xl border-white/8 bg-muted/20 py-0 shadow-none',
+            'w-full gap-0 overflow-hidden rounded-2xl border-border bg-muted/20 py-0 shadow-none',
             controls && 'glass-solid rounded-[22px]'
           )}
           data-coding-run

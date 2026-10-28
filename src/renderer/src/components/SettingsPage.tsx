@@ -108,7 +108,7 @@ export function SettingsPage({
   const saving = useSettingsSave()
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-[68px] shrink-0 items-center justify-between border-b border-white/5 px-7">
+      <header className="flex h-[68px] shrink-0 items-center justify-between border-b border-border px-7">
         <h1 className="text-[13px] font-medium">Settings</h1>
         <span role="status" className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
           <Check className="size-3" />{' '}
@@ -144,7 +144,7 @@ export function SettingsPage({
               <TabsTrigger
                 key={id}
                 value={id}
-                className="h-8 rounded-lg px-2 text-[11px] font-normal data-active:bg-white/10 data-active:shadow-sm dark:data-active:bg-white/10"
+                className="h-8 rounded-lg px-2 text-[11px] font-normal data-active:bg-muted data-active:shadow-sm dark:data-active:bg-muted"
               >
                 {label}
               </TabsTrigger>

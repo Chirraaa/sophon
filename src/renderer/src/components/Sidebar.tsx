@@ -109,7 +109,7 @@ export function Sidebar({ view, onView, status, hotkey, onOpenModel }: Props): R
             aria-label={label}
             title={collapsed ? label : undefined}
             className={cn(
-              'relative h-10 justify-start gap-3 rounded-xl px-3 text-[13px] font-normal hover:bg-white/4',
+              'relative h-10 justify-start gap-3 rounded-xl px-3 text-[13px] font-normal hover:bg-muted/50',
               view === id ? 'text-foreground' : 'text-muted-foreground',
               collapsed && 'justify-center px-0'
             )}
@@ -117,7 +117,7 @@ export function Sidebar({ view, onView, status, hotkey, onOpenModel }: Props): R
             {view === id && (
               <motion.span
                 layoutId="nav-pill"
-                className="absolute inset-0 rounded-xl border border-white/6 bg-white/7 shadow-[0_2px_8px_#00000012]"
+                className="absolute inset-0 rounded-xl border border-border bg-muted shadow-[0_2px_8px_#00000012]"
                 transition={spring}
               />
             )}
@@ -127,7 +127,7 @@ export function Sidebar({ view, onView, status, hotkey, onOpenModel }: Props): R
         ))}
       </nav>
       {collapsed ? (
-        <div className="mt-4 flex flex-1 flex-col items-center border-t border-white/6 pt-3">
+        <div className="mt-4 flex flex-1 flex-col items-center border-t border-border pt-3">
           <Hint text="New chat">
             <Button
               variant="ghost"
@@ -150,7 +150,7 @@ export function Sidebar({ view, onView, status, hotkey, onOpenModel }: Props): R
       )}
       <div className="mt-4 shrink-0">
         {hotkey && !collapsed && !hideReminder && (
-          <div className="relative mb-5 rounded-xl border border-white/6 bg-white/2 p-3">
+          <div className="relative mb-5 rounded-xl border border-border bg-muted/40 p-3">
             <Button
               variant="ghost"
               size="icon-xs"
@@ -175,7 +175,7 @@ export function Sidebar({ view, onView, status, hotkey, onOpenModel }: Props): R
             </div>
           </div>
         )}
-        <Separator className="mb-3 bg-white/6" />
+        <Separator className="mb-3 bg-muted" />
         <Button
           variant="ghost"
           onClick={onOpenModel}
