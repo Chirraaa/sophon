@@ -6,6 +6,7 @@ const suites = [
   'app-routing',
   'apps',
   'awareness',
+  'browser',
   'capabilities',
   'chatgpt',
   'coding',

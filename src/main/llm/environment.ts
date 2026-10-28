@@ -20,6 +20,14 @@ type Environment = {
 }
 
 const ACTIONS: Record<string, string> = {
+  browser_open:
+    'open an HTTP(S) page in an installed Edge/Chrome browser using a separate Sophon profile; user signs in manually, never assume the desktop app account carries over',
+  browser_tabs:
+    'discover tabs in already-open Sophon-managed browser sessions; no arbitrary browser attachment or implicit launch',
+  browser_inspect:
+    'read bounded visible main-frame DOM controls and text; narrow with query; frame/scan omissions are explicit',
+  browser_act:
+    'use one fresh DOM element reference; fill replaces without submitting; action returns fresh evidence when browser_inspect is allowed, otherwise request inspection separately',
   discover_tools:
     'load exact tool schemas from the capability index; discovery executes no actions and cannot grant permissions',
   plugins_list:

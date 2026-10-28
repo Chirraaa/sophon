@@ -92,6 +92,11 @@ export async function executeTool(
 ): Promise<string | CapturedScreen | ToolOutcome> {
   authorizeTool(run, name)
   const parameters = validateToolArguments(name, args)
+  if (['browser_open', 'browser_tabs', 'browser_inspect', 'browser_act'].includes(name)) {
+    const { executeBrowserTool } = await import('./browser/runtime')
+    assertRun(run)
+    return await executeBrowserTool(name, parameters, run)
+  }
   if (['list_audio', 'list_radios', 'set_volume', 'set_radio'].includes(name)) {
     try {
       const { listAudio, listRadios, setDevice } = await import('./system-control')

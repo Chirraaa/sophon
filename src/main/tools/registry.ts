@@ -1,5 +1,32 @@
 export const TOOL_INFO: ToolInfo[] = [
   {
+    name: 'browser_open',
+    label: 'Open browser pages',
+    description:
+      'Open a visible Edge or Chrome session with a separate Sophon profile. Sign in directly in that browser; websites use its cookies and run scripts.',
+    default: 'ask'
+  },
+  {
+    name: 'browser_tabs',
+    label: 'List browser tabs',
+    description: 'List tabs in Sophon-managed browser sessions only.',
+    default: 'ask'
+  },
+  {
+    name: 'browser_inspect',
+    label: 'Read browser elements',
+    description:
+      'Read visible page controls and text without screenshots. Password and file inputs are excluded.',
+    default: 'ask'
+  },
+  {
+    name: 'browser_act',
+    label: 'Use browser elements',
+    description:
+      'Click or edit an inspected page element. Buttons and Enter may submit information. Allowed browser inspection supplies a fresh read-back.',
+    default: 'ask'
+  },
+  {
     name: 'run_command',
     label: 'Run project commands',
     description:
