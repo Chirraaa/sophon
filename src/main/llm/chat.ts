@@ -26,7 +26,9 @@ import {
   assembleContext,
   estimateMessages,
   contextBudget,
-  latestScreenObservation
+  latestDesktopObservations,
+  historicalDesktopReferences,
+  appControlSnapshot
 } from './context'
 import { RecentResults, releaseCheckpointedMessages } from './retention'
 import { compactContext, compactionInfo, isSummaryTurn } from './compaction'
@@ -165,7 +167,11 @@ export async function chat(
   try {
     const taskText = workflow.resumed ? workflow.snapshot().goal : userText
     const discovery = new ToolDiscovery(taskText)
-    const history = settings.model.historyTurns === 0 ? [] : turns.map(repairToolHistory)
+    const history =
+      settings.model.historyTurns === 0
+        ? []
+        : turns.map((saved) => historicalDesktopReferences(repairToolHistory(saved)))
+    const controlWindows = new Map<string, string>()
     const books = selectPlaybooks(taskText)
     const memories = settings.memory?.enabled
       ? rankMemories(listMemories(), taskText, run.workspace, chatId)
@@ -385,7 +391,7 @@ export async function chat(
         (session.active ? '\n' + session.feedback() : '') +
         (verificationSetup ? '\nVerification setup needs repair: ' + verificationSetup : '')
 
-      const observations = latestScreenObservation(turn)
+      const observations = latestDesktopObservations(turn)
       for (let index = 0; index < turn.length; index++) turn[index] = observations[index]
       const current = (): Msg[] => [
         { role: 'user', content: workflow.context() },
@@ -1120,6 +1126,20 @@ export async function chat(
         if (session.active)
           resources.consume(estimateMessages([{ role: 'tool', content: resultText }]))
         const status = workflow.afterAction(actionId, args, result)
+        if (!['failed', 'denied', 'uncertain'].includes(status)) discovery.used(call.function.name)
+        const readbackWindow =
+          call.function.name === 'act_on_control'
+            ? controlWindows.get(String(args.observation))
+            : undefined
+        if (call.function.name === 'act_on_control') controlWindows.clear()
+        if (call.function.name === 'inspect_app' && status === 'observed') {
+          const snapshot = appControlSnapshot(resultText)
+          if (snapshot) {
+            while (controlWindows.size >= 4)
+              controlWindows.delete(controlWindows.keys().next().value!)
+            controlWindows.set(snapshot.observation, snapshot.windowRef)
+          }
+        }
         if (
           call.function.name === 'harness_manage' &&
           args.action === 'read' &&
@@ -1168,6 +1188,73 @@ export async function chat(
         results.push(resultText)
         turn.push({ role: 'tool', tool_call_id: call.id, content: resultText })
         if (typeof result !== 'string') images.push(result)
+        if (
+          call.function.name === 'act_on_control' &&
+          status === 'uncertain' &&
+          workflow.canRecover(actionId)
+        ) {
+          for (const pending of calls.slice(index + 1))
+            turn.push({
+              role: 'tool',
+              tool_call_id: pending.id,
+              content: 'Not executed: read back the uncertain control action first.'
+            })
+          let readbackFailure =
+            'The original app could not be inspected under the current scope or action budget.'
+          if (
+            readbackWindow &&
+            run.tools < ACTION_LIMIT &&
+            stepTools().some((tool) => tool.function.name === 'inspect_app')
+          ) {
+            const id = randomUUID()
+            const inspectArgs = { window: readbackWindow }
+            workflow.beforeAction(id, 'inspect_app', inspectArgs)
+            turn.push({
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id,
+                  type: 'function',
+                  function: { name: 'inspect_app', arguments: JSON.stringify(inspectArgs) }
+                }
+              ]
+            })
+            onEvent({ type: 'tool_start', id, name: 'inspect_app', args: inspectArgs })
+            const readback = await runTool('inspect_app', inspectArgs, id, onEvent)
+            assertRun(run)
+            const text = typeof readback === 'string' ? readback : readback.text
+            const readbackStatus = workflow.afterAction(id, inspectArgs, readback)
+            onEvent({ type: 'tool_end', id, result: text })
+            turn.push({ role: 'tool', tool_call_id: id, content: text })
+            results.push(text)
+            const snapshot = appControlSnapshot(text)
+            if (
+              readbackStatus === 'observed' &&
+              snapshot?.windowRef === readbackWindow &&
+              snapshot.controls.length
+            ) {
+              controlWindows.set(snapshot.observation, snapshot.windowRef)
+              discovery.used('inspect_app')
+              turn.push({
+                role: 'system',
+                content:
+                  'The host inspected the same app after an uncertain control action. The original action remains uncertain; inspection is not proof of success. Assess the fresh state against the user goal. Do not blindly replay the action. Continue only with a supported next step using fresh references, or report what remains unverified.'
+              })
+              break
+            }
+            readbackFailure = text
+          }
+          const reply =
+            'The control action outcome is uncertain and read-back could not establish usable state. ' +
+            resultText +
+            '\n' +
+            readbackFailure
+          workflow.finish(true)
+          turn.push({ role: 'assistant', content: reply })
+          saveTurn(turns, turn)
+          return reply
+        }
         if (
           (resultText.startsWith('Missing workspace path:') ||
             (call.function.name === 'edit_file' && resultText.startsWith('Patch not applied:'))) &&

@@ -90,6 +90,7 @@ export const WORKFLOW_INSTRUCTIONS =
 export class WorkflowController {
   readonly budgets = new LoopBudgets()
   private recoveryAction?: string
+  private controlReadbackPending = false
   canRecover(actionId: string): boolean {
     return this.recoveryAction === actionId
   }
@@ -164,7 +165,10 @@ export class WorkflowController {
         evidence: recent.map(({ actionId, tool, target, status, summary, at, runId }) => ({
           actionId,
           tool,
-          target: target.slice(0, 100),
+          target: (runId === this.runId
+            ? target
+            : target.replace(/\b(?:win-[a-f0-9-]{36}|obs-[a-f0-9]{12})\b/gi, '[expired reference]')
+          ).slice(0, 100),
           status,
           summary: summary.slice(0, 120),
           at,
@@ -176,6 +180,8 @@ export class WorkflowController {
   }
   beforeAction(actionId: string, tool: string, args: Record<string, unknown>): void {
     if (this.state.outcome !== 'running') throw new Error('This workflow has stopped.')
+    if (this.controlReadbackPending && tool !== 'inspect_app')
+      throw new Error('Inspect the uncertain control action before any further action.')
     this.state.phase = MUTATIONS.has(tool) ? 'act' : 'inspect'
     this.state.nextStep = 'Wait for the approved tool result before deciding what to do next.'
     this.state.evidence.push({
@@ -213,7 +219,16 @@ export class WorkflowController {
       resultText,
       assessment.status
     )
-    if (evidence.tool === 'click' && resultText.startsWith('Screenshot required:') && recover) {
+    if (evidence.tool === 'act_on_control' && assessment.status === 'uncertain' && recover) {
+      this.recoveryAction = actionId
+      this.controlReadbackPending = true
+      this.state.nextStep =
+        'Read back the same app before continuing. The action may have occurred; do not replay it or claim it was verified.'
+    } else if (
+      evidence.tool === 'click' &&
+      resultText.startsWith('Screenshot required:') &&
+      recover
+    ) {
       this.recoveryAction = actionId
       this.state.nextStep =
         'No click was executed. Capture the intended window again and choose fresh coordinates inside the new image.'
@@ -243,6 +258,8 @@ export class WorkflowController {
         assessment.status === 'reported'
           ? 'Check the relevant outcome with an available observation tool, or clearly report that it is unverified.'
           : 'Use this evidence to choose the next step or give a supported answer.'
+    if (evidence.tool === 'inspect_app' && assessment.status === 'observed')
+      this.controlReadbackPending = false
     this.emit()
     return assessment.status
   }

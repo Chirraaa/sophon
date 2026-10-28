@@ -11,12 +11,22 @@ export const CODING_PINNED_TOOLS = [
 
 type Tool = { function: { name: string; description: string } }
 
+const DESKTOP_TOOLS = ['list_windows', 'inspect_app', 'act_on_control', 'look_at_screen']
+const RELATED: Record<string, string[]> = {
+  open_app: DESKTOP_TOOLS,
+  inspect_app: DESKTOP_TOOLS,
+  act_on_control: DESKTOP_TOOLS,
+  look_at_screen: DESKTOP_TOOLS,
+  click: ['look_at_screen', 'inspect_app', 'list_windows'],
+  type_text: ['inspect_app', 'press_keys', 'list_windows']
+}
+
 export class ToolDiscovery {
   private requested = new Set<string>()
 
   constructor(query: string) {
     const groups: [RegExp, string[]][] = [
-      [/\b(open|launch|start|ouvrir)\b/i, ['open_app', 'list_apps', 'list_windows']],
+      [/\b(open|launch|start|ouvrir)\b/i, ['open_app', 'list_apps', ...DESKTOP_TOOLS]],
       [
         /\b(window|windows|screen|desktop|click|button|type|scroll|notepad|fenêtre|écran)\b/i,
         [
@@ -52,6 +62,20 @@ export class ToolDiscovery {
     for (const name of query.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? []) this.requested.add(name)
   }
 
+  // A bounded working set: explicit requests first, useful follow-ups next, then
+  // recently loaded schemas. Availability is still checked on every selection.
+  private remember(names: string[]): void {
+    this.requested = new Set(
+      [
+        ...new Set([...names, ...names.flatMap((name) => RELATED[name] ?? []), ...this.requested])
+      ].slice(0, 8)
+    )
+  }
+
+  used(name: string): void {
+    this.remember([name])
+  }
+
   select<T extends Tool>(catalog: T[], pinned: string[] = []): T[] {
     const available = new Map(catalog.map((tool) => [tool.function.name, tool]))
     const optional = [...this.requested]
@@ -69,8 +93,13 @@ export class ToolDiscovery {
       if (unavailable.length)
         return `Not loaded: ${unavailable.join(', ')} unavailable in this phase or under current policy. No permissions changed.`
 
-      this.requested = new Set(names)
-      return `Schemas loaded for the next model call: ${names.join(', ')}. No actions executed or permissions changed. Call discover_tools again to switch tools.`
+      this.remember(names)
+      return `Schemas ready: ${this.select(catalog)
+        .map((tool) => tool.function.name)
+        .filter((name) => name !== 'discover_tools')
+        .join(
+          ', '
+        )}. No actions executed or permissions changed. Use loaded tools directly; discover only missing tools.`
     }
     return JSON.stringify(
       catalog.map((tool) => ({
