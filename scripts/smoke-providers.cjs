@@ -109,6 +109,11 @@ async function main() {
   const harness = createHarness(
     {
       id: 'api-roundtrip',
+      files: { 'package.json': JSON.stringify({ scripts: { test: 'node test.cjs' } }) },
+      toolResults: {
+        list_files: '[file] package.json',
+        run_npm: JSON.stringify({ exitCode: 0, stopped: false })
+      },
       prompt: 'Read source.txt and create copy.txt',
       responses: [
         response(reasoning, call('read_file', { path: 'source.txt' })),
@@ -123,8 +128,12 @@ async function main() {
   )
   const result = await harness.run()
   assert(!result.error, result.error)
-  assert.equal(result.calls.length, 2)
-  assert.equal(result.reply, 'Saved copy.txt.')
+  assert.deepEqual(
+    result.calls.map((call) => call.name),
+    ['read_file', 'write_file', 'list_files', 'read_file', 'run_npm']
+  )
+  assert.match(result.reply, /^Saved copy\.txt\./)
+  assert.match(result.reply, /npm run test.*passed/)
   assert.deepEqual(result.usage, { prompt_tokens: 300, completion_tokens: 45, missing: 0 })
   const request = result.requests[0].body
   assert.equal(request.store, false)

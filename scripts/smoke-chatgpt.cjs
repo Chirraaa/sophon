@@ -322,6 +322,11 @@ async function main() {
   const harness = createHarness(
     {
       id: 'subscription-tools',
+      files: { 'package.json': JSON.stringify({ scripts: { test: 'node test.cjs' } }) },
+      toolResults: {
+        list_files: '[file] package.json',
+        run_npm: JSON.stringify({ exitCode: 0, stopped: false })
+      },
       streamResponses: true,
       prompt: 'Read source.txt and create copy.txt',
       responses: [
@@ -340,7 +345,10 @@ async function main() {
   )
   const result = await harness.run()
   assert(!result.error, result.error)
-  assert.equal(result.calls.length, 2)
+  assert.deepEqual(
+    result.calls.map((call) => call.name),
+    ['read_file', 'write_file', 'list_files', 'read_file', 'run_npm']
+  )
   for (const { body } of result.requests) {
     assert.deepEqual(body.reasoning, { effort: 'high' })
     assert.equal(body.stream, true)

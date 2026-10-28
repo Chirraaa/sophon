@@ -1,3 +1,5 @@
+import { codingMutation } from './coding-mutation'
+export { codingMutation, isRoutineNpm } from './coding-mutation'
 import { ACTION_LIMIT, RUN_SECONDS } from '../../shared/loop-limits'
 import { untrustedData } from '../llm/untrusted-data'
 import { codingQualityGuide, codingToolFeedback } from '../../shared/coding-quality'
@@ -9,26 +11,6 @@ PATCH POLICY: Use edit_file for existing files, with short unique old_text/new_t
 Use run_command for Git and installed project toolchains such as Java, Maven, Gradle, C/C++, Make and CMake. Commands use PowerShell syntax and existing workspace-relative directories. Set purpose accurately: inspect, change or check. Run separate dependent commands and inspect each exit code. Check installed tools with Get-Command when uncertain. run_npm supports managed dev servers. Approval cards handle command approval; do not ask twice in prose. Never use a command to evade blocked tools, protected paths or the selected GitHub account/repository scope.
 On a patch mismatch re-read the file and correct the excerpt. On command failure inspect diagnostics and state before a focused repair, bounded by the task budget. Stop on denial or uncertain effects. Never weaken checks. After source changes run relevant builds/tests with purpose check; npm projects also have host-discovered checks. Verification must follow the last edit. If checks are unavailable report that limitation honestly, without manufacturing a package.json or test merely to satisfy the harness. Planning and learning are optional. If you save a plan, keep task statuses current and save a coding_checkpoint after the latest edits before finishing.`
 
-const SOURCE =
-  /\.(?:[cm]?[jt]sx?|css|scss|html?|json|xml|py|rs|go|java|c|cc|cxx|cpp|h|hpp|hxx|gradle|kts|properties|cmake|mk|toml|ya?ml|sql)$|(?:^|[\\/])(?:Makefile|CMakeLists\.txt)$/i
-export function codingMutation(name: string, args: Record<string, unknown>): boolean {
-  return (
-    (name === 'run_npm' && args.action !== 'stop' && !isRoutineNpm(args.args)) ||
-    (name === 'run_command' && args.purpose === 'change') ||
-    (['write_file', 'edit_file', 'delete_file'].includes(name) &&
-      SOURCE.test(String(args.path ?? '')))
-  )
-}
-
-export function isRoutineNpm(args: unknown): boolean {
-  if (!Array.isArray(args)) return false
-  const script = args[0] === 'run' ? args[1] : args[0]
-  return (
-    /^(?:dev|start|serve|preview|test(?::[\w-]+)?|lint|typecheck|type-check|check|build|smoke(?::[\w-]+)?)$/.test(
-      String(script ?? '')
-    ) && !args.some((arg) => /^(?:--fix|--write|--updateSnapshot|-u)$/.test(String(arg)))
-  )
-}
 export function wantsCodingSession(text: string, workspace: string): boolean {
   if (
     /^(?:please\s+)?(?:run|start|stop|restart|launch|close)\b/i.test(text.trim()) &&
