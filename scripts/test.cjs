@@ -24,6 +24,7 @@ const suites = [
   'github-restore',
   'harness',
   'harness-outcomes',
+  'harness-rollback',
   'harness-store',
   'icons',
   'licenses',

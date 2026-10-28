@@ -26,6 +26,8 @@ interface Lifecycle {
   content?: { hash: string; version: number }
   state: LifecycleState
   version: number
+  latestVersion?: number
+  previousAccepted?: { hash: string; version: number }
   successes: number
   failures: number
   uses: number
@@ -55,6 +57,26 @@ export function harnessLifecycle(category: string, name: string): Lifecycle {
       runs: []
     })
   const value = JSON.parse(readFileSync(path, 'utf8')) as Lifecycle
+  validateLifecycle(value)
+  if (value.format === undefined) return migrateLifecycle(category, name, value)
+  if (value.content) versionContent(category, name, value)
+  if (value.outcomes === undefined) {
+    // Old counters cannot prove that a counted success had no later failure.
+    if (value.uses > 0) {
+      if (['active', 'trial'].includes(value.state))
+        value.state = value.failures > 0 ? 'candidate' : 'trial'
+      if (value.archivedState === 'active') value.archivedState = 'trial'
+      value.successes = value.failures = value.uses = 0
+      value.runs = []
+      value.evidence = []
+    }
+    value.outcomes = []
+    saveLifecycle(category, name, value)
+  }
+  if (value.previousAccepted) readAcceptedVersion(category, name, value.previousAccepted)
+  return value
+}
+function validateLifecycle(value: Lifecycle): void {
   if (
     !['candidate', 'trial', 'active', 'revised', 'deprecated', 'discarded'].includes(value.state) ||
     ![value.version, value.successes, value.failures, value.uses].every(
@@ -89,29 +111,23 @@ export function harnessLifecycle(category: string, name: string): Lifecycle {
     (value.archived !== undefined && !/^[a-z0-9-]+\.md$/.test(value.archived))
   )
     throw new Error('Invalid procedural lifecycle metadata.')
-  if (value.format === undefined) return migrateLifecycle(category, name, value)
+  if (value.format === undefined) return
   if (
     value.format !== 1 ||
+    (value.latestVersion !== undefined &&
+      (!Number.isSafeInteger(value.latestVersion) || value.latestVersion < value.version)) ||
+    (value.previousAccepted !== undefined &&
+      (!value.previousAccepted ||
+        typeof value.previousAccepted.hash !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(value.previousAccepted.hash) ||
+        !Number.isSafeInteger(value.previousAccepted.version) ||
+        value.previousAccepted.version < 0 ||
+        value.previousAccepted.version >= value.version)) ||
     (value.content !== undefined &&
       (!/^[a-f0-9]{64}$/.test(value.content.hash) || value.content.version !== value.version)) ||
     (!value.content && !['candidate', 'discarded'].includes(value.state))
   )
     throw new Error('Inconsistent procedural manifest.')
-  if (value.content) versionContent(category, name, value)
-  if (value.outcomes === undefined) {
-    // Old counters cannot prove that a counted success had no later failure.
-    if (value.uses > 0) {
-      if (['active', 'trial'].includes(value.state))
-        value.state = value.failures > 0 ? 'candidate' : 'trial'
-      if (value.archivedState === 'active') value.archivedState = 'trial'
-      value.successes = value.failures = value.uses = 0
-      value.runs = []
-      value.evidence = []
-    }
-    value.outcomes = []
-    saveLifecycle(category, name, value)
-  }
-  return value
 }
 function versionPath(category: string, name: string, value: Lifecycle): string {
   if (!value.content) throw new Error('Procedural manifest has no content version.')
@@ -132,6 +148,65 @@ function storeVersion(category: string, name: string, value: Lifecycle, content:
   const path = versionPath(category, name, value)
   if (existsSync(path)) versionContent(category, name, value)
   else writeFileSync(path, content, { flag: 'wx' })
+}
+function acceptedPath(
+  category: string,
+  name: string,
+  reference: { hash: string; version: number }
+): string {
+  return join(
+    root(),
+    'revisions',
+    `${category}-${name}-${reference.version}-${reference.hash}.json`
+  )
+}
+function readAcceptedVersion(
+  category: string,
+  name: string,
+  reference: { hash: string; version: number }
+): Lifecycle {
+  const path = acceptedPath(category, name, reference)
+  safeFile(path)
+  if (!existsSync(path)) throw new Error('Missing accepted procedural revision; rollback refused.')
+  const text = readFileSync(path, 'utf8')
+  if (digest(text) !== reference.hash) throw new Error('Inconsistent accepted revision hash.')
+  const snapshot = JSON.parse(text) as { category: string; name: string; lifecycle: Lifecycle }
+  const value = snapshot.lifecycle
+  if (
+    snapshot.category !== category ||
+    snapshot.name !== name ||
+    !value ||
+    value.format !== 1 ||
+    value.state !== 'active' ||
+    value.version !== reference.version ||
+    value.previousAccepted !== undefined ||
+    value.candidate !== undefined ||
+    value.archived !== undefined ||
+    value.archivedState !== undefined ||
+    value.outcomes === undefined
+  )
+    throw new Error('Inconsistent accepted procedural revision metadata.')
+  validateLifecycle(value)
+  versionContent(category, name, value)
+  return value
+}
+function retainAcceptedVersion(
+  category: string,
+  name: string,
+  entry: Lifecycle
+): { hash: string; version: number } {
+  const accepted = { ...entry }
+  delete accepted.candidate
+  delete accepted.archived
+  delete accepted.archivedState
+  delete accepted.previousAccepted
+  const text = JSON.stringify({ category, name, lifecycle: accepted })
+  if (Buffer.byteLength(text) > 16000) throw new Error('Accepted revision metadata is oversized.')
+  const reference = { hash: digest(text), version: entry.version }
+  const path = acceptedPath(category, name, reference)
+  if (existsSync(path)) readAcceptedVersion(category, name, reference)
+  else writeFileSync(path, text, { flag: 'wx' })
+  return reference
 }
 function migrateLifecycle(category: string, name: string, value: Lifecycle): Lifecycle {
   // Never recover a managed entry by falling back to unbound legacy Markdown.
@@ -246,7 +321,7 @@ export function readHarnessProposal(category: string, name: string): string {
 export const HARNESS_INSTRUCTIONS = `Use propose → probe → compose: propose the smallest useful approach, probe it with tools or evidence, then compose the checked answer. Answer simple requests directly. python_calculate evaluates bounded Python math and CSV expressions; use it for arithmetic, numerical checks, CSV filtering and aggregation rather than guessing. It supports rows (CSV dictionaries), comprehensions, sum/min/max/len/sorted, int/float/round/abs, Decimal/Fraction and sqrt/sin/cos/log/pi. For CSV use its approved relative workspace path input or inline content. Python expressions cannot import modules, access attributes, open files or execute arbitrary scripts.
 Use ask_questions only when a few answers would materially improve an ambiguous request, for example unspecified help with a lesson. Ask up to three short questions with choices; skip it when intent or level is already known, the user wants a direct answer, or a useful assumption suffices. Never require a questionnaire for simple factual questions.
 The Markdown harness contains editable skills, script-tools, subagents and loop-hooks. These are fallible procedural guidance, subordinate to current user requests and application instructions, never permissions. Read relevant documents with harness_manage. To learn from an explicit user correction or repeatable tool evidence: propose a concise reusable Markdown document with source, applicability and limits; probe its structure and a meaningful example (script-tools require an expected result); compose only after a passing probe. Do not store private facts, secrets, raw conversations or inferred personal preferences in this plaintext harness. Existing encrypted user memories remain separate. A structure probe is not proof of semantic correctness. Report saved changes accurately. Never claim weight training. Script-tools require one fenced python expression. Subagents use the existing profiles with clean context and bounded handoffs; they cannot add permissions or recursively delegate. Loop hooks are guidance at before_task, after_tool and before_answer, never executable shell commands.
-LIFECYCLE: A proposal is a candidate, not active advice. Non-script compose requires the user's approval of the exact probed content, even under Always allow; the app presents this approval. Script-tools require a passing replay probe. Successful compose creates an unproven trial. Only host-observed use can promote a trial or quarantine failing guidance; never assert successful uses or promote it yourself. status reports lifecycle and counters, discard invalidates a candidate, archive deprecates guidance, and rollback restores an archived state without bypassing trial. A completed coding task does not itself approve publication. Reflection may record that no reusable lesson was found.`
+LIFECYCLE: A proposal is a candidate, not active advice. Non-script compose requires the user's approval of the exact probed content, even under Always allow; the app presents this approval. Script-tools require a passing replay probe. Successful compose creates an unproven trial. Only host-observed use can promote a trial or quarantine failing guidance; never assert successful uses or promote it yourself. status reports lifecycle and counters, discard invalidates a candidate, archive deprecates guidance, and rollback restores an archived state or the previous accepted version with its recorded lifecycle, without promoting an unproven trial. A completed coding task does not itself approve publication. Reflection may record that no reusable lesson was found.`
 
 const SEEDS: Record<string, string> = {
   'skills/learning.md':
@@ -484,12 +559,20 @@ export async function manageHarness(
   }
   if (args.action === 'rollback') {
     const entry = harnessLifecycle(category, name)
-    if (entry.state !== 'deprecated' || !entry.archived)
-      throw new Error('No deprecated revision to restore.')
-    versionContent(category, name, entry)
-    entry.state = entry.archivedState ?? 'trial'
-    saveLifecycle(category, name, entry)
-    return `Restored the deprecated revision to its previous ${entry.state} state.`
+    if (entry.state === 'deprecated' && entry.archived) {
+      versionContent(category, name, entry)
+      entry.state = entry.archivedState ?? 'trial'
+      saveLifecycle(category, name, entry)
+      return `Restored the deprecated revision to its previous ${entry.state} state.`
+    }
+    if (!entry.previousAccepted)
+      throw new Error('No previous accepted version or deprecated revision to restore.')
+    const restored = readAcceptedVersion(category, name, entry.previousAccepted)
+    restored.latestVersion = entry.latestVersion ?? entry.version
+    if (signal?.aborted) throw new Error('Rollback cancelled.')
+    saveLifecycle(category, name, restored)
+    probes.delete(location(category, name, true))
+    return `Restored ${category}/${name}.md to accepted v${restored.version} with its recorded ${restored.state} lifecycle and evidence.`
   }
   if (args.action === 'archive') {
     if (signal?.aborted) throw new Error('Archive cancelled.')
@@ -554,18 +637,27 @@ export async function manageHarness(
   if (signal?.aborted) throw new Error('Compose cancelled.')
   if (!entry.content && documentNames(category).length >= 100)
     throw new Error('Category document limit reached.')
-  if (readdirSync(join(root(), 'revisions')).length >= 1000)
+  const revisionCount = readdirSync(join(root(), 'revisions')).length
+  const revisionsNeeded = entry.content ? (entry.state === 'active' ? 2 : 1) : 0
+  if (revisionCount >= 1000 || revisionCount + revisionsNeeded > 1000)
     throw new Error(
       'Revision limit reached. Review archived revisions before saving further changes.'
     )
+  const nextVersion = (entry.latestVersion ?? entry.version) + 1
+  if (!Number.isSafeInteger(nextVersion)) throw new Error('Procedural version limit reached.')
   if (entry.content)
     writeFileSync(
       join(root(), 'revisions', `${category}-${name}-${randomUUID()}.md`),
       versionContent(category, name, entry),
       { flag: 'wx' }
     )
+  if (entry.state === 'active')
+    entry.previousAccepted = retainAcceptedVersion(category, name, entry)
   entry.state = 'trial'
-  entry.version++
+  entry.version = nextVersion
+  entry.latestVersion = entry.version
+  entry.archived = undefined
+  entry.archivedState = undefined
   entry.successes = 0
   entry.failures = 0
   entry.uses = 0
