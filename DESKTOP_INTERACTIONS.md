@@ -1,5 +1,10 @@
 # Desktop interaction
 
+The four-route app interaction work adds focused/paged accessibility inspection
+and optional action read-back. See [App interaction routes](docs/APP_INTERACTION.md)
+for current behavior, permission requirements and validation. The historical
+implementation records below describe earlier limits and test results.
+
 The shared action ledger now owns live accessibility observation identities and
 their expiry. An uncertain action uses the exact inspected window for its bounded
 read-back. The chat loop consumes structured outcomes and no longer keeps a

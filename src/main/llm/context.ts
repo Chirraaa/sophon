@@ -112,7 +112,7 @@ export function appControlSnapshot(text: string):
     }
   | undefined {
   try {
-    const envelope = JSON.parse(text)
+    const envelope = JSON.parse(text.slice(text.lastIndexOf('\n{') + 1))
     if (envelope.kind !== 'app-controls' || envelope.trust !== 'untrusted-data') return
     const snapshot = JSON.parse(envelope.content)
     if (
@@ -147,17 +147,19 @@ export function latestDesktopObservations(messages: ModelMessage[]): ModelMessag
       if (!stale) return message
       return {
         ...message,
-        content: untrustedData(
-          'expired-app-controls',
-          snapshot.windowRef,
-          JSON.stringify({
-            note: 'Historical inspection; control references expired or were superseded. Inspect again for actions. Full details remain in action history.',
-            excerpt: snapshot.controls.slice(0, 6).map((control) => ({
-              name: String(control.name ?? '').slice(0, 80),
-              ...(control.value ? { valueExcerpt: String(control.value).slice(0, 80) } : {})
-            }))
-          })
-        )
+        content:
+          message.content.slice(0, message.content.lastIndexOf('\n{') + 1) +
+          untrustedData(
+            'expired-app-controls',
+            snapshot.windowRef,
+            JSON.stringify({
+              note: 'Historical inspection; control references expired or were superseded. Inspect again for actions. Full details remain in action history.',
+              excerpt: snapshot.controls.slice(0, 6).map((control) => ({
+                name: String(control.name ?? '').slice(0, 80),
+                ...(control.value ? { valueExcerpt: String(control.value).slice(0, 80) } : {})
+              }))
+            })
+          )
       }
     })
     .reverse()

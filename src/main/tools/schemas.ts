@@ -181,6 +181,11 @@ export const toolSchemas = [
             type: 'string',
             description:
               'Optional literal substring of a control name, role or text, at most 120 characters. Matching named groups include their child controls. Do not use sentences or OR expressions. If no controls match, inspect again without query.'
+          },
+          offset: {
+            type: 'number',
+            description:
+              'Optional nextOffset from a truncated inspection (0–1000). Keep the same query. Pages re-read current state; prefer a focused query when the app is changing.'
           }
         }
       }
@@ -191,7 +196,7 @@ export const toolSchemas = [
     function: {
       name: 'act_on_control',
       description:
-        'Act on one exact control from a fresh inspect_app result. Use only an action listed for that control. set_value REPLACES the complete field; it sends no Enter key or submit click. invoke may activate a button with external effects: follow the user request. Inspect again after every action; references are single-use and expire after two minutes.',
+        'Act on one exact control from a fresh inspect_app result. Use only an action listed for that control. set_value REPLACES the complete field; it sends no Enter key or submit click. invoke may activate a button with external effects: follow the user request. Prefer readback_query for expected resulting controls/text: when inspect_app is Always allow, fresh evidence and references return with the action. Otherwise inspect afterward. Old references are single-use and expire after two minutes.',
       parameters: {
         type: 'object',
         properties: {
@@ -220,6 +225,12 @@ export const toolSchemas = [
             type: 'string',
             description:
               'Exact replacement for set_value only; may be empty to clear the field. At most 2000 characters.'
+          },
+          readback_query: {
+            type: 'string',
+            maxLength: 120,
+            description:
+              'Optional literal query for fresh post-action evidence (e.g. Pause or Draft controls). Empty means overview. Only runs automatically when inspect_app is Always allow; never bypasses read permissions.'
           }
         },
         required: ['observation', 'control', 'action']

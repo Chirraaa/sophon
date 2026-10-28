@@ -41,7 +41,7 @@ const native = {
 const permissions = {
   protectedWindowRule: () => (protectedTarget ? 'protected' : null),
   blockedAppRule: () => (blocked ? 'blocked' : null),
-  toolPermission: () => 'ask'
+  toolPermission: (name) => settings.tools[name]
 }
 const windows = load('src/main/tools/windows.ts', {
   crypto,
@@ -275,7 +275,43 @@ async function main() {
   next = unwrap(await execute('inspect_app', { window: refs[1] }))
   assert(next.truncated)
   assert(JSON.stringify(next).length < 12000)
+  assert.equal(
+    next.nextOffset,
+    next.controls.length,
+    'Paging does not skip controls omitted by the host character budget'
+  )
+  const offsetPage = unwrap(
+    await execute('inspect_app', { window: refs[1], query: 'Draft', offset: 7 })
+  )
+  assert.equal(workerCalls.at(-1).offset, 7)
+  assert.equal(offsetPage.nextOffset, 7 + offsetPage.controls.length)
+  assert.throws(() => contracts.validateToolArguments('inspect_app', { offset: -1 }))
+  assert.throws(() => contracts.validateToolArguments('inspect_app', { offset: 1001 }))
+  assert.throws(() => contracts.validateToolArguments('inspect_app', { offset: 1.5 }))
   observed = [sample]
+  for (const permission of ['ask', 'block', 'allow']) {
+    settings.tools.inspect_app = 'ask'
+    const before = unwrap(await execute('inspect_app', { window: refs[1] }))
+    settings.tools.inspect_app = permission
+    const start = workerCalls.length
+    const combined = await runner(
+      'act_on_control',
+      { ...args, observation: before.observation, readback_query: 'Draft' },
+      crypto.randomUUID()
+    )
+    assert.equal(combined.status, 'verified')
+    assert.equal(workerCalls.length - start, permission === 'allow' ? 2 : 1)
+    if (permission === 'allow') {
+      assert(combined.observation)
+      assert.equal(workerCalls.at(-1).hwnd, 2)
+      assert.equal(workerCalls.at(-1).query, 'Draft')
+      assert.equal(
+        controls.controlTarget({ ...args, observation: combined.observation.id }, run).window.hwnd,
+        2
+      )
+    } else assert(!combined.observation, 'Read permission is not implied by action approval')
+  }
+  settings.tools.inspect_app = 'ask'
   next = unwrap(await execute('inspect_app', { window: refs[1] }))
   result = { status: 'uncertain', message: 'Changed after the action' }
   assert.match(

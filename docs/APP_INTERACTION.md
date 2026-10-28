@@ -56,3 +56,28 @@ Validation: `npm run smoke:browser` (offline contracts) and
 `npm run smoke:browser:native` (real headless Edge against a localhost fixture
 and disposable profile). These do not establish compatibility with every web
 app or Discord account.
+
+## Windows accessibility
+
+The existing `inspect_app` / `act_on_control` route uses Windows UI Automation.
+Inspection now caches common element properties in one provider request per
+element, and refreshes the chosen element immediately before an action. It
+retains process/window binding, stale-value rejection and password exclusion.
+
+An overview scans at most 240 nodes. A focused query or paged inspection scans
+at most 1200, still within the worker's existing time limit and depth 24. Results
+include explicit diagnostics and a `nextOffset` when a page is truncated. The
+offset counts controls actually returned to the model, including the host's
+character cap. Pages read current state, so they are not stable cursors through
+a changing UI. Narrow queries are preferable. A lack of controls can reflect
+the app's accessibility provider; it does not establish that the UI is empty.
+
+`act_on_control` accepts `readback_query` (empty for an overview). After a
+reported/verified action, it returns a fresh inspection only when `inspect_app`
+is already Always allow. Other grants remain unchanged. Fresh references are
+registered in the action ledger, and superseded trees are compacted without
+discarding the original action evidence. Existing bounded recovery handles
+uncertain actions separately. Read-back itself is not proof of the full goal.
+
+Validation: `npm run smoke:controls`, `npm run smoke:controls:native`,
+`node scripts/smoke-action-outcomes.cjs`, and `npm run smoke:screen`.

@@ -110,6 +110,23 @@ assert.deepEqual(
   packedTrees,
   'Compaction is idempotent'
 )
+const compound = {
+  ...inspection(4),
+  content: 'Reported control action: invoke.\nFresh app evidence follows.\n' + inspection(4).content
+}
+assert.equal(context.appControlSnapshot(compound.content).observation, 'obs-000000000004')
+const packedCompound = context.latestDesktopObservations([inspection(3), act, compound])
+assert.equal(
+  packedCompound[2].content,
+  compound.content,
+  'Latest compound read-back stays actionable'
+)
+const staleCompound = context.latestDesktopObservations([compound, act])[0]
+assert(staleCompound.content.startsWith('Reported control action: invoke.'))
+assert(
+  !staleCompound.content.includes('obs-000000000004'),
+  'Superseded read-back references are removed without losing action evidence'
+)
 const oldCalls = [
   {
     role: 'assistant',

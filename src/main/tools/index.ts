@@ -33,6 +33,7 @@ import {
   closeApp,
   closeWindow,
   listWindowsText,
+  listWindows,
   moveWindow,
   rememberEditedWindow,
   type MoveArgs
@@ -199,6 +200,46 @@ export async function executeTool(
     if (name === 'act_on_control') {
       const result = await actOnControl(parameters, run, scope)
       if (scope.window && scope.pid !== undefined) rememberEditedWindow(scope.window, scope.pid)
+      if (
+        parameters.readback_query !== undefined &&
+        ['verified', 'reported'].includes(result.status)
+      ) {
+        if (toolPermission('inspect_app') !== 'allow' || !canUseTool(run, 'inspect_app'))
+          return toolOutcome(
+            result.status,
+            result.text +
+              '\nAutomatic read-back was skipped: inspect_app requires its own permission.',
+            { summary: result.summary }
+          )
+        try {
+          scope.guard?.()
+          const window = listWindows().find((win) => win.hwnd === scope.window?.hwnd)
+          if (!window) throw new Error('Original window closed.')
+          const readback = await inspectApp({ query: parameters.readback_query }, run, {
+            ...scope,
+            window
+          })
+          assertRun(run)
+          return toolOutcome(
+            result.status,
+            result.text +
+              '\nFresh app evidence follows. Assess the requested effect; do not repeat inspection when this evidence is sufficient.\n' +
+              readback.text,
+            {
+              summary: result.summary,
+              ...(readback.status === 'observed' ? { observation: readback.observation } : {})
+            }
+          )
+        } catch {
+          assertRun(run)
+          return toolOutcome(
+            result.status,
+            result.text +
+              '\nFresh read-back was unavailable. Inspect the original app before continuing; do not repeat the action.',
+            { summary: result.summary }
+          )
+        }
+      }
       return result
     }
 

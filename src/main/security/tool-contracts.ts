@@ -176,6 +176,12 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
   }
   if (name === 'inspect_app' && String(object.query ?? '').length > 120)
     throw new Error('Control query exceeds 120 characters.')
+  if (
+    name === 'inspect_app' &&
+    object.offset !== undefined &&
+    (!Number.isInteger(object.offset) || Number(object.offset) < 0 || Number(object.offset) > 1000)
+  )
+    throw new Error('Control offset must be an integer from 0 to 1000.')
   if (name === 'act_on_control') {
     if (
       !/^obs-[\da-f]{12}$/.test(String(object.observation)) ||

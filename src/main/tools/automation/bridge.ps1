@@ -17,7 +17,7 @@ function Pattern($element, $id) {
   return $null
 }
 function Describe($element) {
-  $info = $element.Current
+  $info = $element.Cached
   if ($info.IsPassword -or $info.IsOffscreen) { return $null }
   $rect = $info.BoundingRectangle
   if ($rect.IsEmpty -or $rect.Width -le 0 -or $rect.Height -le 0) { return $null }
@@ -71,6 +71,16 @@ function Describe($element) {
 try {
   $root = [Windows.Automation.AutomationElement]::FromHandle([IntPtr][long]$request.hwnd)
   if (-not $root -or $root.Current.ProcessId -ne $request.pid) { throw 'The target application changed.' }
+  # Fetch common properties together rather than crossing processes for every
+  # name, role, rectangle and state. Patterns still use live values for actions.
+  $cache = New-Object Windows.Automation.CacheRequest
+  foreach ($property in @('NameProperty', 'AutomationIdProperty', 'ControlTypeProperty', 'IsEnabledProperty', 'IsOffscreenProperty', 'IsPasswordProperty', 'BoundingRectangleProperty')) {
+    $cache.Add([Windows.Automation.AutomationElement]::$property)
+  }
+  $root = $root.GetUpdatedCache($cache)
+  $offset = if ($request.offset) { [int]$request.offset } else { 0 }
+  if ($offset -lt 0 -or $offset -gt 1000) { throw 'Invalid control offset.' }
+  $scanLimit = if ($request.operation -eq 'act' -or $request.query -or $offset -gt 0) { 1200 } else { 240 }
   $walker = [Windows.Automation.TreeWalker]::ControlViewWalker
   $queue = New-Object System.Collections.Queue
   $queue.Enqueue(@($root, 0, $false, ''))
@@ -79,7 +89,8 @@ try {
   $limited = $false
   $found = $null
   $description = $null
-  while ($queue.Count -gt 0 -and $visited -lt 240 -and $clock.ElapsedMilliseconds -lt 6500) {
+  $matched = 0
+  while ($queue.Count -gt 0 -and $visited -lt $scanLimit -and $clock.ElapsedMilliseconds -lt 6500) {
     $entry = $queue.Dequeue()
     $element = $entry[0]
     $depth = [int]$entry[1]
@@ -87,7 +98,7 @@ try {
     $container = [string]$entry[3]
     $visited++
 
-    if ($element.Current.IsPassword) { continue }
+    if ($element.Cached.IsPassword) { continue }
     $data = Describe $element
     if ($data) { $data.container = $container }
     $needle = [string]$request.query
@@ -99,7 +110,8 @@ try {
 
     if ($request.operation -eq 'inspect' -and $data -and ($data.name -or $data.value -or $data.actions.Count)) {
       if ($matches) {
-        [void]$items.Add($data)
+        if ($matched -ge $offset) { [void]$items.Add($data) }
+        $matched++
         if ($items.Count -ge 50) { break }
       }
     }
@@ -109,18 +121,25 @@ try {
       $group = $data -and $data.name -and $data.role -in @('Group', 'ToolBar', 'Menu')
       $childMatch = $withinMatch -or ($needle -and $matches -and $group)
       $childContainer = if ($group) { $data.name } else { $container }
-      $child = $walker.GetFirstChild($element)
-      while ($child -and ($queue.Count + $visited) -lt 240) {
+      $child = $walker.GetFirstChild($element, $cache)
+      while ($child -and ($queue.Count + $visited) -lt $scanLimit) {
         $queue.Enqueue(@($child, ($depth + 1), $childMatch, $childContainer))
-        $child = $walker.GetNextSibling($child)
+        $child = $walker.GetNextSibling($child, $cache)
       }
       if ($child) { $limited = $true }
     } else { $limited = $true }
   }
   if ($request.operation -eq 'inspect') {
-    $result = @{ status = 'observed'; controls = @($items.ToArray()); truncated = ($limited -or $queue.Count -gt 0 -or $items.Count -ge 50 -or $visited -ge 240); visited = $visited }
+    $truncated = $limited -or $queue.Count -gt 0 -or $items.Count -ge 50 -or $visited -ge $scanLimit
+    $reason = if ($truncated) { 'scan-limited' } elseif ($items.Count -eq 0 -and $request.query) { 'no-match' } elseif ($items.Count -eq 0) { 'no-controls' } else { 'available' }
+    $result = @{ status = 'observed'; controls = @($items.ToArray()); truncated = $truncated; visited = $visited; scanLimit = $scanLimit; diagnostic = $reason }
   } elseif ($request.operation -eq 'act') {
     if (-not $found) { throw 'Control is no longer visible. Inspect the app again.' }
+    # Traversal caches can precede dispatch by several seconds. Reacquire the
+    # selected node's properties immediately before the mutation identity check.
+    $found = $found.GetUpdatedCache($cache)
+    $description = Describe $found
+    if (-not $description) { throw 'Control is no longer available. Inspect again.' }
     foreach ($key in @('name', 'automationId', 'role', 'valueHash', 'selected', 'toggle', 'expanded', 'vertical')) {
       if ([string]$description[$key] -cne [string]$request.expected.$key) { throw 'Control changed since inspection. Inspect the app again.' }
     }
