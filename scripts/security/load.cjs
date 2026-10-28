@@ -28,6 +28,8 @@ function load(file, dependencies = {}) {
           (name === './skills' && file.startsWith('src/main/plugins/')))
       )
         return load('src/main/plugins/skills.ts', { crypto: require('node:crypto') })
+      if (!Object.hasOwn(dependencies, name) && name === './coding-mutation')
+        return load('src/main/workflow/coding-mutation.ts')
       if (!Object.hasOwn(dependencies, name) && name === './tool-discovery')
         return load('src/main/llm/tool-discovery.ts')
       if (!Object.hasOwn(dependencies, name) && name === '../plugins/schemas')

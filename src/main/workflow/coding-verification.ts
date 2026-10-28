@@ -1,3 +1,5 @@
+import { codingMutation, codingMutationPath } from './coding-mutation'
+
 type Action = {
   tool: 'list_files' | 'read_file' | 'run_npm' | 'run_command'
   args: Record<string, unknown>
@@ -16,8 +18,6 @@ const SCRIPT_NAMES = [
   'test:e2e',
   'smoke'
 ]
-const source =
-  /\.(?:[cm]?[jt]sx?|css|scss|html?|json|xml|py|rs|go|java|c|cc|cxx|cpp|h|hpp|hxx|gradle|kts|properties|cmake|mk|toml|ya?ml|sql)$|(?:^|[\\/])(?:Makefile|CMakeLists\.txt)$/i
 const pathName = (value: unknown): string =>
   String(value ?? '.')
     .replace(/\\/g, '/')
@@ -63,8 +63,8 @@ export class CodingVerification {
   record(tool: string, args: Record<string, unknown>, text: string, status: EvidenceStatus): void {
     if (['denied', 'failed', 'uncertain'].includes(status)) return
     const path = pathName(args.path)
+    if (codingMutation(tool, args)) this.dirty(codingMutationPath(tool, args))
     if (tool === 'run_command') {
-      if (args.purpose === 'change' && this.active) this.dirty(`${path}/__command_change__`)
       if (args.purpose === 'check') {
         try {
           const result = JSON.parse(text)
@@ -82,13 +82,6 @@ export class CodingVerification {
         }
       }
     }
-    if (['write_file', 'edit_file'].includes(tool) && source.test(path) && status === 'verified')
-      this.dirty(path)
-    if (
-      status === 'verified' &&
-      (tool === 'delete_directory' || (tool === 'delete_file' && source.test(path)))
-    )
-      this.dirty(path)
     if (tool === 'list_files')
       this.listings.set(path, text.split(/\r?\n/).includes('[file] package.json'))
     if (tool === 'read_file' && /(?:^|\/)package\.json$/i.test(path)) {
@@ -159,11 +152,6 @@ export class CodingVerification {
           check.failures++
         }
         this.pendingNpmChecks.set(key, check)
-      } else if (
-        this.active ||
-        ['install', 'i', 'ci', 'uninstall', 'update', 'exec', 'init', 'create'].includes(argv?.[0])
-      ) {
-        this.dirty(file(path))
       }
     }
   }
