@@ -63,6 +63,34 @@ const npm = load('src/main/tools/npm.ts', {
   '../llm/untrusted-data': untrusted
 })
 async function main() {
+  const absolute = path.join(workspace, 'result.html')
+  const boundAbsolute = await binding.bindLocalAction(
+    'write_file',
+    {
+      path: absolute,
+      content: '<!DOCTYPE html><title>Fixture</title>'
+    },
+    run
+  )
+  await files.writeWorkspaceFile(
+    { path: absolute, content: '<!DOCTYPE html><title>Fixture</title>' },
+    boundAbsolute.scope.file
+  )
+  assert.equal(await fsp.readFile(absolute, 'utf8'), '<!DOCTYPE html><title>Fixture</title>')
+  assert.equal(await files.workspacePath(absolute), absolute)
+  for (const target of [
+    path.join(directory, 'outside.html'),
+    path.join(workspace + '-sibling', 'result.html'),
+    workspace + '\\..\\project\\ambiguous.html',
+    absolute + ':stream',
+    path.join(workspace, 'folder. ', 'result.html'),
+    '\\\\localhost\\share\\result.html',
+    path.join(workspace, '.git', 'config')
+  ])
+    await assert.rejects(files.workspacePath(target, true), /Blocked|relative/)
+  console.log(
+    'PASS absolute paths inside the authorized workspace; outside, traversal, ADS, UNC, ambiguous and sensitive paths remain blocked'
+  )
   const schema = load('src/main/tools/schemas.ts', {
     './windows': { POSITIONS: [] },
     '../harness/schemas': load('src/main/harness/schemas.ts')
