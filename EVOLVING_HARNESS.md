@@ -30,7 +30,12 @@ harness/
 Markdown is plaintext. Keep private facts, secrets and personal preferences in
 the existing encrypted, scoped memory store. Current requests override old guidance.
 Turning saved memories off disables procedural recall and model edits while
-retaining the files. Research mode never loads procedural memory.
+retaining the files. Research uses the same assistant mode and can load procedural
+guidance when recall is enabled and the current task/tools call for it. Enabling
+web access does not isolate personal memories, history or custom instructions from
+the selected inference provider. Encryption protects personal memory at rest,
+not after it is selected for a model request. See [the memory guide](MEMORY_HARNESS.md)
+for context selection and the separate disclosure of public web queries and URLs.
 
 ## Propose → probe → compose
 
