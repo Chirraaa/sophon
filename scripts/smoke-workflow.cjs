@@ -6,6 +6,63 @@ const { load } = require('./security/load.cjs')
 const workflow = require('./security/workflow-load.cjs')(load)
 
 {
+  const { standaloneHtmlIssue } = load('src/main/workflow/html-check.ts', {
+    parse5: require('parse5'),
+    'node:vm': require('node:vm')
+  })
+  const document = (script) =>
+    '<!DOCTYPE html><html><head><title>Test</title></head><body><canvas></canvas><script>' +
+    script +
+    '</script></body></html>'
+  assert.equal(standaloneHtmlIssue(document('throw new Error("must never execute");')), undefined)
+  assert.match(standaloneHtmlIssue(document('function ( {')), /JavaScript syntax error/)
+  assert.match(standaloneHtmlIssue('<!DOCTYPE html><html>'), /incomplete/)
+  assert.match(
+    standaloneHtmlIssue(document('').replace('<script>', '<script src="app.js">')),
+    /Linked scripts/
+  )
+  const { CodingVerification } = load('src/main/workflow/coding-verification.ts')
+  const gate = new CodingVerification()
+  record(
+    gate,
+    'write_file',
+    { path: 'result.html' },
+    'Saved result.html. Verified by reading back identical bytes.',
+    'verified'
+  )
+  record(gate, 'list_files', { path: '.' }, '[file] result.html', 'observed')
+  assert.deepEqual(gate.next(), {
+    tool: 'read_file',
+    args: { path: 'result.html', max_chars: 60000 }
+  })
+  const content = (source) =>
+    JSON.stringify({ trust: 'untrusted-data', kind: 'local-file', content: source })
+  record(
+    gate,
+    'read_file',
+    { path: 'result.html' },
+    content(document('const answer = 42;')),
+    'observed'
+  )
+  assert('done' in gate.next())
+  assert.match(gate.summary(), /syntax.*passed.*runtime behavior not tested/)
+  record(
+    gate,
+    'edit_file',
+    { path: 'result.html' },
+    'Edited result.html. Verified by reading back identical bytes.',
+    'verified'
+  )
+  assert.equal(gate.report().status, 'pending', 'An edit invalidates the HTML check')
+  record(gate, 'list_files', { path: '.' }, '[file] result.html', 'observed')
+  record(gate, 'read_file', { path: 'result.html' }, content(document('function {')), 'observed')
+  assert.match(gate.next().blocked, /syntax error/)
+  assert(gate.requestSetupRepair())
+  assert(gate.requestSetupRepair())
+  assert.equal(gate.requestSetupRepair(), undefined)
+}
+
+{
   const controller = new workflow.WorkflowController(
     'absolute',
     'assistant',
