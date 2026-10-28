@@ -45,7 +45,8 @@ export async function runTool(
       'delete_file',
       'delete_directory',
       'mcp_call',
-      'mcp_read'
+      'mcp_read',
+      'notes_delete'
     ].includes(name)
     const codingEdit = ['write_file', 'edit_file', 'create_directory'].includes(name)
     const codingMode = codingEdit ? (getSettings().coding?.mode ?? 'ask-before-edit') : undefined

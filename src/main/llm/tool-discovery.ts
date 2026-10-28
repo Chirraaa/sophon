@@ -18,6 +18,10 @@ const RELATED: Record<string, string[]> = {
   browser_inspect: ['browser_act', 'browser_tabs', 'browser_open'],
   browser_act: ['browser_inspect', 'browser_tabs'],
   plugins_list: ['mcp_catalog', 'mcp_call', 'plugin_read', 'list_windows', 'inspect_app'],
+  notes_list: ['notes_read', 'notes_create'],
+  notes_read: ['notes_edit', 'notes_delete', 'notes_list'],
+  notes_edit: ['notes_read'],
+  notes_delete: ['notes_read'],
   mcp_catalog: ['mcp_call', 'mcp_read', 'plugins_list'],
   mcp_call: ['mcp_catalog', 'mcp_read', 'plugins_list'],
   open_app: DESKTOP_TOOLS,
@@ -71,6 +75,10 @@ export class ToolDiscovery {
         ['web_search', 'web_fetch']
       ],
       [/\b(calculate|csv|sum|average)\b|\d\s*[+*/=]\s*\d/i, ['python_calculate']],
+      [
+        /\b(notes?|jot|memo)\b/i,
+        ['notes_list', 'notes_read', 'notes_create', 'notes_edit', 'notes_delete']
+      ],
       [/\b(volume|mute|audio)\b/i, ['list_audio', 'set_volume']],
       [/\b(wi-?fi|bluetooth|radio)\b/i, ['list_radios', 'set_radio']],
       [
