@@ -148,7 +148,8 @@ export class WorkflowController {
       runId,
       this.resumed ? (previous?.mutationRevision ?? previous?.codingSession?.revision ?? 0) : 0,
       this.resumed ? previous?.codingPaths : [],
-      wantsCodingSession(this.state.goal, workspace) || !!this.state.codingSession
+      wantsCodingSession(this.state.goal, workspace) || !!this.state.codingSession,
+      workspace
     )
     if (this.resumed)
       this.actions.restore(

@@ -240,7 +240,17 @@ async function transportChecks() {
     './sse': { eventStream }
   })
   const server = http.createServer((request, response) => {
-    if (request.url === '/no-content') {
+    if (request.url === '/large-model-stream') {
+      response.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      const event =
+        'data: ' +
+        JSON.stringify({
+          model: 'x'.repeat(300),
+          choices: [{ delta: { content: 'x' }, finish_reason: null }]
+        }) +
+        '\n\n'
+      response.end(event.repeat(7000) + encode({}, 'stop') + 'data: [DONE]\n\n')
+    } else if (request.url === '/no-content') {
       response.writeHead(204)
       response.end()
     } else if (request.url === '/headerless-bom') {
@@ -289,6 +299,19 @@ async function transportChecks() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   try {
     const base = `http://127.0.0.1:${server.address().port}`
+    const large = completionStream(() => {})
+    await requestJson(new URL(base + '/large-model-stream'), {
+      onEvent: large.accept,
+      maxBytes: 32 * 1024 * 1024
+    })
+    assert.equal(large.reply().content.length, 7000)
+    await assert.rejects(
+      requestJson(new URL(base + '/large-model-stream'), { onEvent: () => {} }),
+      /byte budget/
+    )
+    console.log(
+      'PASS model stream allowance handles SSE overhead while ordinary service byte limits remain enforced'
+    )
     const events = []
     assert.equal(await requestJson(new URL(base), { onEvent: (data) => events.push(data) }), null)
     assert.deepEqual(events, ['{"ok":true}'])
