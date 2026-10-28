@@ -240,7 +240,32 @@ async function transportChecks() {
     './sse': { eventStream }
   })
   const server = http.createServer((request, response) => {
-    if (request.url === '/no-content') {
+    if (
+      [
+        '/active-stream',
+        '/headerless-active-stream',
+        '/stalled-stream',
+        '/heartbeat-stream',
+        '/partial-stream'
+      ].includes(request.url)
+    ) {
+      if (request.url !== '/headerless-active-stream')
+        response.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      let ticks = 0
+      const tick = () => {
+        ticks++
+        if (request.url === '/heartbeat-stream') response.write(': heartbeat\n\n')
+        else if (request.url === '/partial-stream')
+          response.write(ticks === 1 ? 'data: {"choices":' : ' ')
+        else if (ticks === 1 || request.url !== '/stalled-stream') {
+          response.write(encode({ content: 'code' }))
+          if (ticks === 12) response.end(encode({}, 'stop') + 'data: [DONE]\n\n')
+        }
+      }
+      tick()
+      const timer = setInterval(tick, 50)
+      response.on('close', () => clearInterval(timer))
+    } else if (request.url === '/no-content') {
       response.writeHead(204)
       response.end()
     } else if (request.url === '/headerless-bom') {
@@ -289,6 +314,53 @@ async function transportChecks() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   try {
     const base = `http://127.0.0.1:${server.address().port}`
+    // Scale the two-minute model deadline down to 250 ms. Active generation
+    // lasts 550 ms; only an idle timeout can complete it without truncation.
+    for (const path of ['/active-stream', '/headerless-active-stream']) {
+      const model = completionStream(() => {})
+      await requestJson(new URL(base + path), {
+        timeout: 250,
+        streamIdleTimeout: 250,
+        onEvent: model.accept
+      })
+      assert.equal(model.reply().content, 'code'.repeat(12))
+    }
+    await assert.rejects(
+      requestJson(new URL(base + '/active-stream'), {
+        timeout: 250,
+        onEvent: () => {}
+      }),
+      /Request timed out/,
+      'Ordinary requests keep their absolute deadline'
+    )
+    for (const path of ['/stalled-stream', '/heartbeat-stream', '/partial-stream']) {
+      const model = completionStream(() => {})
+      await assert.rejects(
+        requestJson(new URL(base + path), {
+          timeout: 250,
+          streamIdleTimeout: 250,
+          onEvent: model.accept
+        }),
+        /model stopped responding.*Retry/
+      )
+      assert.throws(() => model.reply(), /before completing/)
+    }
+    const cancellation = new AbortController()
+    let activeEvents = 0
+    await assert.rejects(
+      requestJson(new URL(base + '/active-stream'), {
+        timeout: 250,
+        streamIdleTimeout: 250,
+        signal: cancellation.signal,
+        onEvent: () => {
+          if (++activeEvents === 2) cancellation.abort()
+        }
+      }),
+      /Request stopped\./
+    )
+    console.log(
+      'PASS active streams outlive request deadline; stalled/heartbeat/partial streams time out; Stop interrupts active generation'
+    )
     const events = []
     assert.equal(await requestJson(new URL(base), { onEvent: (data) => events.push(data) }), null)
     assert.deepEqual(events, ['{"ok":true}'])
@@ -308,7 +380,7 @@ async function transportChecks() {
     )
     await assert.rejects(
       requestJson(new URL(base), { signal: AbortSignal.abort() }),
-      /stopped or timed out/
+      /Request stopped/
     )
     const bomEvents = []
     await requestJson(new URL(base + '/headerless-bom'), {

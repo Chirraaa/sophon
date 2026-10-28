@@ -38,6 +38,7 @@ async function request(
     body,
     signal: run?.signal,
     timeout,
+    ...(onEvent ? { streamIdleTimeout: timeout } : {}),
     modelErrors: provider !== 'chatgpt',
     errorDetails: provider === 'chatgpt',
     ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
