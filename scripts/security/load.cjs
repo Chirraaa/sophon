@@ -137,6 +137,11 @@ function load(file, dependencies = {}) {
         return load('src/main/workflow/loop-budgets.ts')
       if (!Object.hasOwn(dependencies, name) && name.endsWith('/loop-limits'))
         return load('src/shared/loop-limits.ts')
+      if (!Object.hasOwn(dependencies, name) && name === './html-check')
+        return load('src/main/workflow/html-check.ts', {
+          parse5: require('parse5'),
+          'node:vm': require('node:vm')
+        })
       assert(Object.hasOwn(dependencies, name), `Unexpected dependency in ${file}: ${name}`)
       return dependencies[name]
     },
