@@ -4,6 +4,7 @@ import { motion } from 'motion/react'
 import { cn } from '@/lib/utils'
 import { spring } from '@/lib/motion'
 import { ActionHistory } from './chat/ActionHistory'
+import { DesktopResults } from './chat/DesktopCards'
 import { AssistantText } from './AssistantText'
 import { AttachmentView } from './chat/AttachmentView'
 import { useState } from 'react'
@@ -85,6 +86,7 @@ export function Message({
       {!you && (item.actions.length > 0 || !!item.attachments?.length) && (
         <ActionHistory actions={item.actions} attachments={item.attachments} />
       )}
+      {!you && <DesktopResults actions={item.actions} />}
       {!you && <ResearchActivity item={item} />}
       {!!item.specialists?.length && (
         <div
