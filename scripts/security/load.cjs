@@ -96,8 +96,12 @@ function load(file, dependencies = {}) {
         return load('src/main/workflow/coding-mutation.ts')
       if (!Object.hasOwn(dependencies, name) && name === './tool-discovery')
         return load('src/main/llm/tool-discovery.ts')
+      if (!Object.hasOwn(dependencies, name) && name === './app-routing')
+        return load('src/main/llm/app-routing.ts')
       if (!Object.hasOwn(dependencies, name) && name === '../plugins/schemas')
         return load('src/main/plugins/schemas.ts')
+      if (!Object.hasOwn(dependencies, name) && name === './browser/schemas')
+        return load('src/main/tools/browser/schemas.ts')
 
       if (
         !Object.hasOwn(dependencies, name) &&

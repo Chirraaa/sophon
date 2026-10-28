@@ -214,6 +214,36 @@ for (const expired of [false, true]) {
 
 // Removing a standalone folder records its mutation without inventing a project.
 {
+  const runtime = create()
+  const windowRef = 'win-' + crypto.randomUUID()
+  act(
+    runtime,
+    'act_on_control',
+    { observation: 'obs-111111111111', control: 'c1', action: 'invoke' },
+    toolOutcome('reported', 'Action plus fresh read-back', {
+      observation: {
+        id: 'obs-222222222222',
+        windowRef,
+        expiresAt: Date.now() + 120000,
+        controls: 1
+      }
+    })
+  )
+  const next = act(
+    runtime,
+    'act_on_control',
+    { observation: 'obs-222222222222', control: 'c1', action: 'invoke' },
+    toolOutcome('uncertain', 'Unknown', { code: 'control-uncertain' })
+  )
+  assert.equal(
+    next.readbackWindow,
+    windowRef,
+    'Compound actions register fresh observation identities for subsequent recovery'
+  )
+}
+
+// Removing a standalone folder records its mutation without inventing a project.
+{
   const runtime = new TaskRuntime(
     'folder-run',
     'assistant',

@@ -1,9 +1,11 @@
 import { POSITIONS } from './windows'
 import { harnessSchemas } from '../harness/schemas'
 import { pluginSchemas } from '../plugins/schemas'
+import { browserSchemas } from './browser/schemas'
 import { CODE_TEXT_MAX_CHARS } from '../../shared/coding-resources'
 export { CODE_TEXT_MAX_CHARS, TOOL_ARGUMENT_MAX_CHARS } from '../../shared/coding-resources'
 export const toolSchemas = [
+  ...browserSchemas,
   {
     type: 'function',
     function: {
@@ -179,6 +181,11 @@ export const toolSchemas = [
             type: 'string',
             description:
               'Optional literal substring of a control name, role or text, at most 120 characters. Matching named groups include their child controls. Do not use sentences or OR expressions. If no controls match, inspect again without query.'
+          },
+          offset: {
+            type: 'number',
+            description:
+              'Optional nextOffset from a truncated inspection (0–1000). Keep the same query. Pages re-read current state; prefer a focused query when the app is changing.'
           }
         }
       }
@@ -189,7 +196,7 @@ export const toolSchemas = [
     function: {
       name: 'act_on_control',
       description:
-        'Act on one exact control from a fresh inspect_app result. Use only an action listed for that control. set_value REPLACES the complete field; it sends no Enter key or submit click. invoke may activate a button with external effects: follow the user request. Inspect again after every action; references are single-use and expire after two minutes.',
+        'Act on one exact control from a fresh inspect_app result. Use only an action listed for that control. set_value REPLACES the complete field; it sends no Enter key or submit click. invoke may activate a button with external effects: follow the user request. Prefer readback_query for expected resulting controls/text: when inspect_app is Always allow, fresh evidence and references return with the action. Otherwise inspect afterward. Old references are single-use and expire after two minutes.',
       parameters: {
         type: 'object',
         properties: {
@@ -218,6 +225,12 @@ export const toolSchemas = [
             type: 'string',
             description:
               'Exact replacement for set_value only; may be empty to clear the field. At most 2000 characters.'
+          },
+          readback_query: {
+            type: 'string',
+            maxLength: 120,
+            description:
+              'Optional literal query for fresh post-action evidence (e.g. Pause or Draft controls). Empty means overview. Only runs automatically when inspect_app is Always allow; never bypasses read permissions.'
           }
         },
         required: ['observation', 'control', 'action']
@@ -341,7 +354,7 @@ export const toolSchemas = [
     function: {
       name: 'look_at_screen',
       description:
-        'See one app window. Defaults to the last active app; specify a win- reference or unique title. Use region for a higher-detail close-up of a small control, in full overview image pixels. Click using the returned image dimensions and local pixels. Model-directed monitor capture is unavailable. For named controls and text, prefer inspect_app.',
+        'Visual fallback: see one app window when structured tools cannot supply the needed evidence, or for explicit visual questions. Defaults to the last active app; specify a win- reference or unique title. Use region for a higher-detail close-up in full overview pixels. Click using returned image dimensions. if_changed avoids resending identical images when the preceding image is still available. Model-directed monitor capture is unavailable.',
       parameters: {
         type: 'object',
         properties: {
@@ -353,6 +366,11 @@ export const toolSchemas = [
           window: {
             type: 'string',
             description: 'Window title or app to inspect. Omit for active window.'
+          },
+          if_changed: {
+            type: 'boolean',
+            description:
+              'Optional: compare a fresh capture against the preceding capture of the same window/region. If identical, return text and fresh coordinates instead of a duplicate image. Use only while that preceding image remains available.'
           },
           region: {
             type: 'object',
@@ -416,13 +434,26 @@ export const toolSchemas = [
     function: {
       name: 'click',
       description:
-        'Click at x,y coordinates measured from the most recent look_at_screen image. Call look_at_screen first.',
+        'Click at x,y pixels measured from the most recent look_at_screen image. Input invalidates those coordinates. Prefer capture_after when visual verification is needed: with look_at_screen Always allow, the click returns a fresh image in this call. Otherwise inspect separately. A click being accepted is not proof of success.',
       parameters: {
         type: 'object',
         properties: {
           x: { type: 'number' },
           y: { type: 'number' },
-          button: { type: 'string', enum: ['left', 'right'] }
+          button: { type: 'string', enum: ['left', 'right'] },
+          capture_after: { type: 'boolean' },
+          readback_region: {
+            type: 'object',
+            description:
+              'Optional crop for capture_after, in full overview image pixels. Omit if the click may change the window layout.',
+            properties: {
+              x: { type: 'number' },
+              y: { type: 'number' },
+              width: { type: 'number' },
+              height: { type: 'number' }
+            },
+            required: ['x', 'y', 'width', 'height']
+          }
         },
         required: ['x', 'y']
       }

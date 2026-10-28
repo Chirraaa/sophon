@@ -24,6 +24,11 @@ const ONE_USE = [
 ]
 const GROUPS = [
   {
+    title: 'Browser interaction',
+    description: 'Use a separate Sophon browser session with its own sign-in.',
+    names: ['browser_open', 'browser_tabs', 'browser_inspect', 'browser_act']
+  },
+  {
     title: 'Files & coding',
     description: 'Read, create and edit in your working folder.',
     names: [

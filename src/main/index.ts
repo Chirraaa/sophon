@@ -15,6 +15,7 @@ import { lockChromiumSession, closeChromiumEgress } from './security/chromium-eg
 import { initializePrivateStorage } from './security/private-store'
 import { cancelChatgptSignIn } from './security/chatgpt-auth'
 import { closeConnections } from './plugins/runtime'
+import { closeBrowsers } from './tools/browser/runtime'
 import { UpdateService } from './services/updates'
 import { GithubUpdater } from './services/update-transport'
 import { snapshot } from './chat/session'
@@ -37,6 +38,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', () => desktop?.showMain())
   app.on('before-quit', () => {
     void closeConnections()
+    void closeBrowsers()
     cancelChatgptSignIn()
     closeChromiumEgress()
     stopRun()

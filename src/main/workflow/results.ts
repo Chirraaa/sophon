@@ -1,4 +1,6 @@
 export const MUTATIONS = new Set([
+  'browser_open',
+  'browser_act',
   'mcp_call',
   'set_volume',
   'set_radio',

@@ -112,7 +112,7 @@ export function appControlSnapshot(text: string):
     }
   | undefined {
   try {
-    const envelope = JSON.parse(text)
+    const envelope = JSON.parse(text.slice(text.lastIndexOf('\n{') + 1))
     if (envelope.kind !== 'app-controls' || envelope.trust !== 'untrusted-data') return
     const snapshot = JSON.parse(envelope.content)
     if (
@@ -132,14 +132,56 @@ export function appControlSnapshot(text: string):
 // inference. Control actions invalidate every observation in the native layer.
 export function latestDesktopObservations(messages: ModelMessage[]): ModelMessage[] {
   const seenWindows = new Set<string>()
+  const seenTabs = new Set<string>()
   let invalidated = false
+  let browserInvalidated = false
   return latestScreenObservation(messages)
     .map((message) => ({ ...message }))
     .reverse()
     .map((message) => {
       if (message.tool_calls?.some((call) => call.function.name === 'act_on_control'))
         invalidated = true
+      if (
+        message.tool_calls?.some((call) =>
+          ['browser_act', 'browser_open'].includes(call.function.name)
+        )
+      )
+        browserInvalidated = true
       if (message.role !== 'tool' || typeof message.content !== 'string') return message
+      try {
+        const prefix = message.content.slice(0, message.content.lastIndexOf('\n{') + 1)
+        const envelope = JSON.parse(message.content.slice(prefix.length))
+        if (envelope.kind === 'browser-dom' && envelope.trust === 'untrusted-data') {
+          const state = JSON.parse(envelope.content)
+          if (
+            /^tab-[a-f0-9]{12}$/.test(state.tab) &&
+            /^dom-[a-f0-9]{12}$/.test(state.observation) &&
+            Array.isArray(state.controls)
+          ) {
+            const stale = browserInvalidated || seenTabs.has(state.tab)
+            seenTabs.add(state.tab)
+            if (!stale) return message
+            return {
+              ...message,
+              content:
+                prefix +
+                untrustedData(
+                  'expired-browser-dom',
+                  'Historical browser observation',
+                  JSON.stringify({
+                    note: 'DOM references expired or superseded. Inspect the current tab before acting; stored action history retains details.',
+                    excerpt: state.controls.slice(0, 6).map((control: Record<string, unknown>) => ({
+                      name: String(control?.name ?? '').slice(0, 80),
+                      valueExcerpt: String(control?.value ?? '').slice(0, 80)
+                    }))
+                  })
+                )
+            }
+          }
+        }
+      } catch {
+        /* Non-DOM results retain their original evidence. */
+      }
       const snapshot = appControlSnapshot(message.content)
       if (!snapshot) return message
       const stale = invalidated || seenWindows.has(snapshot.windowRef)
@@ -147,17 +189,19 @@ export function latestDesktopObservations(messages: ModelMessage[]): ModelMessag
       if (!stale) return message
       return {
         ...message,
-        content: untrustedData(
-          'expired-app-controls',
-          snapshot.windowRef,
-          JSON.stringify({
-            note: 'Historical inspection; control references expired or were superseded. Inspect again for actions. Full details remain in action history.',
-            excerpt: snapshot.controls.slice(0, 6).map((control) => ({
-              name: String(control.name ?? '').slice(0, 80),
-              ...(control.value ? { valueExcerpt: String(control.value).slice(0, 80) } : {})
-            }))
-          })
-        )
+        content:
+          message.content.slice(0, message.content.lastIndexOf('\n{') + 1) +
+          untrustedData(
+            'expired-app-controls',
+            snapshot.windowRef,
+            JSON.stringify({
+              note: 'Historical inspection; control references expired or were superseded. Inspect again for actions. Full details remain in action history.',
+              excerpt: snapshot.controls.slice(0, 6).map((control) => ({
+                name: String(control.name ?? '').slice(0, 80),
+                ...(control.value ? { valueExcerpt: String(control.value).slice(0, 80) } : {})
+              }))
+            })
+          )
       }
     })
     .reverse()
@@ -166,8 +210,8 @@ export function latestDesktopObservations(messages: ModelMessage[]): ModelMessag
 export function historicalDesktopReferences(messages: ModelMessage[]): ModelMessage[] {
   const expired = (text: string): string =>
     text.replace(
-      /\b(?:win-[a-f0-9-]{36}|obs-[a-f0-9]{12})\b/gi,
-      '[expired reference; refresh list_windows or inspect_app]'
+      /\b(?:win-[a-f0-9-]{36}|obs-[a-f0-9]{12}|tab-[a-f0-9]{12}|dom-[a-f0-9]{12})\b/gi,
+      '[expired reference; refresh list_windows/inspect_app or browser_tabs/browser_inspect]'
     )
   return messages.map((message) => ({
     ...message,

@@ -89,6 +89,17 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
       `Tool arguments too long: ${name} (${size} serialized characters; maximum ${TOOL_ARGUMENT_MAX_CHARS}). Split the work into smaller tool calls.`
     )
   const object = args as Record<string, unknown>
+  if (name === 'click' && object.readback_region !== undefined && object.capture_after !== true)
+    throw new Error('readback_region requires capture_after: true.')
+  if (name === 'browser_act') {
+    if (
+      !/^dom-[\da-f]{12}$/.test(String(object.observation)) ||
+      !/^e\d{1,2}$/.test(String(object.element))
+    )
+      throw new Error('Use exact DOM references from browser_inspect.')
+    if (['fill', 'select'].includes(String(object.action)) !== Object.hasOwn(object, 'text'))
+      throw new Error('Text is required only for fill or select.')
+  }
   if (name === 'run_command') {
     if (!String(object.command).trim()) throw new Error('Provide a project command.')
     if (
@@ -161,12 +172,18 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
   if (name === 'wait' && (Number(object.seconds) < 0.001 || Number(object.seconds) > 60))
     throw new Error('Wait duration must be between 0.001 and 60 seconds.')
   for (const key of ['name', 'title', 'path', 'query', 'keys', 'text']) {
-    if (key === 'text' && name === 'act_on_control') continue
+    if (key === 'text' && ['act_on_control', 'browser_act'].includes(name)) continue
     if (Object.hasOwn(object, key) && typeof object[key] === 'string' && !object[key].trim())
       throw new Error(`Empty argument: ${key}`)
   }
   if (name === 'inspect_app' && String(object.query ?? '').length > 120)
     throw new Error('Control query exceeds 120 characters.')
+  if (
+    name === 'inspect_app' &&
+    object.offset !== undefined &&
+    (!Number.isInteger(object.offset) || Number(object.offset) < 0 || Number(object.offset) > 1000)
+  )
+    throw new Error('Control offset must be an integer from 0 to 1000.')
   if (name === 'act_on_control') {
     if (
       !/^obs-[\da-f]{12}$/.test(String(object.observation)) ||

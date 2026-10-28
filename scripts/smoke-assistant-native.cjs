@@ -412,12 +412,23 @@ async function review() {
 
   fixtureCall = { name: 'look_at_screen', args: { window: title } }
 
-  fixtureCall.afterImage = { name: 'click', args: { x, y } }
+  fixtureCall.afterImage = { name: 'click', args: { x, y, capture_after: true } }
   await evaluate('window.api.chats.create()')
   await evaluate('window.api.send("native fixture action")')
   await wait(() => fs.existsSync(path.join(output, 'clicks.txt')), 'native click event')
   assert.equal(fs.readFileSync(path.join(output, 'clicks.txt'), 'utf8'), '1')
   check('click from screenshot coordinates triggers the native button exactly once')
+  state = await evaluate('window.api.getSession()')
+  assert(
+    state.items.at(-1).attachments.length >= 2,
+    'Click returns a post-action screenshot without a separate model tool call'
+  )
+  assert(
+    state.items
+      .at(-1)
+      .actions.some((a) => a.name === 'click' && a.detail.includes('Post-action observation'))
+  )
+  check('visual fallback returns post-click evidence in the same tool call')
   assert.equal(prompts, confirmedPrompts, 'Always allow must not prompt for each action')
   check('Always allow runs native tools without repeated prompts')
   assert((await listing()).includes(title))

@@ -1,4 +1,5 @@
 import { ACTION_LIMIT, RUN_SECONDS } from '../../shared/loop-limits'
+import { APP_ROUTING } from './app-routing'
 type Environment = {
   mode: TaskMode
   tools: string[]
@@ -19,6 +20,14 @@ type Environment = {
 }
 
 const ACTIONS: Record<string, string> = {
+  browser_open:
+    'open an HTTP(S) page in an installed Edge/Chrome browser using a separate Sophon profile; user signs in manually, never assume the desktop app account carries over',
+  browser_tabs:
+    'discover tabs in already-open Sophon-managed browser sessions; no arbitrary browser attachment or implicit launch',
+  browser_inspect:
+    'read bounded visible main-frame DOM controls and text; narrow with query; frame/scan omissions are explicit',
+  browser_act:
+    'use one fresh DOM element reference; fill replaces without submitting; action returns fresh evidence when browser_inspect is allowed, otherwise request inspection separately',
   discover_tools:
     'load exact tool schemas from the capability index; discovery executes no actions and cannot grant permissions',
   plugins_list:
@@ -97,6 +106,7 @@ const ACTIONS: Record<string, string> = {
 export function environmentPrompt(state: Environment): string {
   if (state.compact) return compactEnvironment(state)
   const parts = [
+    APP_ROUTING,
     'LIVE APPLICATION ENVIRONMENT: You are Sophon, an assistant hosted in a Windows desktop application. Your host tools can interact with Windows; you do not act outside those tools. This capability summary supersedes outdated capability claims in earlier conversation or custom persona text.',
     `You can handle conversation, creative work, desktop tasks and research in the same chat. Available tools for THIS request: ${state.tools.join(', ') || 'none'}.`,
     "For a requested action supported here, call the tool instead of giving manual instructions or saying you are just a chatbot. Always obey the user's explicit constraints even when a tool is available. For questions about capabilities, explain them without taking an unrequested action. Never claim success before a successful result. The app handles approval; stop on denial. Inspect failed or uncertain mutations before further action; failed project checks may enter the coding harness's bounded repair loop.",
@@ -145,7 +155,7 @@ export function environmentPrompt(state: Environment): string {
       : 'No working folder is selected. File operations need a folder chosen in Settings > Files first.'
   )
   parts.push(
-    'You do not continuously see the desktop. Prefer inspect_app for named controls and text when available; use look_at_screen for visual layout with a vision-capable model. Use window references from list_windows to distinguish identical titles. For field entry, inspect then use act_on_control with set_value when supported: it replaces the entire field and does not press Enter. Otherwise use type_text and press_keys, targeting the same window explicitly. After each control action, inspect again; old control references cannot be reused. For click, capture first and use image pixel coordinates; capture again after a window moves. Verify typing and deletion with inspect_app or a screenshot. Open installed apps with open_app; use list_apps to discover names. Portable apps need a Start menu shortcut. Shell execution, custom launch arguments and system administration are not provided by the built-in desktop tools. Connected MCP servers may provide additional capabilities; discover their actual tools before claiming availability. Explain the specific missing capability, not a blanket inability to use Windows.'
+    'You do not continuously see the desktop. Prefer inspect_app for named controls and text when available; use look_at_screen for visual layout with a vision-capable model. Use window references from list_windows to distinguish identical titles. For field entry, inspect then use act_on_control with set_value when supported: it replaces the entire field and does not press Enter. Otherwise use type_text and press_keys, targeting the same window explicitly. After each control action, use its fresh read-back references or inspect again; old references cannot be reused. For click, capture first and use image pixel coordinates; capture again after a window moves. Verify typing and deletion with inspect_app or a screenshot. Open installed apps with open_app; use list_apps to discover names. Portable apps need a Start menu shortcut. Shell execution, custom launch arguments and system administration are not provided by the built-in desktop tools. Connected MCP servers may provide additional capabilities; discover their actual tools before claiming availability. Explain the specific missing capability, not a blanket inability to use Windows.'
   )
   parts.push(
     'For window arguments, pass only the win- reference, without its title or description. After open_app, target the exact Window reference returned by that tool. Window references are valid only within the current request. For follow-up requests, refresh list_windows instead of reusing old references. The Active window line includes its exact win- reference: use it to distinguish a newly opened browser window when several windows share New Tab or another title. After opening a new window or tab, refresh observations before the next action.'
@@ -180,6 +190,18 @@ function compactEnvironment(state: Environment): string {
       }),
     `Available tools for THIS request: ${state.tools.join(', ') || 'none'} (schemas loaded).`,
     `CAPABILITY INDEX (permitted names): ${names.join(', ') || 'none'}.`,
+    !state.inlineVisual &&
+    has(
+      'plugins_list',
+      'mcp_catalog',
+      'mcp_call',
+      'inspect_app',
+      'look_at_screen',
+      'browser_open',
+      'browser_inspect'
+    )
+      ? APP_ROUTING
+      : '',
     state.unavailableTools && Object.keys(state.unavailableTools).length
       ? 'UNAVAILABLE: ' + JSON.stringify(state.unavailableTools)
       : '',
@@ -211,7 +233,7 @@ function compactEnvironment(state: Environment): string {
       'open_app',
       'list_windows'
     )
-      ? 'Desktop: prefer inspect_app and supported control actions. Inspect again after actions; control references expire. set_value replaces a whole field without submitting. Window win- references last only this request; use the exact reference returned by open_app/list_windows. Click only coordinates from a fresh screenshot of the same window. Accepted input is not proof of change. Leave save prompts to the user. Built-in desktop tools provide no general shell; MCP capabilities require discovery. Image understanding depends on model support, which may be unknown.'
+      ? 'Desktop: prefer inspect_app and supported control actions. Use fresh action read-back or inspect again; old control references expire. set_value replaces a whole field without submitting. Window win- references last only this request; use the exact reference returned by open_app/list_windows. Click only coordinates from a fresh screenshot of the same window. Accepted input is not proof of change. Leave save prompts to the user. Built-in desktop tools provide no general shell; MCP capabilities require discovery. Image understanding depends on model support, which may be unknown.'
       : '',
     has('mcp_call', 'mcp_read')
       ? 'MCP calls/reads always require one-use approval. Use discovered names and schemas; local MCPs run with Windows account access outside built-in workspace restrictions. A timeout may follow a completed external action; inspect before retrying.'

@@ -73,6 +73,16 @@ export function connectionSummaries(): McpSummary[] {
     }
   })
 }
+// Read only the already-connected catalogue. No implicit connections or network
+// requests, and never expose credentials from the saved server configuration.
+export function connectionCapabilities(id: string): { name: string; description: string }[] {
+  const c = connections.get(id)
+  if (!c || c.status !== 'connected') return []
+  return c.tools.map((tool) => ({
+    name: tool.name,
+    description: (tool.description ?? '').slice(0, 240)
+  }))
+}
 export async function disconnect(id: string): Promise<void> {
   const c = connections.get(id)
   if (!c) return
