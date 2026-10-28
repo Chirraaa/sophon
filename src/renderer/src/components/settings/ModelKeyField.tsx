@@ -60,7 +60,7 @@ export function ModelKeyField({
           value={key}
           onChange={(event) => setKey(event.target.value)}
           placeholder="Enter your API key"
-          className="h-9 w-64 max-w-full bg-background/30 text-xs shadow-none"
+          className="h-9 w-64 max-w-full text-xs"
         />
         <PillButton
           disabled={saving}
