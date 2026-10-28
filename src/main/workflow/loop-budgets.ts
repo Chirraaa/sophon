@@ -1,3 +1,5 @@
+import type { ToolOutcome } from './tool-outcome'
+
 type Retry = 'session' | 'gate' | 'arguments' | 'completion' | 'protocol'
 const RETRY_LIMITS: Record<Retry, number> = {
   session: 3,
@@ -30,24 +32,28 @@ export class LoopBudgets {
     if (['checkpoint', 'file-read'].includes(event)) this.retries.gate = 0
     if (event === 'arguments') this.retries.arguments = 0
   }
-  recover(tool: string, path: string, result: string, status: string): boolean {
-    if (tool === 'act_on_control' && status === 'uncertain') return this.controlReadbacks++ < 2
+  recover(tool: string, path: string, result: ToolOutcome): boolean {
+    if (tool === 'act_on_control' && result.code === 'control-uncertain')
+      return this.controlReadbacks++ < 2
     const target = path.replace(/\\/g, '/').toLowerCase()
-    if (status === 'verified' && ['edit_file', 'write_file', 'create_directory'].includes(tool)) {
+    if (
+      result.status === 'verified' &&
+      ['edit_file', 'write_file', 'create_directory'].includes(tool)
+    ) {
       this.workspaceRefreshes = 0
       this.targets.delete(target)
     }
-    if (tool === 'click' && result.startsWith('Screenshot required:'))
+    if (tool === 'click' && result.code === 'screenshot-required')
       return this.screenshotRefreshes++ < 2
     if (
-      result.startsWith('Missing workspace path:') ||
-      (tool === 'edit_file' && result.startsWith('Patch not applied:'))
+      result.code === 'workspace-missing' ||
+      (tool === 'edit_file' && result.code === 'patch-not-applied')
     ) {
       const count = this.targets.get(target) ?? 0
       this.targets.set(target, count + 1)
       return this.workspaceRefreshes++ < 2 && count < 2
     }
-    if (result.startsWith('Target not found:')) return this.targetRefreshes++ < 2
+    if (result.code === 'target-missing') return this.targetRefreshes++ < 2
     return false
   }
 }

@@ -1,3 +1,4 @@
+const { record } = require('./security/action-fixture.cjs')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
@@ -124,7 +125,7 @@ assert.equal(
 function controllerTests() {
   const deleting = new sessions.CodingSession(true)
   assert.equal(deleting.guard('delete_file', { path: 'index.ts' }), undefined)
-  deleting.record('list_files', {}, '[file] index.ts', 'observed')
+  record(deleting, 'list_files', {}, '[file] index.ts', 'observed')
   deleting.checkpoint(plan(), names, true)
   assert.equal(deleting.guard('delete_file', { path: 'index.ts' }), undefined)
   deleting.checkpoint(
@@ -133,7 +134,8 @@ function controllerTests() {
     true
   )
   assert.equal(deleting.guard('delete_directory', { path: 'old' }), undefined)
-  deleting.record(
+  record(
+    deleting,
     'delete_file',
     { path: 'index.ts' },
     'Deleted file index.ts. Verified path is absent.',
@@ -142,14 +144,16 @@ function controllerTests() {
   assert.equal(deleting.snapshot().revision, 1)
   const verification = load('src/main/workflow/coding-verification.ts')
   const gate = new verification.CodingVerification()
-  gate.record(
+  record(
+    gate,
     'delete_file',
     { path: 'src/old.ts' },
     'Deleted file src/old.ts. Verified path is absent.',
     'verified'
   )
   assert.equal(gate.active, true, 'Deleting source code requires fresh project checks')
-  gate.record(
+  record(
+    gate,
     'delete_directory',
     { path: 'legacy' },
     'Deleted folder legacy. Verified path is absent.',
@@ -184,7 +188,7 @@ function controllerTests() {
   assert.match(s.guard('write_file', { path: 'index.ts', overwrite: true }), /must be patched/)
   assert.equal(s.guard('write_file', { path: 'index.ts' }), undefined)
   assert.throws(() => s.checkpoint(plan(), names, true), /Inspect/)
-  s.record('list_files', {}, '[file] package.json', 'observed')
+  record(s, 'list_files', {}, '[file] package.json', 'observed')
   s.checkpoint(plan(), names, true)
   assert.equal(s.guard('write_file', { path: 'index.ts' }), undefined)
   assert.throws(
@@ -200,11 +204,17 @@ function controllerTests() {
     () => s.checkpoint({ tasks: [{ ...task(), profile: 'reviewer' }] }, names, false),
     /unavailable/
   )
-  s.record('write_file', { path: 'index.ts', content: 'export const n = 1' }, 'saved', 'verified')
+  record(s, 'write_file', { path: 'index.ts', content: 'export const n = 1' }, 'saved', 'verified')
   assert.equal(s.snapshot().revision, 1)
   s.checkpoint({ tasks: [task('implemented')] }, names, true)
   assert.equal(s.pendingIssue(), undefined)
-  s.verified('npm run test passed')
+  s.verified({
+    runId: s.ledger.runId,
+    revision: s.ledger.revision,
+    checkRevision: s.ledger.checkRevision,
+    status: 'passed',
+    summary: 'npm run test passed'
+  })
   s.checkpoint({ lesson: 'No reusable lesson found' }, names, true)
   const resumed = new sessions.CodingSession(true, {
     ...s.snapshot(),
@@ -221,7 +231,7 @@ function controllerTests() {
   assert.equal(resumed.snapshot().tasks[0].status, 'implemented')
   assert.equal(resumed.snapshot().verification, '')
   s.checkpoint({ tasks: [task()] }, names, true)
-  s.record('write_file', { path: 'index.ts', content: 'changed again' }, 'saved', 'verified')
+  record(s, 'write_file', { path: 'index.ts', content: 'changed again' }, 'saved', 'verified')
   assert.equal(s.needsReflection, true)
   assert.equal(s.snapshot().verification, '')
   s.compact()
@@ -463,6 +473,39 @@ async function integrationTests() {
   assert.equal(reviews.length, 0, 'A routine coding task needs no automatic reviewer')
   assert.equal(executions.filter((e) => e.name === 'run_npm').length, 1)
   const previous = structuredClone(latest)
+  const mixed = { tool_calls: [...checkpoint(plan()).tool_calls, ...write().tool_calls] }
+  reset([
+    tool('list_files'),
+    mixed,
+    checkpoint(plan()),
+    write(),
+    checkpoint({ tasks: [task('implemented')] }),
+    answer()
+  ])
+  assert.match(await chat('Implement the function in this project', event, []), /Project checks:/)
+  assert.equal(
+    executions.filter((e) => e.name === 'write_file').length,
+    1,
+    'Rejected mixed batch must have no side effects'
+  )
+  assert(
+    captured.some((messages) =>
+      messages.some(
+        (message) =>
+          message.role === 'tool' &&
+          message.content.includes('No checkpoint or action was executed')
+      )
+    )
+  )
+  reset([tool('list_files'), mixed, mixed, mixed])
+  await assert.rejects(
+    chat('Implement the function in this project', event, []),
+    /three rejected batches/
+  )
+  assert(
+    !executions.some((e) => e.name === 'write_file'),
+    'Repeated protocol failures never execute their actions'
+  )
   for (const request of [
     'Continue',
     'try again',
@@ -729,10 +772,14 @@ async function lifecycleTests() {
   assert.equal(store.harnessLifecycle(args.category, args.name).successes, 1)
   store.recordHarnessUse(args.category, args.name, 'run-2', true, 'Tests passed')
   store.recordHarnessUse(args.category, args.name, 'run-3', true, 'Tests passed')
-  assert.equal(store.harnessLifecycle(args.category, args.name).state, 'active')
+  assert.equal(
+    store.harnessLifecycle(args.category, args.name).state,
+    'trial',
+    'Execution success does not establish guidance usefulness'
+  )
   store.recordHarnessUse(args.category, args.name, 'run-4', false, 'Regression')
   store.recordHarnessUse(args.category, args.name, 'run-5', false, 'Repeated regression')
-  assert.equal(store.harnessLifecycle(args.category, args.name).state, 'revised')
+  assert.equal(store.harnessLifecycle(args.category, args.name).state, 'candidate')
   assert(
     !store
       .harnessContext('coding', 'before_task')
@@ -810,15 +857,12 @@ async function approvalTests(store, content) {
       }
     }
   }).runTool
-  const result = await runner(
-    'harness_manage',
-    { ...args, action: 'compose' },
-    'compose-one',
-    (e) => {
+  const result = (
+    await runner('harness_manage', { ...args, action: 'compose' }, 'compose-one', (e) => {
       if (e.type === 'tool_preview') preview = e.preview
       if (e.type === 'tool_wait') assert.equal(e.canAlwaysAllow, false)
-    }
-  )
+    })
+  ).text
   assert.match(result, /trial v1/)
   assert(preview.includes(content), 'Consent must show the exact candidate')
   assert.equal(approvals, 1, 'Structure-only compose asks even under Always allow')
@@ -827,7 +871,7 @@ async function approvalTests(store, content) {
   await store.manageHarness({ ...args, action: 'probe' })
   decision = 'deny'
   assert.match(
-    await runner('harness_manage', { ...args, action: 'compose' }, 'compose-two'),
+    (await runner('harness_manage', { ...args, action: 'compose' }, 'compose-two')).text,
     /Denied/
   )
   assert.equal(executeCount, 1, 'Denied proposal cannot be composed')

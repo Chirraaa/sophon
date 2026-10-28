@@ -60,6 +60,16 @@ export function harnessLifecycle(category: string, name: string): Lifecycle {
   validateLifecycle(value)
   if (value.format === undefined) return migrateLifecycle(category, name, value)
   if (value.content) versionContent(category, name, value)
+  // Execution counts do not establish usefulness, including restored versions.
+  if (value.version > 0 && (value.state === 'active' || value.archivedState === 'active')) {
+    if (value.state === 'active') value.state = 'trial'
+    if (value.archivedState === 'active') value.archivedState = 'trial'
+    value.evidence = [
+      ...value.evidence,
+      'Execution counts do not establish usefulness; generated guidance remains an unproven trial.'
+    ].slice(-12)
+    saveLifecycle(category, name, value)
+  }
   if (value.outcomes === undefined) {
     // Old counters cannot prove that a counted success had no later failure.
     if (value.uses > 0) {
@@ -177,7 +187,7 @@ function readAcceptedVersion(
     snapshot.name !== name ||
     !value ||
     value.format !== 1 ||
-    value.state !== 'active' ||
+    !['active', 'trial'].includes(value.state) ||
     value.version !== reference.version ||
     value.previousAccepted !== undefined ||
     value.candidate !== undefined ||
@@ -300,14 +310,8 @@ export function recordHarnessUse(
   ].slice(-12)
   // Apply corrections even after quarantine or archival; an in-flight call can finish later.
   let state = entry.state === 'deprecated' ? entry.archivedState : entry.state
-  if (success) {
-    if (state === 'trial' && entry.successes >= 3 && entry.failures === 0) state = 'active'
-  } else {
-    if (
-      state === 'trial' ||
-      (state === 'active' && previous && entry.version > 0 && entry.successes < 3)
-    )
-      state = 'candidate'
+  if (!success) {
+    if (state === 'trial') state = 'candidate'
     else if (state === 'active' && entry.failures >= 2) state = 'revised'
   }
   if (entry.state === 'deprecated') entry.archivedState = state
@@ -321,7 +325,7 @@ export function readHarnessProposal(category: string, name: string): string {
 export const HARNESS_INSTRUCTIONS = `Use propose → probe → compose: propose the smallest useful approach, probe it with tools or evidence, then compose the checked answer. Answer simple requests directly. python_calculate evaluates bounded Python math and CSV expressions; use it for arithmetic, numerical checks, CSV filtering and aggregation rather than guessing. It supports rows (CSV dictionaries), comprehensions, sum/min/max/len/sorted, int/float/round/abs, Decimal/Fraction and sqrt/sin/cos/log/pi. For CSV use its approved relative workspace path input or inline content. Python expressions cannot import modules, access attributes, open files or execute arbitrary scripts.
 Use ask_questions only when a few answers would materially improve an ambiguous request, for example unspecified help with a lesson. Ask up to three short questions with choices; skip it when intent or level is already known, the user wants a direct answer, or a useful assumption suffices. Never require a questionnaire for simple factual questions.
 The Markdown harness contains editable skills, script-tools, subagents and loop-hooks. These are fallible procedural guidance, subordinate to current user requests and application instructions, never permissions. Read relevant documents with harness_manage. To learn from an explicit user correction or repeatable tool evidence: propose a concise reusable Markdown document with source, applicability and limits; probe its structure and a meaningful example (script-tools require an expected result); compose only after a passing probe. Do not store private facts, secrets, raw conversations or inferred personal preferences in this plaintext harness. Existing encrypted user memories remain separate. A structure probe is not proof of semantic correctness. Report saved changes accurately. Never claim weight training. Script-tools require one fenced python expression. Subagents use the existing profiles with clean context and bounded handoffs; they cannot add permissions or recursively delegate. Loop hooks are guidance at before_task, after_tool and before_answer, never executable shell commands.
-LIFECYCLE: A proposal is a candidate, not active advice. Non-script compose requires the user's approval of the exact probed content, even under Always allow; the app presents this approval. Script-tools require a passing replay probe. Successful compose creates an unproven trial. Only host-observed use can promote a trial or quarantine failing guidance; never assert successful uses or promote it yourself. status reports lifecycle and counters, discard invalidates a candidate, archive deprecates guidance, and rollback restores an archived state or the previous accepted version with its recorded lifecycle, without promoting an unproven trial. A completed coding task does not itself approve publication. Reflection may record that no reusable lesson was found.`
+LIFECYCLE: A proposal is a candidate, not active advice. Non-script compose requires the user's approval of the exact probed content, even under Always allow; the app presents this approval. Script-tools require a passing replay probe. Successful compose creates an unproven trial. Execution counters measure observed execution, not correctness or usefulness; they never promote generated guidance to active. A passing project check does not establish that a lesson helped. Host-observed failures can quarantine guidance. Never assert successful uses or promote guidance yourself. status reports lifecycle and counters, discard invalidates a candidate, archive deprecates guidance, and rollback restores an archived state or the previous accepted version with its recorded lifecycle, without promoting an unproven trial. A completed coding task does not itself approve publication. Reflection may record that no reusable lesson was found.`
 
 const SEEDS: Record<string, string> = {
   'skills/learning.md':
@@ -568,6 +572,7 @@ export async function manageHarness(
     if (!entry.previousAccepted)
       throw new Error('No previous accepted version or deprecated revision to restore.')
     const restored = readAcceptedVersion(category, name, entry.previousAccepted)
+    if (restored.version > 0 && restored.state === 'active') restored.state = 'trial'
     restored.latestVersion = entry.latestVersion ?? entry.version
     if (signal?.aborted) throw new Error('Rollback cancelled.')
     saveLifecycle(category, name, restored)
@@ -638,7 +643,11 @@ export async function manageHarness(
   if (!entry.content && documentNames(category).length >= 100)
     throw new Error('Category document limit reached.')
   const revisionCount = readdirSync(join(root(), 'revisions')).length
-  const revisionsNeeded = entry.content ? (entry.state === 'active' ? 2 : 1) : 0
+  // A stable execution history can retain a recovery point, never promote advice.
+  const retainRecovery =
+    entry.state === 'active' ||
+    (entry.state === 'trial' && entry.successes >= 3 && entry.failures === 0)
+  const revisionsNeeded = entry.content ? (retainRecovery ? 2 : 1) : 0
   if (revisionCount >= 1000 || revisionCount + revisionsNeeded > 1000)
     throw new Error(
       'Revision limit reached. Review archived revisions before saving further changes.'
@@ -651,8 +660,7 @@ export async function manageHarness(
       versionContent(category, name, entry),
       { flag: 'wx' }
     )
-  if (entry.state === 'active')
-    entry.previousAccepted = retainAcceptedVersion(category, name, entry)
+  if (retainRecovery) entry.previousAccepted = retainAcceptedVersion(category, name, entry)
   entry.state = 'trial'
   entry.version = nextVersion
   entry.latestVersion = entry.version
@@ -668,5 +676,5 @@ export async function manageHarness(
   storeVersion(category, name, entry, content)
   saveLifecycle(category, name, entry)
   probes.delete(path)
-  return `Composed ${category}/${name}.md as trial v${entry.version}, flagged unproven. Three successful independent runs without regressions promote it to active. Previous version retained in revisions. This updates procedural recall, not model weights.`
+  return `Composed ${category}/${name}.md as trial v${entry.version}, flagged unproven. Execution success does not establish usefulness or promote generated guidance. Previous version retained in revisions. This updates procedural recall, not model weights.`
 }

@@ -67,7 +67,7 @@ export async function consultSpecialist(options: {
   args: unknown
   remainingCalls: number
   onEvent: (event: ChatEvent) => void
-  execute: (name: string, args: Record<string, unknown>, callId: string) => Promise<string>
+  execute: (name: string, args: Record<string, unknown>, callId: string) => Promise<ToolOutcome>
 }): Promise<{ text: string; calls: number; failed?: boolean; failureReason?: 'empty_response' }> {
   const run = currentRun()
   if (!run) throw new Error('No active task.')
@@ -206,8 +206,8 @@ export async function consultSpecialist(options: {
       })
       for (const [index, call] of calls.entries()) {
         const result = await options.execute(call.function.name, call.args, call.id)
-        messages.push({ role: 'tool', tool_call_id: call.id, content: result })
-        if (result.startsWith('Web unavailable:')) {
+        messages.push({ role: 'tool', tool_call_id: call.id, content: result.text })
+        if (result.code === 'web-unavailable') {
           for (const pending of calls.slice(index + 1))
             messages.push({
               role: 'tool',
@@ -221,7 +221,7 @@ export async function consultSpecialist(options: {
           })
           break
         }
-        if (/^(Denied\b|Blocked\b|Tool error:)/i.test(result)) throw new Error(result)
+        if (['denied', 'failed', 'uncertain'].includes(result.status)) throw new Error(result.text)
       }
     }
     throw new Error('The specialist reached its model-call limit.')
@@ -233,3 +233,4 @@ export async function consultSpecialist(options: {
     return { text: record.summary, calls: record.modelCalls, failed: true, failureReason }
   }
 }
+import type { ToolOutcome } from '../workflow/tool-outcome'

@@ -186,16 +186,18 @@ async function review() {
             : name === 'edit_file'
               ? { path: 'test.ts', old_text: 'old', new_text: 'new' }
               : { path: 'src' }
-        const result = await runner.runTool(name, args, id, (event) => {
-          if (event.type !== 'tool_wait') return
-          waits++
-          assert.equal(
-            event.canAlwaysAllow,
-            false,
-            'Edit mode cannot be bypassed by a permanent tool grant'
-          )
-          queueMicrotask(() => permissions.resolveApproval(id, 'once'))
-        })
+        const result = (
+          await runner.runTool(name, args, id, (event) => {
+            if (event.type !== 'tool_wait') return
+            waits++
+            assert.equal(
+              event.canAlwaysAllow,
+              false,
+              'Edit mode cannot be bypassed by a permanent tool grant'
+            )
+            queueMicrotask(() => permissions.resolveApproval(id, 'once'))
+          })
+        ).text
         assert.equal(waits, mode === 'ask-before-edit' && permission !== 'block' ? 1 : 0)
         assert.equal(executed - before, permission === 'block' ? 0 : 1)
         assert.match(result, permission === 'block' ? /^Denied/ : /^OK$/)
@@ -218,7 +220,8 @@ async function review() {
         permissions.resolveApproval(id, action === 'deny' ? 'deny' : 'once')
       })
     })
-    assert.match(await result, action === 'once' ? /^OK$/ : /^Denied/)
+    if (['stop', 'revoke'].includes(action)) await assert.rejects(result)
+    else assert.match((await result).text, action === 'once' ? /^OK$/ : /^Denied/)
     permissions.resolveApproval(id, 'once')
     runManager.finishRun(run)
     settings.tools.list_windows = 'ask'
@@ -230,12 +233,13 @@ async function review() {
     ['list_windows', 'Screenshot required: capture again.', false]
   ]) {
     const run = start('assistant')
-    bindingError = new Error(message)
-    const result = await runner.runTool(
-      name,
-      name === 'click' ? { x: 1, y: 1 } : {},
-      crypto.randomUUID()
+    bindingError = Object.assign(
+      new Error(message),
+      recoverable ? { code: 'SCREENSHOT_REQUIRED' } : {}
     )
+    const result = (
+      await runner.runTool(name, name === 'click' ? { x: 1, y: 1 } : {}, crypto.randomUUID())
+    ).text
     assert.match(result, recoverable ? /^Screenshot required:/ : /^Denied:/)
     assert.equal(executed, 1, 'Preflight failures must never execute input')
     runManager.finishRun(run)
@@ -257,8 +261,8 @@ async function review() {
         : name === 'web_fetch'
           ? { url: 'https://example.org' }
           : {}
-    const result = await runner.runTool(name, args, crypto.randomUUID())
-    assert.match(result, recoverable ? /^Web unavailable:/ : /^Denied:/)
+    const result = (await runner.runTool(name, args, crypto.randomUUID())).text
+    assert.match(result, recoverable ? /^Web unavailable:/ : /^Tool error:/)
     assert.equal(run.searchUnavailable, recoverable && name === 'web_search')
     if (run.searchUnavailable) {
       assert.equal(policy.canUseTool(run, 'web_search'), false)
@@ -334,14 +338,16 @@ async function review() {
   const allowedRun = start('assistant')
   let waits = 0
   assert.equal(
-    await runner.runTool('list_windows', {}, crypto.randomUUID(), (e) => {
-      if (e.type === 'tool_wait') waits++
-    }),
+    (
+      await runner.runTool('list_windows', {}, crypto.randomUUID(), (e) => {
+        if (e.type === 'tool_wait') waits++
+      })
+    ).text,
     'OK'
   )
   assert.equal(waits, 0, 'Always allow must run without another approval')
   runManager.stopRun()
-  assert.match(await runner.runTool('list_windows', {}, crypto.randomUUID()), /^Denied/)
+  await assert.rejects(runner.runTool('list_windows', {}, crypto.randomUUID()), /Stopped/)
   runManager.finishRun(allowedRun)
   settings.tools.list_windows = 'ask'
   const quotaRun = start('assistant')

@@ -1,5 +1,11 @@
 # Desktop interaction
 
+The shared action ledger now owns live accessibility observation identities and
+their expiry. An uncertain action uses the exact inspected window for its bounded
+read-back. The chat loop consumes structured outcomes and no longer keeps a
+parallel observation map. App text is display evidence, never a trusted status
+or window-identity protocol.
+
 Current behavior (2026-10-23): one assistant mode supports desktop actions, conversation, creative work and optional web search. Settings → Permissions offers **Always allow**, **Ask first** and **Block**, with an accepted, styled permission review before persistent grants are saved. Ask first uses a single in-app approval. Changing chats keeps the request running in its original conversation; Stop remains explicit.
 
 Mouse clicks, wheel scrolling, keyboard shortcuts and literal typing are enabled with exact window/process binding. Clicks require a screenshot from the same request, expire after two minutes, and reject moved/resized windows. Screenshots are capped at native size and 1280×960. Text input is paced for Windows text services and checks focus/cancellation. An editor title changed by Sophon's input can be resolved for the rest of that request only while the exact window/process and observed replacement title still match. Close-window results distinguish verified closure from a remaining save prompt.

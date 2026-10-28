@@ -16,6 +16,34 @@ tasks and do not establish general model quality or permission safety.
 
 ## Run
 
+### Paired runs with real files and commands
+
+`compare-live.cjs` is a separate native coding comparison. It uses the connected
+Sophon ChatGPT account with the selected model and runs three or more pairs:
+
+```powershell
+node bench/compare-live.cjs --chatgpt --model gpt-6-luna --baseline tech/NCS-0007 --repetitions 3
+```
+
+The baseline is a Git snapshot; the candidate is a frozen snapshot of current
+tracked and untracked application sources. Both use the same runner and independent
+behavior oracle. Run order alternates. Reports under `.cache/bench/live-*/` retain
+source/driver hashes, each trial's pass/failure, elapsed time, model calls and
+provider-reported token usage. Missing usage stays null; aborted comparisons are
+marked incomplete. Failed trials remain in the report. Inspect success rates before
+comparing time or tokens: an early failure can be cheaper than completing the task.
+
+Windows file operations, npm processes and authenticated model requests are real.
+Only disposable projects are edited; approvals are supplied by the fixture. The
+runner uses the existing encrypted account store in place through production
+authentication, including normal token refresh, without exporting credentials.
+It requires Electron and the existing signed-in Sophon profile (`--profile` may
+select a different profile). It does not operate Spotify or test the approval UI.
+This small scenario does not establish general reliability or lesson usefulness.
+Memory is disabled, so it cannot attribute improvement to procedural guidance.
+
+### Synthetic suite
+
 Use existing repository dependencies; no additional installation is required.
 Load qwen3.5-4b@q4_0 in LM Studio at 60k context. The isolated benchmark default
 is 60,000 tokens; adjust model overrides for the model you are evaluating.

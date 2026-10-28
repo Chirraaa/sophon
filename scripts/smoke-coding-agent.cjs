@@ -10,9 +10,17 @@ async function main() {
     process.argv.includes('--live'),
     'Pass --live to test the loaded local model with a real disposable project'
   )
-  const catalog = await fetch('http://127.0.0.1:1234/api/v0/models').then((r) => r.json())
-  const loaded = catalog.data.find((m) => m.state === 'loaded' && m.type !== 'embeddings')
+  const connected = process.argv.includes('--chatgpt')
+  const modelIndex = process.argv.indexOf('--model')
+  const modelId = modelIndex >= 0 ? process.argv[modelIndex + 1] : 'gpt-6-luna'
+  const catalog = connected
+    ? undefined
+    : await fetch('http://127.0.0.1:1234/api/v0/models').then((r) => r.json())
+  const loaded = connected
+    ? { id: modelId, loaded_context_length: 32000 }
+    : catalog.data.find((m) => m.state === 'loaded' && m.type !== 'embeddings')
   assert(loaded, 'Load a local model in LM Studio first')
+  fs.mkdirSync(path.join(root, '.cache'), { recursive: true })
   const directory = fs.mkdtempSync(path.join(root, '.cache/coding-agent-'))
   const workspace = path.join(directory, 'project')
   fs.mkdirSync(workspace)
@@ -52,14 +60,15 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
       ).map((n) => [n, 'allow'])
     ),
     model: {
-      provider: 'local',
-      endpoint: 'http://127.0.0.1:1234/v1',
+      provider: connected ? 'chatgpt' : 'local',
+      endpoint: connected ? 'https://api.openai.com/v1' : 'http://127.0.0.1:1234/v1',
       modelId: loaded.id,
       contextWindow: loaded.loaded_context_length || 32000,
       maxTokens: 3072,
       maxSteps: 24,
       temperature: 0.2,
       thinking: false,
+      reasoningEffort: 'low',
       historyTurns: 4,
       specialists: false
     }
@@ -106,6 +115,8 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
     '../services/isolated-parser': {}
   })
   const npm = load('src/main/tools/npm.ts', {
+    electron: connected ? require('electron') : { app: { on: () => {} } },
+    net: require('node:net'),
     child_process: require('node:child_process'),
     util: require('node:util'),
     path,
@@ -189,13 +200,23 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
     https: require('node:https'),
     './sse': load('src/main/network/sse.ts', { string_decoder: require('node:string_decoder') })
   })
+  const profileIndex = process.argv.indexOf('--profile')
+  const auth = connected
+    ? await require('./security/connected-chatgpt.cjs').connectedChatgpt({
+        load,
+        manager,
+        transport,
+        scratch: directory,
+        profile: profileIndex >= 0 ? process.argv[profileIndex + 1] : undefined
+      })
+    : {}
   const client = load('src/main/llm/client.ts', {
     '../settings': settingsModule,
     '../tools': tools,
     '../network/endpoint': load('src/main/network/endpoint.ts'),
     '../network/json-request': {
       requestJson: async (url, options) => {
-        assert.equal(url.origin, 'http://127.0.0.1:1234')
+        assert.equal(url.origin, connected ? 'https://api.openai.com' : 'http://127.0.0.1:1234')
         if (options.body) requests.push(JSON.parse(options.body))
         return transport.requestJson(url, options)
       }
@@ -205,10 +226,12 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
     './stream': load('src/main/llm/stream.ts'),
     './providers': load('src/main/llm/providers.ts'),
     '../security/model-credentials': {},
-    '../security/chatgpt-auth': {},
+    '../security/chatgpt-auth': auth,
     'node:perf_hooks': require('node:perf_hooks'),
     './time': load('src/main/llm/time.ts', { 'node:perf_hooks': require('node:perf_hooks') })
   })
+  // The user explicitly selected this model. Model discovery can time out and
+  // return an empty list; the authenticated inference response is authoritative.
   const fixtures = require('./security/harness-fixture.cjs')(load)
   const routing = load('src/main/llm/visual-routing.ts')
   const visuals = load('src/main/llm/visuals.ts', {
@@ -251,7 +274,7 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
     reply = await chat(
       deletionMode
         ? 'Delete remove-me.txt, delete the empty empty-folder, and delete old-folder with all its contents. Inspect first, then use delete_file and delete_directory; use recursive: true only for old-folder. Keep keep-me.txt untouched. Stop after confirming those paths were removed.'
-        : 'Implement a small CommonJS Node.js project in this empty workspace. Inspect it, save one active task mapped to all needed tools with skill none, then run npm init -y. Create src/unique.cjs exporting uniqueStrings(values). Require an array of strings or throw TypeError, preserve first occurrence order, do not mutate input, and handle large arrays efficiently. Use edit_file on package.json to set scripts.test to exactly "node ../oracle.cjs"; the trusted test file already exists outside this workspace, do not edit it. Create the src folder with create_directory, write the new module, mark the task implemented, and let the host run verification. Record a final checkpoint with the complexity tradeoff, review limits (specialists disabled), and lesson "No reusable lesson found". No dependencies, downloads, shell commands, or deletion. Do the work with tools.',
+        : 'Implement a small CommonJS Node.js project in this empty workspace. Inspect it, save one active task mapped to all needed tools with skill none, then run npm init -y. Create src/unique.cjs with the named CommonJS export module.exports = { uniqueStrings }, where uniqueStrings(values) is the function. Require an array of strings or throw TypeError, preserve first occurrence order, do not mutate input, and handle large arrays efficiently. Use edit_file on package.json to set scripts.test to exactly "node ../oracle.cjs"; the trusted test file already exists outside this workspace, do not edit it. Create the src folder with create_directory, write the new module, mark the task implemented, and let the host run verification. Record a final checkpoint with the complexity tradeoff, review limits (specialists disabled), and lesson "No reusable lesson found". No dependencies, downloads, shell commands, or deletion. Do the work with tools.',
       (e) => {
         events.push(e)
         if (e.type === 'tool_start') console.log('TOOL', e.name)
@@ -268,6 +291,10 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
       JSON.stringify(
         {
           model: loaded.id,
+          provider: settings.model.provider,
+          settings: settings.model,
+          modelCalls: run.modelCalls,
+          usage: run.usage ?? null,
           scenario: deletionMode ? 'deletion' : 'coding',
           elapsedMs: Date.now() - started,
           reply,
@@ -312,7 +339,14 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
     'PASS live coding agent: real model + chat loop + Windows file tools + npm init + independent behavior oracle'
   )
 }
-main().catch((e) => {
-  console.error(e)
-  process.exitCode = 1
-})
+if (require.main === module || process.versions.electron)
+  main()
+    .then(() => {
+      if (process.argv.includes('--chatgpt')) require('electron').app.exit(0)
+    })
+    .catch((e) => {
+      console.error(e.message)
+      if (process.argv.includes('--chatgpt')) require('electron').app.exit(1)
+      else process.exitCode = 1
+    })
+module.exports = { main }

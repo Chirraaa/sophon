@@ -56,16 +56,19 @@ Explicit corrections and repeatable tool evidence can support reusable procedure
 - `archive` moves obsolete guidance to revisions and removes it from recall.
   Starter documents are seeded once, so archived starters are not recreated.
 
-Trial guidance is labeled unproven. Three distinct host-recorded successful uses
-without regressions promote it to active. Failed trials return to candidate;
+Trial guidance is labeled unproven. Successful execution counts are recorded but
+do not promote it to active: execution does not demonstrate usefulness or semantic
+correctness. Previously auto-promoted generated guidance migrates back to trial,
+retaining its history; trusted starter documents keep their status. Failed trials return to candidate;
 repeated active failures mark the entry revised and exclude it from recall.
 `status` shows lifecycle counters and evidence; `discard` invalidates a candidate;
 `rollback` restores an archived entry's prior state. See the
 [coding harness guide](CODING_HARNESS.md) for task checkpoints, attribution and limits.
 
-The model must assess meaningful evidence before promoting a lesson. There is no
-automatic transcript extraction or claim that structure checks establish semantic
-quality. Persistence requires a successful tool result.
+There is no automatic usefulness promotion or transcript extraction. A future
+promotion mechanism needs independent task-quality evidence and controlled
+comparisons with and without the guidance. Structure checks and successful Python
+execution alone cannot establish semantic quality. Persistence requires a successful tool result.
 
 Recall selects at most two relevant skill/recipe excerpts plus compact hook
 guidance within the context estimate. Hooks are declarative instructions:

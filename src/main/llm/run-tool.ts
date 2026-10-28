@@ -10,21 +10,17 @@ import { toolPermission } from '../permissions'
 import { hideScreenGlow } from '../services/screen-glow'
 import { allowApprovedTool, getSettings } from '../settings'
 import { readHarnessProposal } from '../harness/store'
+import { normalizeToolOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
+import { MUTATIONS } from '../workflow/results'
 export async function runTool(
   name: string,
   args: unknown,
   actionId: string,
   onEvent?: (e: ChatEvent) => void
-): Promise<
-  | string
-  | {
-      text: string
-      image: string
-    }
-> {
+): Promise<ToolOutcome> {
   const run = currentRun()
   hideScreenGlow()
-  if (!run) return 'Denied: no active task.'
+  if (!run) return toolOutcome('denied', 'Denied: no active task.')
   let executing = false
   try {
     const parameters = validateToolArguments(name, args)
@@ -66,12 +62,16 @@ export async function runTool(
       )
       onEvent?.({ type: 'tool_wait', id: actionId, canAlwaysAllow })
       const decision = await approval
+      assertRun(run)
       onEvent?.({ type: 'tool_resume', id: actionId })
       if (decision === 'timeout' || decision === 'deny') {
         securityEvent('tool_denied', run.id, name)
-        return decision === 'timeout'
-          ? 'Denied: no answer from the user in time.'
-          : 'Denied by the user.'
+        return toolOutcome(
+          'denied',
+          decision === 'timeout'
+            ? 'Denied: no answer from the user in time.'
+            : 'Denied by the user.'
+        )
       }
       if (proposal !== undefined) bound.scope.approvedProposal = proposal
     }
@@ -81,10 +81,12 @@ export async function runTool(
     assertRun(run)
     securityEvent('tool_allowed', run.id, name)
     executing = true
-    return await executeTool(name, parameters, run, bound.scope, (output) =>
+    const result = await executeTool(name, parameters, run, bound.scope, (output) =>
       onEvent?.({ type: 'tool_output', id: actionId, output })
     )
+    return normalizeToolOutcome(name, parameters, result)
   } catch (error) {
+    assertRun(run)
     const message = (error as Error).message
     if (
       executing &&
@@ -94,9 +96,11 @@ export async function runTool(
     ) {
       assertRun(run)
       securityEvent('tool_failed', run.id, name)
-      return (
+      return toolOutcome(
+        'failed',
         'Patch not applied: no file was changed. Read the current file and copy a short unique old_text exactly, preserving JSON escaping and whitespace. ' +
-        message
+          message,
+        { code: 'patch-not-applied', execution: 'not-started' }
       )
     }
     if (
@@ -115,20 +119,29 @@ export async function runTool(
     ) {
       assertRun(run)
       securityEvent('tool_failed', run.id, name)
-      return (
+      return toolOutcome(
+        'failed',
         'Missing workspace path: no action was executed. Inspect the intended parent folder and create missing project folders with create_directory before writing. ' +
-        message
+          message,
+        { code: 'workspace-missing', execution: 'not-started' }
       )
     }
     if (
       !executing &&
       !run.signal.aborted &&
-      (message.startsWith('Target not found:') ||
-        (name === 'click' && message.startsWith('Screenshot required:')))
+      ['TARGET_NOT_FOUND', 'SCREENSHOT_REQUIRED'].includes(
+        String((error as NodeJS.ErrnoException).code)
+      )
     ) {
       assertRun(run)
       securityEvent('tool_failed', run.id, name)
-      return message
+      return toolOutcome('failed', message, {
+        execution: 'not-started',
+        code:
+          (error as NodeJS.ErrnoException).code === 'TARGET_NOT_FOUND'
+            ? 'target-missing'
+            : 'screenshot-required'
+      })
     }
     if (
       executing &&
@@ -142,9 +155,13 @@ export async function runTool(
       assertRun(run)
       if (name === 'web_search') run.searchUnavailable = true
       securityEvent('tool_failed', run.id, name)
-      return `Web unavailable: ${message}`
+      return toolOutcome('failed', `Web unavailable: ${message}`, { code: 'web-unavailable' })
     }
-    securityEvent('tool_denied', run.id, name)
-    return `Denied: ${message}`
+    securityEvent(executing ? 'tool_failed' : 'tool_denied', run.id, name)
+    if (!executing) return toolOutcome('denied', `Denied: ${message}`)
+    return toolOutcome(MUTATIONS.has(name) ? 'uncertain' : 'failed', `Tool error: ${message}`, {
+      execution: 'unknown',
+      code: name === 'act_on_control' ? 'control-uncertain' : 'execution-error'
+    })
   }
 }

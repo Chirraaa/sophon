@@ -25,6 +25,21 @@ flowchart TD
 
 ## Ownership
 
+`workflow/runtime.ts` commits each host `ToolOutcome` once to `ActionLedger`, then
+updates the workflow, coding verifier and saved session before publishing them.
+The ledger owns mutation revisions, changed paths, check-evidence revisions and
+short-lived desktop observation identities. A verification report is valid only
+for its run, current mutation revision and current check revision. Possible writes
+and interrupted actions invalidate earlier checks; failed rechecks invalidate
+saved verification even when no file changed. Resume requires fresh check evidence.
+
+File writes, commands and accessibility controls produce structured status,
+execution certainty and evidence. Display text remains model-visible data.
+Remaining legacy tools are classified once at `workflow/tool-outcome.ts`; their
+string adapters are a migration boundary, not a second completion authority.
+`chat.ts` coordinates actions through the runtime rather than maintaining its own
+desktop identity map or separately updating three mutation histories.
+
 | Component                                                     | Responsibility                                                                        |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `src/main/chat/session.ts`                                    | Conversation events, streaming updates, persistence and run lifetime                  |

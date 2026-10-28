@@ -2,6 +2,7 @@ const { spawnSync } = require('node:child_process')
 const path = require('node:path')
 
 const suites = [
+  'action-outcomes',
   'apps',
   'awareness',
   'capabilities',
@@ -28,6 +29,7 @@ const suites = [
   'harness-store',
   'icons',
   'licenses',
+  'live-comparison',
   'long-task-memory',
   'memory',
   'model-insights',

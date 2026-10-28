@@ -1,3 +1,4 @@
+const { record } = require('./security/action-fixture.cjs')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
@@ -106,7 +107,7 @@ const event = (e) => {
 }
 async function execute(commandText, purpose = 'check', extra = {}) {
   const args = { command: commandText, purpose, ...extra }
-  const result = await runner.runTool('run_command', args, crypto.randomUUID(), event)
+  const result = (await runner.runTool('run_command', args, crypto.randomUUID(), event)).text
   assert(!result.startsWith('Denied'), result)
   return JSON.parse(result)
 }
@@ -126,7 +127,7 @@ async function main() {
     contracts.validateToolArguments('run_command', { command: 'git status', purpose: 'unknown' })
   )
   const gitInit = { command: 'git init --quiet', purpose: 'change' }
-  assert.match(await runner.runTool('run_command', gitInit, 'denied', event), /^Denied/)
+  assert.match((await runner.runTool('run_command', gitInit, 'denied', event)).text, /^Denied/)
   assert.equal(executions, 0)
   assert(!fs.existsSync(path.join(workspace, '.git')))
   decision = 'once'
@@ -211,29 +212,32 @@ async function main() {
   const timeout = await execute('Start-Sleep -Seconds 20', 'inspect', { timeout_seconds: 1 })
   assert.equal(timeout.stopped, true)
   assert.equal(results.assessResult('run_command', {}, JSON.stringify(timeout)).status, 'uncertain')
-  const blocked = await runner.runTool(
-    'run_command',
-    { command: 'git status', purpose: 'inspect', path: '../outside' },
-    'outside',
-    event
-  )
+  const blocked = (
+    await runner.runTool(
+      'run_command',
+      { command: 'git status', purpose: 'inspect', path: '../outside' },
+      'outside',
+      event
+    )
+  ).text
   assert.match(blocked, /^Denied/)
 
   const gate = new verification.CodingVerification()
   const check = { command: 'javac Hello.java', purpose: 'check' }
-  gate.record('write_file', { path: 'Hello.java' }, 'saved', 'verified')
-  gate.record('list_files', {}, '[file] Hello.java', 'observed')
-  gate.record('run_command', check, JSON.stringify({ exitCode: 0, stopped: false }), 'verified')
+  record(gate, 'write_file', { path: 'Hello.java' }, 'saved', 'verified')
+  record(gate, 'list_files', {}, '[file] Hello.java', 'observed')
+  record(gate, 'run_command', check, JSON.stringify({ exitCode: 0, stopped: false }), 'verified')
   assert.deepEqual(gate.next(), { done: true })
-  gate.record('edit_file', { path: 'Hello.java' }, 'saved', 'verified')
-  gate.record('list_files', {}, '[file] Hello.java', 'observed')
+  record(gate, 'edit_file', { path: 'Hello.java' }, 'saved', 'verified')
+  record(gate, 'list_files', {}, '[file] Hello.java', 'observed')
   assert.equal(gate.next().tool, 'run_command')
   for (let i = 0; i < 3; i++)
-    gate.record('run_command', check, JSON.stringify({ exitCode: 1, stopped: false }), 'reported')
+    record(gate, 'run_command', check, JSON.stringify({ exitCode: 1, stopped: false }), 'reported')
   assert.match(gate.next().blocked, /failed three times/)
   const mixed = new verification.CodingVerification()
-  mixed.record('edit_file', { path: 'Hello.java' }, 'saved', 'verified')
-  mixed.record(
+  record(mixed, 'edit_file', { path: 'Hello.java' }, 'saved', 'verified')
+  record(
+    mixed,
     'read_file',
     { path: 'package.json' },
     envelope.untrustedData(
@@ -243,13 +247,14 @@ async function main() {
     ),
     'observed'
   )
-  mixed.record(
+  record(
+    mixed,
     'run_npm',
     { args: ['run', 'test'] },
     JSON.stringify({ exitCode: 0, stopped: false }),
     'verified'
   )
-  mixed.record('run_command', check, JSON.stringify({ exitCode: 1, stopped: false }), 'reported')
+  record(mixed, 'run_command', check, JSON.stringify({ exitCode: 1, stopped: false }), 'reported')
   assert.equal(mixed.next().tool, 'run_command', 'Passing npm cannot hide a failed compiler check')
 
   fs.writeFileSync(

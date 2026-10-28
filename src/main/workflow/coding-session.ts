@@ -1,4 +1,5 @@
 import { codingMutation } from './coding-mutation'
+import { ActionLedger, type ActionRecord, type VerificationReport } from './action-ledger'
 export { codingMutation, isRoutineNpm } from './coding-mutation'
 import { ACTION_LIMIT, RUN_SECONDS } from '../../shared/loop-limits'
 import { untrustedData } from '../llm/untrusted-data'
@@ -79,8 +80,13 @@ export function validCodingSession(v: unknown): v is CodingSessionState {
 export class CodingSession {
   private state: CodingSessionState
   private teachingFeedback = ''
+  private acceptedVerification?: VerificationReport
   active: boolean
-  constructor(active: boolean, previous?: CodingSessionState) {
+  constructor(
+    active: boolean,
+    previous?: CodingSessionState,
+    readonly ledger = new ActionLedger('standalone', previous?.revision)
+  ) {
     this.active = active || !!previous
     this.state =
       previous && validCodingSession(previous)
@@ -123,7 +129,20 @@ export class CodingSession {
     }
   }
   snapshot(): CodingSessionState {
+    this.synchronize()
     return structuredClone(this.state)
+  }
+  private synchronize(): void {
+    if (
+      this.state.revision === this.ledger.revision &&
+      (!this.acceptedVerification || this.ledger.accepts(this.acceptedVerification))
+    )
+      return
+    this.acceptedVerification = undefined
+    this.state.revision = this.ledger.revision
+    this.state.verification = ''
+    this.state.lesson = ''
+    for (const task of this.state.tasks) if (task.status === 'verified') task.status = 'implemented'
   }
   get needsInspection(): boolean {
     return this.active && !this.state.inspections.length
@@ -149,6 +168,7 @@ export class CodingSession {
     return undefined
   }
   checkpoint(args: Record<string, unknown>, tools: string[], profiles: boolean): void {
+    this.synchronize()
     const next = this.snapshot()
     for (const key of ['plan', 'docs', 'decisions', 'lesson'] as const)
       if (args[key] !== undefined) next[key] = String(args[key])
@@ -208,19 +228,21 @@ export class CodingSession {
     this.state = next
     this.log('Checkpoint: ' + next.tasks.map((t) => `${t.id}=${t.status}`).join(', '))
   }
-  record(
-    name: string,
-    args: Record<string, unknown>,
-    text: string,
-    status: EvidenceStatus,
-    verification = false
-  ): void {
+  record(record: ActionRecord): void {
+    this.synchronize()
     if (!this.active) return
+    const {
+      tool: name,
+      args,
+      outcome: { text, status }
+    } = record
     const feedback = codingToolFeedback(name, args, text)
     if (name === 'run_npm') this.teachingFeedback = feedback
     this.log(`${name} ${String(args.path ?? '')}: ${status}; ${text.slice(0, 300)}`)
-    if (['failed', 'denied', 'uncertain'].includes(status)) return
-    if (['list_files', 'read_file'].includes(name)) {
+    if (
+      ['observed', 'reported', 'verified'].includes(status) &&
+      ['list_files', 'read_file'].includes(name)
+    ) {
       this.state.inspections = [
         ...new Set([
           ...this.state.inspections,
@@ -228,15 +250,10 @@ export class CodingSession {
         ])
       ].slice(-64)
     }
-    if (
-      (codingMutation(name, args) ||
-        ['write_file', 'edit_file', 'create_directory', 'delete_file', 'delete_directory'].includes(
-          name
-        )) &&
-      !verification
-    ) {
+    if (record.mutation !== 'none') {
       const change = JSON.stringify({
         tool: name,
+        effect: record.mutation,
         path: args.path,
         before: String(
           args.old_text ??
@@ -252,15 +269,10 @@ export class CodingSession {
         note: 'Bounded change excerpt; re-read the file for complete content.'
       })
       this.state.changes = [...this.state.changes, change.slice(0, 1000)].slice(-16)
-      this.state.revision++
-      this.state.verification = ''
-      this.state.lesson = ''
-      this.state.tasks.forEach((t) => {
-        if (t.status === 'verified') t.status = 'implemented'
-      })
     }
   }
   pendingIssue(response = ''): string | undefined {
+    this.synchronize()
     if (!this.state.plan) {
       if (
         this.active &&
@@ -279,8 +291,12 @@ export class CodingSession {
       return 'Save a coding_checkpoint after the latest edits before finishing.'
     return undefined
   }
-  verified(summary: string): void {
-    this.state.verification = summary.slice(0, 4000)
+  verified(report: VerificationReport): void {
+    this.synchronize()
+    if (!this.ledger.accepts(report))
+      throw new Error('Verification does not cover the current mutation revision.')
+    this.state.verification = report.summary.slice(0, 4000)
+    this.acceptedVerification = report
     this.state.tasks.forEach((t) => {
       if (t.status === 'implemented') t.status = 'verified'
     })
