@@ -337,7 +337,7 @@ export function DesignGuide({
                   maxLength={100}
                   onChange={(event) => update({ customFont: event.target.value })}
                   placeholder="e.g. Avenir Next, sans-serif"
-                  className="mt-2 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-xs font-normal"
+                  className="mt-2 w-full text-xs font-normal"
                 />
                 <span className="mt-1 block text-[10px] font-normal text-muted-foreground">
                   Uses a local font when available; otherwise previews a fallback.
@@ -400,7 +400,7 @@ export function DesignGuide({
                   rows={2}
                   onChange={(event) => update({ notes: event.target.value })}
                   placeholder="Brand colors, a font name, examples you like…"
-                  className="mt-2 block w-full resize-y rounded-lg border border-border bg-background/30 px-3 py-2 text-xs font-normal placeholder:text-muted-foreground"
+                  className="mt-2 block w-full resize-y text-xs font-normal"
                 />
               </label>
             </fieldset>
