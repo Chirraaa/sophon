@@ -107,7 +107,7 @@ function createFixtures(task, { untrustedData }, currentRun) {
           return untrustedData('file-list', '.', Object.keys(files).join('\n'))
         case 'read_file':
           return Object.hasOwn(files, args.path)
-            ? untrustedData('file', args.path, files[args.path])
+            ? untrustedData('local-file', args.path, files[args.path])
             : 'Tool error: file not found.'
         case 'write_file':
           if (Object.hasOwn(files, args.path) || args.overwrite)
