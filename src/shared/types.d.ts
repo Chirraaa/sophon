@@ -65,6 +65,18 @@ declare global {
       planEnabled: boolean
     }[]
   }
+  interface MicrosoftStatus {
+    clientId: string
+    pending: boolean
+    activeId?: string
+    accounts: {
+      id: string
+      email: string
+      name: string
+      signedIn: boolean
+      calendar: boolean
+    }[]
+  }
   type PageDestination = 'reader' | 'browser'
   interface PagePreview {
     pages?: string[]
@@ -429,6 +441,14 @@ declare global {
       signOut: () => Promise<{ status: ChatgptStatus; revoked: boolean }>
       acknowledgeWelcome: () => Promise<void>
       manageUsage: () => Promise<void>
+    }
+    microsoft: {
+      status: () => Promise<MicrosoftStatus>
+      setClientId: (clientId: string) => Promise<MicrosoftStatus>
+      signIn: (accountId?: string) => Promise<MicrosoftStatus>
+      cancel: () => Promise<void>
+      select: (accountId: string) => Promise<MicrosoftStatus>
+      remove: (accountId: string) => Promise<MicrosoftStatus>
     }
     visuals: {
       image: (dataUrl: string) => Promise<{ id: string; url: string }>
