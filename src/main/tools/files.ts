@@ -152,13 +152,32 @@ export async function workspacePath(
 ): Promise<string> {
   const configured = getSettings().files.workspace
   if (!configured) throw new Error('Choose a working folder in Settings → Files first.')
-  if (typeof input !== 'string' || input.includes('\0') || input.includes(':'))
+  if (typeof input !== 'string' || input.includes('\0'))
     throw new Error('Use a relative file path inside the working folder.')
+  let requested = input
   const root = await validateWorkspaceRoot(configured)
-  const parts = input.split(/[\\/]/).filter((part) => part && part !== '.')
+  if (/^[a-z]:[\\/]/i.test(requested)) {
+    // Accept model-produced full paths only within the already authorized root.
+    // Check ambiguous segments before relative() can normalize them away.
+    if (
+      requested.slice(2).includes(':') ||
+      requested
+        .split(/[\\/]/)
+        .some(
+          (part) => part === '..' || part.endsWith('.') || part.endsWith(' ') || /~\d/.test(part)
+        )
+    )
+      throw new Error('Blocked: unsafe or sensitive workspace path.')
+    if (!contained(root, requested))
+      throw new Error('Blocked: that path is outside your working folder.')
+    requested = relative(root, requested)
+  }
+  if (requested.includes(':'))
+    throw new Error('Use a relative file path inside the working folder.')
+  const parts = requested.split(/[\\/]/).filter((part) => part && part !== '.')
   if (
-    isAbsolute(input) ||
-    /^[\\/]/.test(input) ||
+    isAbsolute(requested) ||
+    /^[\\/]/.test(requested) ||
     parts.some(
       (part, index) =>
         part === '..' ||
@@ -177,7 +196,7 @@ export async function workspacePath(
     )
   )
     throw new Error('Blocked: unsafe or sensitive workspace path.')
-  if (write && !directory && !WRITE_EXTENSIONS.has(extname(input).toLowerCase()))
+  if (write && !directory && !WRITE_EXTENSIONS.has(extname(requested).toLowerCase()))
     throw new Error('Choose a supported text, HTML, data, or source-code filename.')
   let cursor = root
   for (let index = 0; index < parts.length; index++) {
@@ -195,7 +214,7 @@ export async function workspacePath(
         throw error
     }
   }
-  const target = resolve(root, input || '.')
+  const target = resolve(root, requested || '.')
   if (!contained(root, target))
     throw new Error('Blocked: that path is outside your working folder.')
   const parent = await realpath(write ? dirname(target) : target)

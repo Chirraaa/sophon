@@ -310,7 +310,7 @@ async function review() {
       resumeBlocked,
       () => {}
     ).resumed,
-    false
+    true
   )
   assert.equal(
     new workflow.WorkflowController(
@@ -358,6 +358,8 @@ async function review() {
   assert.deepEqual(executions, [])
   assert(JSON.stringify(captured[0]).includes('Opened Notepad'))
   for (const text of [
+    'go',
+    'Go!',
     'Resume the response.',
     'Pick up where we left off',
     'Continue, keep it concise'
