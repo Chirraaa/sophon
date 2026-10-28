@@ -9,7 +9,7 @@ does not silently install a downloaded update.
 The updater uses NSIS installers, verifies the download checksum and the Windows
 publisher signature through electron-updater, and only accepts stable releases
 newer than the running version. Keep the same signing publisher across releases.
-The default release build requires code signing. Do not disable signature
+The existing release build requires code signing. Do not disable signature
 verification or put a GitHub token in application code, updater configuration, or
 the distributed installer. Users do not need a GitHub account or access token.
 
@@ -35,38 +35,6 @@ the distributed installer. Users do not need a GitHub account or access token.
 GitHub CLI or a release workflow may upload them using a maintainer's token;
 that credential belongs only on the publishing machine/CI, never in the app.
 The repository must be public before update checks can succeed anonymously.
-
-### Releases without a signing certificate
-
-The published 1.0.0 release was unsigned. When a signing certificate is unavailable,
-`npm run build:win:unsigned` explicitly generates an unsigned installer and its
-matching `.blockmap` and `latest.yml`; it still verifies the pinned voice resources
-and never publishes automatically. Keep all three assets from the same build.
-Disclose the unsigned installer in the release notes. Windows may show a
-SmartScreen warning. This build does not disable the updater's signature checks:
-do not promise automatic installation until an upgrade from the previous installed
-release has been tested. Manual installation is the fallback if verification fails.
-
-### Preparing 1.1.0
-
-Release notes are in [releases/1.1.0.md](releases/1.1.0.md). The package manifests
-must both report `1.1.0`, and the eventual release tag is `v1.1.0`.
-
-Follow the branch workflow in `AGENTS.md`: commit preparation on `tech/NCS-0010`,
-merge that branch into `dev`, and verify there. Wait for the maintainer's
-confirmation before merging the same task branch directly into `main`.
-Tag the approved commit on `main`; never tag `dev`, which may contain unrelated
-integration work. Build the final assets from that approved source before uploading.
-
-Create a draft using the reviewed notes and the exact approved commit:
-
-```powershell
-gh release create v1.1.0 --repo Chirraaa/sophon --target <approved-main-commit> --draft --title "Sophon 1.1.0" --notes-file docs/releases/1.1.0.md
-gh release upload v1.1.0 dist/Sophon-1.1.0-setup.exe dist/Sophon-1.1.0-setup.exe.blockmap dist/latest.yml --repo Chirraaa/sophon
-```
-
-Review the draft, verify the actual installed upgrade, and publish as the latest
-stable release when ready. Do not use `--clobber` to replace published artifacts.
 
 ## Release notes and restart behavior
 
