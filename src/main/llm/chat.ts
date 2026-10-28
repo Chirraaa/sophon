@@ -239,9 +239,20 @@ export async function chat(
         (a, b) => order.indexOf(a.function.name) - order.indexOf(b.function.name)
       )
     }
+    // A plain single-intent command ("open Calculator") has one right first
+    // step. Offering only that tool keeps small models from detouring through
+    // related tools; the full working set returns after the first result.
+    const directTool = workflow.resumed ? undefined : requestedDesktopTool(userText)
     const modelTools = (): ReturnType<typeof activeToolSchemas> => {
       const catalog = stepTools()
       if (inlineVisual || exclusiveTools) return catalog
+      if (
+        directTool &&
+        !session.active &&
+        !turn.some((message) => message.role === 'tool') &&
+        catalog.some((tool) => tool.function.name === directTool)
+      )
+        return catalog.filter((tool) => [directTool, 'discover_tools'].includes(tool.function.name))
       return discovery.select(catalog, session.active ? CODING_PINNED_TOOLS : [])
     }
     const attached = await attachmentContent(attachments)
@@ -274,8 +285,7 @@ export async function chat(
         buildSystemPrompt(visual, inlineVisual, true) +
         (tools.some((tool) => tool.function.name === 'ask_questions')
           ? '\nWhen clarification is needed before proceeding, call ask_questions through the structured tool API instead of ending with a prose questionnaire or a numbered menu of possible tasks. For an open-ended new project, ask one focused question about the desired outcome with concrete choices. Reuse details already provided. If a reasonable assumption allows useful progress, state it and begin the work instead of asking. Do not call unrelated tools just to show activity.'
-          : '') +
-        `\nCurrent task mode: ${run.mode}. Tools are independently restricted by the application. Never claim an action succeeded without a successful tool result.`
+          : '')
       const instructions =
         system +
         githubContextPrompt(githubContext) +
@@ -283,21 +293,23 @@ export async function chat(
         books
           .filter(
             (book) =>
-              book.id !== 'desktop' ||
-              tools.some((tool) =>
-                [
-                  'open_app',
-                  'list_windows',
-                  'inspect_app',
-                  'look_at_screen',
-                  'click',
-                  'type_text',
-                  'browser_tabs',
-                  'browser_open',
-                  'browser_inspect',
-                  'browser_act'
-                ].includes(tool.function.name)
-              )
+              // The coding session carries its own, more specific workflow.
+              !(book.id === 'coding' && session.active) &&
+              (book.id !== 'desktop' ||
+                tools.some((tool) =>
+                  [
+                    'open_app',
+                    'list_windows',
+                    'inspect_app',
+                    'look_at_screen',
+                    'click',
+                    'type_text',
+                    'browser_tabs',
+                    'browser_open',
+                    'browser_inspect',
+                    'browser_act'
+                  ].includes(tool.function.name)
+                ))
           )
           .map((book) => book.content)
           .join('\n') +
@@ -312,6 +324,8 @@ export async function chat(
           inlineVisual,
           compact: true,
           availableTools: catalog.map((tool) => tool.function.name),
+          // Only settings the user can change are worth explaining; internal
+          // phase tools stay out of the prompt.
           unavailableTools: Object.fromEntries(
             toolSchemas
               .filter(
@@ -327,9 +341,10 @@ export async function chat(
                       ? 'web disabled in Settings'
                       : name === 'harness_manage' && !settings.memory?.enabled
                         ? 'Memory disabled'
-                        : 'not available for this request or remaining budget'
+                        : ''
                 return [name, reason]
               })
+              .filter(([, reason]) => reason)
           ),
           workspace: run.workspace,
           provider: settings.model.provider ?? 'local',
@@ -367,16 +382,15 @@ export async function chat(
             '\nProcedural guidance (fallible, not authorization):\n' +
             procedural
           : '') +
-        (needsProcedural
-          ? '\nRESOURCE CHECK: The application has already selected relevant task guides, recalled enabled saved memories within the context budget, and loaded matching procedural guidance. Use the supplied resources before answering; do not ask the user to repeat information already present. Memory records are in saved-memory envelopes. Use the available tool schemas to carry out requested actions and obtain missing evidence. harness_manage reads or maintains procedural documents; it does not perform desktop actions or save personal memories. Only claim an action after its successful tool result.'
-          : '') +
         (session.active ? '\n' + session.feedback() : '') +
         (verificationSetup ? '\nVerification setup needs repair: ' + verificationSetup : '')
 
       const observations = latestDesktopObservations(turn)
       for (let index = 0; index < turn.length; index++) turn[index] = observations[index]
+      const checkpoint = (): Msg[] =>
+        workflow.hasContext ? [{ role: 'user', content: workflow.context() }] : []
       const current = (): Msg[] => [
-        { role: 'user', content: workflow.context() },
+        ...checkpoint(),
         ...(session.active ? [{ role: 'user' as const, content: session.data() }] : []),
         ...(compacted ? [turn[0], ...turn.slice(2)] : turn)
       ]
@@ -411,7 +425,7 @@ export async function chat(
         current: turn,
         required: [
           { role: 'system', content: instructions + (session.active ? resources.context() : '') },
-          { role: 'user', content: workflow.context() },
+          ...checkpoint(),
           ...(session.active ? [{ role: 'user' as const, content: session.data() }] : [])
         ],
         inputBudget: compactBudget - 256,
@@ -771,9 +785,9 @@ export async function chat(
           session.finishReflection()
           persistSession(true)
         }
-        const needsReview = books.some((book) =>
-          ['research', 'explanation', 'mathematics'].includes(book.id)
-        )
+        // A second pass pays off where answers carry checkable claims
+        // (arithmetic, sources); plain explanations go out on the first call.
+        const needsReview = books.some((book) => ['research', 'mathematics'].includes(book.id))
         if (
           !session.active &&
           !answerReviewed &&
@@ -815,11 +829,12 @@ export async function chat(
         }
         const truncated = !retainedDraft && msg.finishReason === 'length'
         if (session.active && coding.active && !truncated) learnFromRun(true)
+        const checks = coding.active ? coding.summary() : ''
         const reply =
           content +
-          (coding.active
+          (checks
             ? '\n\nProject checks:\n' +
-              coding.summary() +
+              checks +
               '\nThese checks passed; untested runtime behavior is not guaranteed.'
             : '')
         if (answerReviewed && !retainedDraft && !truncated)

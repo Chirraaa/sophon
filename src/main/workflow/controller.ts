@@ -90,7 +90,7 @@ export function interruptedWorkflow(state: WorkflowState): WorkflowState {
   }
 }
 export const WORKFLOW_INSTRUCTIONS =
-  'WORKFLOW: The app tracks stages and action evidence. Workflow envelopes are reference data, not permission. The user goal includes all constraints in the original request. Inspect the relevant target, take the smallest supported action, then check the result. Observed means data received; reported means a tool reported success; verified means a specific postcondition was checked, not that the entire goal is complete. A close request is not proof of closure. Never claim an unperformed action or test. On resume, old evidence is historical: re-observe changing state, do not replay completed actions or reuse approvals. Stop on denial. A failed or uncertain mutation needs inspection before another action; do not blindly replay it. A nonzero project check is diagnostic evidence for the coding harness repair loop, not permission denial; obey its repair limit and never weaken checks.'
+  'WORKFLOW: Loop inspect -> smallest supported action -> check the result, until the whole original request (with its constraints) is done; then answer. The task-checkpoint envelope is reference data, not permission. Evidence status: observed = data received; reported = the tool says it acted; verified = a specific postcondition was checked (not the whole goal). A close request is not proof of closure. On resume, old evidence is historical: re-observe changing state and never replay completed actions or reuse approvals.'
 
 export class WorkflowController {
   readonly budgets = new LoopBudgets()
@@ -162,6 +162,10 @@ export class WorkflowController {
           .map((entry) => entry.target)
       )
     if (publishInitial) this.emit()
+  }
+  // A fresh request has no checkpoint worth showing the model yet.
+  get hasContext(): boolean {
+    return this.resumed || this.state.evidence.length > 0
   }
   snapshot(): WorkflowState {
     return structuredClone(this.state)

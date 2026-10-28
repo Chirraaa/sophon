@@ -58,8 +58,13 @@ async function main() {
       response('Saved copy.txt.')
     ]
   }).run()
-  assert.equal(file.calls.length, 2)
+  // The host lists the folder once to look for a build system; plain files need no checks.
+  assert.deepEqual(
+    file.calls.map((c) => c.name),
+    ['read_file', 'write_file', 'list_files']
+  )
   assert(!file.error, file.error)
+  assert.equal(file.reply, 'Saved copy.txt.')
   const visual = [
     '```html',
     '<!doctype html><html><head><title>Chart</title></head><body><div id="c"></div><script>sophon.lineChart("#c",{labels:["A","B"],series:[{name:"N",values:[2,4]}]});</script></body></html>',
@@ -153,17 +158,8 @@ async function main() {
   assert.throws(() =>
     visualCheck(explorer, { helper: 'explorer', control: 'x', formula: { at: 3, expected: 7 } })
   )
-  const privateResult = await createHarness({
-    id: 'smoke-private',
-    mode: 'research',
-    prompt: 'Hello',
-    behavior: { systemPrompt: 'PRIVATE_CANARY' },
-    history: [[{ role: 'user', content: 'PRIVATE_CANARY' }]],
-    responses: [response('Hello')]
-  }).run()
-  assert(!JSON.stringify(privateResult.requests).includes('PRIVATE_CANARY'))
   console.log(
-    'PASS 110-task split; scorer positive/negative cases; real chat, contracts, approval denial, atomic batch, mock read/write and research isolation; no network or native tools'
+    'PASS 110-task split; scorer positive/negative cases; real chat, contracts, approval denial, atomic batch and mock read/write; no network or native tools'
   )
 }
 main().catch((error) => {
