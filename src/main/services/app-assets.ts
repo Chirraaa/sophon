@@ -44,7 +44,9 @@ export function registerAppProtocol(
         path.includes('\\') ||
         path.includes('\0') ||
         !(
-          parser ? /^\/(?:parser\.html|assets\/[\w./-]+)$/ : /^\/(?:index\.html|voice-worklet\.js|assets\/[\w./-]+)$/
+          parser
+            ? /^\/(?:parser\.html|assets\/[\w./-]+)$/
+            : /^\/(?:index\.html|voice-worklet\.js|assets\/[\w./-]+)$/
         ).test(path)
       )
         return new Response(null, { status: 403 })
