@@ -14,6 +14,7 @@ import {
   type DesignPreferences
 } from '@/hooks/useDesignGuide'
 import { cn } from '@/lib/utils'
+import { Label } from '@/components/ui/label'
 
 function ColorField({
   label,
@@ -30,7 +31,7 @@ function ColorField({
   if (draft.source !== value) setDraft({ source: value, hex: value })
   const valid = /^#[0-9a-f]{6}$/i.test(hex)
   return (
-    <label className="flex flex-wrap items-center gap-2 text-xs">
+    <Label className="flex flex-wrap items-center gap-2 text-xs">
       <Input
         type="color"
         aria-label={`${label} color`}
@@ -56,7 +57,7 @@ function ColorField({
           Use a six-digit hex color, such as #6d28d9.
         </span>
       )}
-    </label>
+    </Label>
   )
 }
 
@@ -329,7 +330,7 @@ export function DesignGuide({
                 }))}
                 onChange={(font) => update({ font, customFont: '' })}
               />
-              <label className="text-xs font-medium">
+              <Label className="text-xs font-medium">
                 Custom font family
                 <Input
                   aria-label="Custom font family"
@@ -342,7 +343,7 @@ export function DesignGuide({
                 <span className="mt-1 block text-[10px] font-normal text-muted-foreground">
                   Uses a local font when available; otherwise previews a fallback.
                 </span>
-              </label>
+              </Label>
               <Choices
                 label="Light or dark?"
                 value={value.appearance}
@@ -392,7 +393,7 @@ export function DesignGuide({
                 ]}
                 onChange={(motion) => update({ motion })}
               />
-              <label className="text-xs font-medium">
+              <Label className="text-xs font-medium">
                 Anything else?
                 <Textarea
                   value={value.notes}
@@ -402,7 +403,7 @@ export function DesignGuide({
                   placeholder="Brand colors, a font name, examples you like…"
                   className="mt-2 block w-full resize-y rounded-lg border border-border bg-background/30 px-3 py-2 text-xs font-normal placeholder:text-muted-foreground"
                 />
-              </label>
+              </Label>
             </fieldset>
             <section aria-label="Live design preview" className="min-w-0">
               <div className="sticky top-0">
