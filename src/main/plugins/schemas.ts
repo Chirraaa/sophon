@@ -5,7 +5,17 @@ export const pluginSchemas = [
       name: 'plugins_list',
       description:
         'Discover enabled plugin skills and configured MCP connections. This does not connect servers or execute external operations. Use relevant skills and connected tools for app and service tasks.',
-      parameters: { type: 'object', properties: {} }
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            maxLength: 120,
+            description:
+              'Optional literal app or capability keyword. Filters enabled plugins and cached connected tools without contacting services.'
+          }
+        }
+      }
     }
   },
   {
@@ -32,6 +42,12 @@ export const pluginSchemas = [
         properties: {
           server: { type: 'string' },
           kind: { type: 'string', enum: ['tools', 'resources', 'templates', 'prompts'] },
+          query: {
+            type: 'string',
+            maxLength: 120,
+            description:
+              'For tools, filter cached names/descriptions by a literal keyword. Keep the same query when following nextCursor.'
+          },
           cursor: { type: 'string' }
         },
         required: ['server', 'kind']

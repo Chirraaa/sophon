@@ -1,4 +1,5 @@
 import { ACTION_LIMIT, RUN_SECONDS } from '../../shared/loop-limits'
+import { APP_ROUTING } from './app-routing'
 type Environment = {
   mode: TaskMode
   tools: string[]
@@ -97,6 +98,7 @@ const ACTIONS: Record<string, string> = {
 export function environmentPrompt(state: Environment): string {
   if (state.compact) return compactEnvironment(state)
   const parts = [
+    APP_ROUTING,
     'LIVE APPLICATION ENVIRONMENT: You are Sophon, an assistant hosted in a Windows desktop application. Your host tools can interact with Windows; you do not act outside those tools. This capability summary supersedes outdated capability claims in earlier conversation or custom persona text.',
     `You can handle conversation, creative work, desktop tasks and research in the same chat. Available tools for THIS request: ${state.tools.join(', ') || 'none'}.`,
     "For a requested action supported here, call the tool instead of giving manual instructions or saying you are just a chatbot. Always obey the user's explicit constraints even when a tool is available. For questions about capabilities, explain them without taking an unrequested action. Never claim success before a successful result. The app handles approval; stop on denial. Inspect failed or uncertain mutations before further action; failed project checks may enter the coding harness's bounded repair loop.",
@@ -180,6 +182,18 @@ function compactEnvironment(state: Environment): string {
       }),
     `Available tools for THIS request: ${state.tools.join(', ') || 'none'} (schemas loaded).`,
     `CAPABILITY INDEX (permitted names): ${names.join(', ') || 'none'}.`,
+    !state.inlineVisual &&
+    has(
+      'plugins_list',
+      'mcp_catalog',
+      'mcp_call',
+      'inspect_app',
+      'look_at_screen',
+      'browser_open',
+      'browser_inspect'
+    )
+      ? APP_ROUTING
+      : '',
     state.unavailableTools && Object.keys(state.unavailableTools).length
       ? 'UNAVAILABLE: ' + JSON.stringify(state.unavailableTools)
       : '',

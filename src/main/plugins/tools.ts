@@ -1,5 +1,11 @@
 import { pluginSummaries, readPluginDocument, serverRecord } from './store'
-import { connected, connectionSummaries, disconnect, safeResult } from './runtime'
+import {
+  connected,
+  connectionSummaries,
+  connectionCapabilities,
+  disconnect,
+  safeResult
+} from './runtime'
 import { destination, parseCallArguments } from './config'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import { untrustedData } from '../llm/untrusted-data'
@@ -63,15 +69,34 @@ export async function executePluginTool(
   run: RunContext
 ): Promise<string> {
   assertRun(run)
-  if (name === 'plugins_list')
+  if (name === 'plugins_list') {
+    const query = String(args.query ?? '')
+      .trim()
+      .toLowerCase()
+    const matches = (value: unknown): boolean =>
+      !query || JSON.stringify(value).toLowerCase().includes(query)
+    const servers = connectionSummaries()
+      .filter((s) => s.enabled)
+      .map((server) => {
+        const tools = connectionCapabilities(server.id)
+        const relevant = matches({ name: server.name }) ? tools : tools.filter(matches)
+        return {
+          ...server,
+          capabilities: relevant.slice(0, 8),
+          moreCapabilities: relevant.length > 8
+        }
+      })
+      .filter((server) => matches(server) || server.capabilities.length > 0)
     return untrustedData(
       'plugin-catalogue',
       'Enabled plugins and MCPs',
       JSON.stringify({
-        plugins: pluginSummaries().filter((p) => p.enabled),
-        servers: connectionSummaries().filter((s) => s.enabled)
+        plugins: pluginSummaries().filter((p) => p.enabled && matches(p)),
+        servers,
+        note: 'Capabilities describe cached connected tools, not permissions or authenticated account scope. Use mcp_catalog with query for exact schemas; disconnected servers require user connection in Settings. No match: use another available route.'
       })
     )
+  }
   if (name === 'plugin_read') {
     const document = readPluginDocument(String(args.plugin), String(args.path))
     return untrustedData(
@@ -97,14 +122,20 @@ export async function executePluginTool(
     if (name === 'mcp_catalog') {
       const cursor = args.cursor ? { cursor: String(args.cursor) } : {}
       if (args.kind === 'tools') {
+        const query = String(args.query ?? '')
+          .trim()
+          .toLowerCase()
+        const tools = connection.tools.filter(
+          (tool) => !query || `${tool.name} ${tool.description ?? ''}`.toLowerCase().includes(query)
+        )
         const offset = args.cursor === undefined ? 0 : Number(args.cursor)
-        if (!Number.isInteger(offset) || offset < 0 || offset > connection.tools.length)
+        if (!Number.isInteger(offset) || offset < 0 || offset > tools.length)
           throw new Error('Invalid tool catalogue cursor.')
 
         let end = offset
         let size = 0
-        while (end < connection.tools.length && end < offset + 20) {
-          const length = JSON.stringify(connection.tools[end]).length
+        while (end < tools.length && end < offset + 20) {
+          const length = JSON.stringify(tools[end]).length
           if (length > 50000)
             throw new Error('MCP tool schema exceeds the supported context limit.')
           if (size + length > 50000) break
@@ -112,8 +143,9 @@ export async function executePluginTool(
           end++
         }
         result = {
-          tools: connection.tools.slice(offset, end),
-          nextCursor: end < connection.tools.length ? String(end) : undefined
+          tools: tools.slice(offset, end),
+          nextCursor: end < tools.length ? String(end) : undefined,
+          ...(query ? { query } : {})
         }
       } else if (args.kind === 'resources') result = await client.listResources(cursor, options)
       else if (args.kind === 'templates')

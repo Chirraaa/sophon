@@ -13,6 +13,9 @@ type Tool = { function: { name: string; description: string } }
 
 const DESKTOP_TOOLS = ['list_windows', 'inspect_app', 'act_on_control', 'look_at_screen']
 const RELATED: Record<string, string[]> = {
+  plugins_list: ['mcp_catalog', 'mcp_call', 'plugin_read', 'list_windows', 'inspect_app'],
+  mcp_catalog: ['mcp_call', 'mcp_read', 'plugins_list'],
+  mcp_call: ['mcp_catalog', 'mcp_read', 'plugins_list'],
   open_app: DESKTOP_TOOLS,
   inspect_app: DESKTOP_TOOLS,
   act_on_control: DESKTOP_TOOLS,
@@ -26,6 +29,10 @@ export class ToolDiscovery {
 
   constructor(query: string) {
     const groups: [RegExp, string[]][] = [
+      [
+        /\b(discord|spotify|slack|notion|teams|outlook|calendar|gmail|jira|confluence|github)\b/i,
+        ['plugins_list', 'mcp_catalog', 'list_windows', 'inspect_app', 'act_on_control']
+      ],
       [/\b(open|launch|start|ouvrir)\b/i, ['open_app', 'list_apps', ...DESKTOP_TOOLS]],
       [
         /\b(window|windows|screen|desktop|click|button|type|scroll|notepad|fenêtre|écran)\b/i,
