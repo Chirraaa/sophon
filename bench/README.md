@@ -18,6 +18,9 @@ tasks and do not establish general model quality or permission safety.
 
 ### Paired runs with real files and commands
 
+See [NCS-0008 validation](NCS-0008-results.md) for the recorded Luna 6 comparison,
+including failures and limits on interpretation.
+
 `compare-live.cjs` is a separate native coding comparison. It uses the connected
 Sophon ChatGPT account with the selected model and runs three or more pairs:
 
