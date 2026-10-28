@@ -7,6 +7,32 @@ const workflow = require('./security/workflow-load.cjs')(load)
 
 {
   const controller = new workflow.WorkflowController(
+    'absolute',
+    'assistant',
+    'M:\\Scratch\\project',
+    'Create result.html',
+    undefined,
+    () => {}
+  )
+  const args = { path: 'M:\\Scratch\\project\\result.html', content: '<!DOCTYPE html>' }
+  controller.beforeAction('write', 'write_file', args)
+  controller.afterAction(
+    'write',
+    normalizeToolOutcome(
+      'write_file',
+      args,
+      'Saved result.html. Verified by reading back identical bytes.'
+    )
+  )
+  assert.deepEqual(controller.actions.paths(), ['result.html'])
+  const verifier = new (load('src/main/workflow/coding-verification.ts').CodingVerification)(
+    controller.actions
+  )
+  assert.deepEqual(verifier.next(), { tool: 'list_files', args: { path: '.' } })
+}
+
+{
+  const controller = new workflow.WorkflowController(
     'recovery',
     'assistant',
     'M:/Project',

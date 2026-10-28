@@ -39,6 +39,8 @@ async function request(
     signal: run?.signal,
     timeout,
     ...(onEvent ? { streamIdleTimeout: timeout } : {}),
+    // Token-sized SSE envelopes can be much larger than the generated source.
+    ...(onEvent ? { maxBytes: 32 * 1024 * 1024 } : {}),
     modelErrors: provider !== 'chatgpt',
     errorDetails: provider === 'chatgpt',
     ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
