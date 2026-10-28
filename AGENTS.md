@@ -9,6 +9,7 @@
 # Git workflow
 
 - Keep `main` and `dev` as separate, persistent branches.
+- Release preparation is exempt from the task-branch workflow below: bump the version directly on `main`, commit it, and tag that commit (for example, `v1.1.0`). Keep release notes in the GitHub release description; a tracked release-notes folder is not required.
 - Start each task on a new branch from `main`, using `feat/NCS-0001`, `fix/NCS-0001`, or `tech/NCS-0001` as the naming pattern. Use the appropriate prefix and the next available issue number.
 - Commit the task's changes on its own branch, then merge that branch into `dev` for integration and verification.
 - After verifying that the specific issue works as intended in `dev`, merge that same task branch directly into `main`. Never merge `dev` into `main`.
