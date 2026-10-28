@@ -89,6 +89,8 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
       `Tool arguments too long: ${name} (${size} serialized characters; maximum ${TOOL_ARGUMENT_MAX_CHARS}). Split the work into smaller tool calls.`
     )
   const object = args as Record<string, unknown>
+  if (name === 'click' && object.readback_region !== undefined && object.capture_after !== true)
+    throw new Error('readback_region requires capture_after: true.')
   if (name === 'browser_act') {
     if (
       !/^dom-[\da-f]{12}$/.test(String(object.observation)) ||

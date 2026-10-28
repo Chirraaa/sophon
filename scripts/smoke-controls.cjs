@@ -117,6 +117,8 @@ const policy = load('src/main/security/policy.ts', {
   '../tools/registry': registry,
   './run-manager': runs
 })
+let captures = 0,
+  invalidatedCaptures = 0
 const tools = load('src/main/tools/index.ts', {
   '../settings': { getSettings: () => settings },
   '../harness/store': {},
@@ -143,8 +145,17 @@ const tools = load('src/main/tools/index.ts', {
   './openApp': {},
   './app-catalog': {},
   './windows': windows,
-  './screen': {},
-  './interact': {},
+  './screen': {
+    invalidateScreenCoordinates: () => {
+      invalidatedCaptures++
+    },
+    captureScreen: async (_args, _guard, window) => {
+      captures++
+      assert.equal(window.hwnd, 2)
+      return { text: 'Fresh fixture image', image: 'data:image/png;base64,fixture' }
+    }
+  },
+  './interact': { clickScreen: async () => 'Clicked left at (1, 1).' },
   './automation/controls': controls
 })
 let decision = 'once'
@@ -312,6 +323,18 @@ async function main() {
     } else assert(!combined.observation, 'Read permission is not implied by action approval')
   }
   settings.tools.inspect_app = 'ask'
+  assert(invalidatedCaptures > 0, 'Control actions invalidate screenshot coordinates')
+  for (const permission of ['ask', 'block', 'allow']) {
+    settings.tools.look_at_screen = permission
+    const start = captures
+    const clicked = await tools.executeTool('click', { x: 1, y: 1, capture_after: true }, run, {
+      window: windows.listWindows().find((w) => w.hwnd === 2)
+    })
+    assert.equal(clicked.status, 'reported')
+    assert.equal(captures - start, permission === 'allow' ? 1 : 0)
+    assert.equal(Boolean(clicked.image), permission === 'allow')
+  }
+  settings.tools.look_at_screen = 'ask'
   next = unwrap(await execute('inspect_app', { window: refs[1] }))
   result = { status: 'uncertain', message: 'Changed after the action' }
   assert.match(

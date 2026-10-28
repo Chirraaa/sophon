@@ -4,7 +4,7 @@ const checkRun = (): void => {
   const run = currentRun()
   if (run) assertRun(run)
 }
-import { captureCoordinates } from './screen'
+import { captureCoordinates, invalidateScreenCoordinates } from './screen'
 import { activeWindow, findWindow, listWindows, type WinInfo } from './windows'
 import {
   SW_RESTORE,
@@ -79,6 +79,7 @@ export async function clickScreen(
   if (!setCursor(point.x, point.y)) return 'Windows could not move the pointer.'
   const flags = button === 'right' ? [0x0008, 0x0010] : button === 'left' ? [0x0002, 0x0004] : null
   if (!flags) return 'Button must be left or right.'
+  invalidateScreenCoordinates()
   return mouseInput(flags[0]) && mouseInput(flags[1])
     ? `Clicked ${button} at (${Math.round(x)}, ${Math.round(y)}) in "${win.title}".`
     : 'Windows refused the click (the app may be running as administrator).'
@@ -99,6 +100,7 @@ export async function scrollWindow(
   if (typeof win === 'string') return win
   if (!setCursor(Math.round(win.x + win.width / 2), Math.round(win.y + win.height / 2)))
     return 'Windows could not move the pointer.'
+  invalidateScreenCoordinates()
   return mouseInput(0x0800, (args.direction === 'up' ? 1 : -1) * steps * 120)
     ? `Scrolled ${args.direction} ${steps} steps in "${win.title}".`
     : 'Windows refused the scroll.'
@@ -154,6 +156,7 @@ export async function pressKeys(
   const win = await focus(bound ? undefined : args.window, bound, guard)
   if (typeof win === 'string') return win
   const held: number[] = []
+  invalidateScreenCoordinates()
   try {
     for (const mod of mods) {
       if (!keyInput(mod)) return 'Windows refused the shortcut.'
@@ -174,6 +177,7 @@ export async function typeText(
   if (!text || text.length > 2000) return 'Provide between 1 and 2000 characters.'
   const win = await focus(bound ? undefined : args.window, bound, guard)
   if (typeof win === 'string') return win
+  invalidateScreenCoordinates()
   for (let i = 0; i < text.length; i++) {
     checkRun()
     if (foregroundWindow() !== win.hwnd) return 'Windows stopped the typing: focus changed.'

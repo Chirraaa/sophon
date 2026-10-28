@@ -354,7 +354,7 @@ export const toolSchemas = [
     function: {
       name: 'look_at_screen',
       description:
-        'See one app window. Defaults to the last active app; specify a win- reference or unique title. Use region for a higher-detail close-up of a small control, in full overview image pixels. Click using the returned image dimensions and local pixels. Model-directed monitor capture is unavailable. For named controls and text, prefer inspect_app.',
+        'Visual fallback: see one app window when structured tools cannot supply the needed evidence, or for explicit visual questions. Defaults to the last active app; specify a win- reference or unique title. Use region for a higher-detail close-up in full overview pixels. Click using returned image dimensions. if_changed avoids resending identical images when the preceding image is still available. Model-directed monitor capture is unavailable.',
       parameters: {
         type: 'object',
         properties: {
@@ -366,6 +366,11 @@ export const toolSchemas = [
           window: {
             type: 'string',
             description: 'Window title or app to inspect. Omit for active window.'
+          },
+          if_changed: {
+            type: 'boolean',
+            description:
+              'Optional: compare a fresh capture against the preceding capture of the same window/region. If identical, return text and fresh coordinates instead of a duplicate image. Use only while that preceding image remains available.'
           },
           region: {
             type: 'object',
@@ -429,13 +434,26 @@ export const toolSchemas = [
     function: {
       name: 'click',
       description:
-        'Click at x,y coordinates measured from the most recent look_at_screen image. Call look_at_screen first.',
+        'Click at x,y pixels measured from the most recent look_at_screen image. Input invalidates those coordinates. Prefer capture_after when visual verification is needed: with look_at_screen Always allow, the click returns a fresh image in this call. Otherwise inspect separately. A click being accepted is not proof of success.',
       parameters: {
         type: 'object',
         properties: {
           x: { type: 'number' },
           y: { type: 'number' },
-          button: { type: 'string', enum: ['left', 'right'] }
+          button: { type: 'string', enum: ['left', 'right'] },
+          capture_after: { type: 'boolean' },
+          readback_region: {
+            type: 'object',
+            description:
+              'Optional crop for capture_after, in full overview image pixels. Omit if the click may change the window layout.',
+            properties: {
+              x: { type: 'number' },
+              y: { type: 'number' },
+              width: { type: 'number' },
+              height: { type: 'number' }
+            },
+            required: ['x', 'y', 'width', 'height']
+          }
         },
         required: ['x', 'y']
       }

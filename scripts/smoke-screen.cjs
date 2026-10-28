@@ -165,6 +165,7 @@ const display = { id: 1, index: 1, full: { x: -1920, y: 0, width: 1920, height: 
 let failCapture = false
 let transientFailure = false
 let sourceCalls = 0
+let pixels = 'fixture'
 let requested
 const crops = []
 class Image {
@@ -186,7 +187,7 @@ class Image {
     return new Image(rect.width, rect.height)
   }
   toJPEG() {
-    return Buffer.from('fixture')
+    return Buffer.from(pixels)
   }
 }
 const capture = load('src/main/tools/screen.ts', {
@@ -224,6 +225,25 @@ const capture = load('src/main/tools/screen.ts', {
     resolveMonitor: () => display
   }
 })
+let inputCount = 0
+const interact = load('src/main/tools/interact.ts', {
+  '../permissions': { protectedWindowRule: () => null, blockedAppRule: () => null },
+  '../security/run-manager': { currentRun: () => run, assertRun: () => {} },
+  './screen': capture,
+  './windows': { activeWindow: () => win, findWindow: () => win, listWindows: () => [win] },
+  './win32': {
+    SW_RESTORE: 9,
+    bringToFront: () => {},
+    foregroundWindow: () => win.hwnd,
+    keyInput: () => true,
+    mouseInput: () => {
+      inputCount++
+      return true
+    },
+    setCursor: () => true,
+    showWindow: () => {}
+  }
+})
 async function main() {
   transientFailure = true
   let result = await capture.captureScreen({ window: 'Fixture' })
@@ -232,6 +252,38 @@ async function main() {
   assert.match(result.text, /1280×720/)
   assert.deepEqual(capture.captureCoordinates(640, 360), { x: -960, y: 640, window: win })
   assert.equal(capture.captureCoordinates(1280, 0), null)
+  const unchanged = await capture.captureScreen({ window: 'Fixture', if_changed: true })
+  assert.equal(typeof unchanged, 'string')
+  assert.match(unchanged, /pixel-identical/)
+  assert.equal(sourceCalls, 3, 'Deduplication still captures current pixels')
+  assert.match(await interact.clickScreen({ x: 640, y: 360 }), /^Clicked/)
+  assert.equal(inputCount, 2)
+  assert.equal(
+    capture.captureCoordinates(640, 360),
+    null,
+    'Input invalidates coordinates before another click'
+  )
+  await interact.clickScreen({ x: 640, y: 360 })
+  assert.equal(inputCount, 2, 'No second click from stale coordinates')
+  assert.match(
+    await capture.captureScreen({ window: 'Fixture', if_changed: true }),
+    /pixel-identical/
+  )
+  assert(capture.captureCoordinates(640, 360), 'A fresh identical capture refreshes coordinates')
+  pixels = 'changed fixture'
+  assert((await capture.captureScreen({ window: 'Fixture', if_changed: true })).image)
+  assert(
+    (await capture.captureScreen({ window: 'Fixture' })).image,
+    'Default capture always supplies an image'
+  )
+  await interact.pressKeys({ keys: 'Tab', window: 'Fixture' })
+  assert.equal(capture.captureCoordinates(1, 1), null)
+  await capture.captureScreen({ window: 'Fixture' })
+  await interact.typeText({ text: 'a', window: 'Fixture' })
+  assert.equal(capture.captureCoordinates(1, 1), null)
+  await capture.captureScreen({ window: 'Fixture' })
+  await interact.scrollWindow({ direction: 'down', window: 'Fixture' })
+  assert.equal(capture.captureCoordinates(1, 1), null)
   result = await capture.captureScreen({
     window: 'Fixture',
     region: { x: 560, y: 600, width: 160, height: 120 }

@@ -38,6 +38,22 @@ for (const compact of [true, false]) {
   assert(prompt.includes(APP_ROUTING))
 }
 assert.match(APP_ROUTING, /denied operation is a stop/)
+const visual = new ToolDiscovery('Inspect the custom app')
+visual.used('look_at_screen')
+const visualCatalog = [
+  'look_at_screen',
+  'click',
+  'scroll',
+  'press_keys',
+  'type_text',
+  'inspect_app',
+  'act_on_control',
+  'list_windows'
+].map((name) => ({ function: { name, description: name } }))
+assert(
+  visual.select(visualCatalog).some((tool) => tool.function.name === 'click'),
+  'A visual fallback keeps coordinate actions immediately available'
+)
 console.log(
   'PASS app routing: direct service discovery, related schemas, blocked tool exclusion, full and compact guidance'
 )

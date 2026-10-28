@@ -21,7 +21,8 @@ Sophon is built to help small local models deliver stronger, more consistent res
 ## Features
 
 - **Local-first models**: LM Studio / loopback `/v1` servers by default; OpenAI Responses, ChatGPT plan sign-in, or any HTTPS Chat Completions provider are opt-in.
-- **Desktop control**: window management, Windows UI Automation (`inspect_app` / `act_on_control`), screenshots, clicks, typing, audio and Wi-Fi/Bluetooth toggles.
+- **App interaction**: connected MCP tools, managed Edge/Chrome browser DOM, Windows UI Automation (`inspect_app` / `act_on_control`), then screenshots and coordinates. The model chooses an available route and verifies effects. See [routes and setup](docs/APP_INTERACTION.md).
+- **Desktop control**: window management, screenshots, clicks, typing, audio and Wi-Fi/Bluetooth toggles.
 - **Agentic coding**: inspect → patch (`edit_file`) → check → repair loop, host-owned verification, patch previews, `run_command` / `run_npm` with exact-command approval.
 - **Web research**: Exa (no key), DuckDuckGo, or Brave; bounded public-page reader with PDF support. Off until you enable it.
 - **Interactive visuals**: HTML/SVG/Mermaid rendered inline in a sandboxed iframe with a small React kit.

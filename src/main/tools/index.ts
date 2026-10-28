@@ -38,11 +38,16 @@ import {
   rememberEditedWindow,
   type MoveArgs
 } from './windows'
-import { captureScreen, type CapturedScreen, type CaptureArgs } from './screen'
+import {
+  captureScreen,
+  invalidateScreenCoordinates,
+  type CapturedScreen,
+  type CaptureArgs
+} from './screen'
 import { clickScreen, focusWindow, pressKeys, scrollWindow, typeText } from './interact'
 import { inspectApp, actOnControl } from './automation/controls'
 import { commandOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
-import { MUTATIONS } from '../workflow/results'
+import { MUTATIONS, resultFailure } from '../workflow/results'
 export const activeToolSchemas = (): typeof toolSchemas =>
   toolSchemas.filter(
     (t) =>
@@ -198,6 +203,7 @@ export async function executeTool(
     scope.guard?.()
     if (name === 'inspect_app') return await inspectApp(parameters, run, scope)
     if (name === 'act_on_control') {
+      invalidateScreenCoordinates()
       const result = await actOnControl(parameters, run, scope)
       if (scope.window && scope.pid !== undefined) rememberEditedWindow(scope.window, scope.pid)
       if (
@@ -243,9 +249,48 @@ export async function executeTool(
       return result
     }
 
+    if (['move_window', 'close_window', 'close_app'].includes(name)) invalidateScreenCoordinates()
     const result = await handler(parameters, scope)
     if (scope.window && scope.pid !== undefined && ['type_text', 'press_keys'].includes(name))
       rememberEditedWindow(scope.window, scope.pid)
+    if (
+      name === 'click' &&
+      parameters.capture_after === true &&
+      typeof result === 'string' &&
+      !resultFailure(result)
+    ) {
+      if (toolPermission('look_at_screen') !== 'allow' || !canUseTool(run, 'look_at_screen'))
+        return toolOutcome(
+          'reported',
+          result +
+            '\nAutomatic capture skipped: look_at_screen requires its own permission. Inspect the requested effect separately.'
+        )
+      try {
+        scope.guard?.()
+        const window = listWindows().find((win) => win.hwnd === scope.window?.hwnd)
+        if (!window) throw new Error('Original window closed.')
+        const captured = await captureScreen(
+          { region: parameters.readback_region as CaptureArgs['region'] },
+          scope.guard,
+          window
+        )
+        assertRun(run)
+        return toolOutcome(
+          'reported',
+          result +
+            '\nInput acceptance is not proof of success. Post-action observation:\n' +
+            (typeof captured === 'string' ? captured : captured.text),
+          typeof captured === 'string' ? {} : { image: captured.image }
+        )
+      } catch {
+        assertRun(run)
+        return toolOutcome(
+          'reported',
+          result +
+            '\nPost-action capture was unavailable. Inspect the original app before continuing; do not repeat the click.'
+        )
+      }
+    }
     return result
   } catch (e) {
     assertRun(run)

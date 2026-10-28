@@ -81,3 +81,49 @@ uncertain actions separately. Read-back itself is not proof of the full goal.
 
 Validation: `npm run smoke:controls`, `npm run smoke:controls:native`,
 `node scripts/smoke-action-outcomes.cjs`, and `npm run smoke:screen`.
+
+## Screenshots and coordinates
+
+`look_at_screen` remains the fallback for canvas/custom controls, inaccessible
+apps and visual questions. It captures one exact window, caps images at native
+size and 1280×960, and supports higher-detail crops in full-overview image
+coordinates. `if_changed: true` still takes a fresh capture but omits a duplicate
+image when the same target, bounds, dimensions and encoded pixels match. Use it
+only while the preceding image remains in context; the default always returns
+an image. Identical pixels are evidence about the screen, not proof of success.
+
+`click` accepts `capture_after: true` and an optional `readback_region`. When
+screen capture is already Always allow, post-click pixels return in the same
+tool call. Other grants do not permit automatic capture. The action is reported
+as input acceptance, and the model evaluates the image for the requested result.
+Clicks, scrolling, keys, typing, accessibility actions and window changes
+invalidate screenshot coordinates. A fresh capture is required before another
+coordinate action. The host checks window bounds again after capturing.
+
+Related coordinate tools load alongside screenshots, avoiding repeated schema
+discovery. Both browser DOM and accessibility history retain only current
+actionable observations in model context. Historical references expire across
+requests; original logs and user attachments remain intact.
+
+Validation: `npm run smoke:screen`, `npm run smoke:controls`,
+`npm run smoke:browser`, and `npm run smoke:assistant:native` (owned fixture
+windows; no live model). Full integration checks are `npm test`, `npm run lint`
+and `npm run build`. Scripted model fixtures verify orchestration, not actual
+model route-choice quality or live Discord behavior. Measure model calls,
+image/input tokens, elapsed time and task completion on real tasks before
+claiming end-to-end speedups.
+
+## Verification record (2026-10-28)
+
+- All 53 offline suites passed, along with type checking and the production build.
+- Real headless Edge fixture passed DOM reads/actions, stale-value and navigation
+  checks, read permission boundaries and cancellation.
+- Real Windows UI Automation fixture passed cached inspection, focused paging,
+  control actions, password exclusion and cancellation.
+- `npm run smoke:assistant:native -- --reference-only` passed window movement,
+  exactly one coordinate click, post-click image return and no repeated prompts
+  under Always allow. Evidence: `.cache/assistant-native/1793193124819/`.
+- The broader desktop suite stopped earlier on incomplete Notepad typing
+  (`Sophon desktop test 7429` was not read back intact). This remains a limitation
+  of the keyboard-input route; the isolated screenshot test passed separately.
+- No live Discord account or live model routing benchmark was exercised.
