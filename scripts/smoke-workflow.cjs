@@ -207,7 +207,19 @@ async function review() {
   const args = { path: 'notes.txt', content: 'abc' }
   toolResult = 'Saved notes.txt (3 bytes). Verified by reading back identical bytes.'
   reset([tool('write_file', args), answer('Saved notes.txt.')])
+  toolHandler = (name) => {
+    if (name === 'list_files') return '[file] package.json'
+    if (name === 'read_file')
+      return envelope.untrustedData(
+        'local-file',
+        'package.json',
+        JSON.stringify({ scripts: { test: 'node test.cjs' } })
+      )
+    if (name === 'run_npm') return JSON.stringify({ exitCode: 0, stopped: false })
+    return toolResult
+  }
   await chat('Create notes.txt', event, [])
+  toolHandler = undefined
   assert.equal(latest.outcome, 'actions_checked')
   assert.equal(latest.evidence[0].status, 'verified')
   assert.equal(validation.unsupportedCompletion('I wrote a document below.', [], run.id), undefined)
@@ -481,6 +493,30 @@ async function review() {
   assert.equal(latest.outcome, 'needs_review')
   toolHandler = undefined
   const { CodingVerification } = load('src/main/workflow/coding-verification.ts')
+  const { codingMutation } = load('src/main/workflow/coding-mutation.ts')
+  for (const path of ['ui/App.vue', 'ui/App.svelte', 'server/Program.cs', 'project/unknown.ext']) {
+    for (const tool of ['write_file', 'edit_file', 'delete_file']) {
+      assert.equal(codingMutation(tool, { path }), true)
+      const changed = new CodingVerification()
+      changed.record(tool, { path }, 'saved', 'verified')
+      assert.equal(changed.active, true)
+      assert.deepEqual(changed.next(), { tool: 'list_files', args: { path: path.split('/')[0] } })
+    }
+  }
+  const commandGate = new CodingVerification()
+  commandGate.record(
+    'run_command',
+    { path: 'project', purpose: 'change' },
+    '{"exitCode":0}',
+    'verified'
+  )
+  assert.equal(commandGate.active, true, 'The first change command activates verification')
+  assert.deepEqual(commandGate.next(), { tool: 'list_files', args: { path: 'project' } })
+  for (const status of ['failed', 'denied', 'uncertain']) {
+    const ignored = new CodingVerification()
+    ignored.record('edit_file', { path: 'App.vue' }, 'not saved', status)
+    assert.deepEqual(ignored.next(), { done: true })
+  }
   const partialGate = new CodingVerification()
   partialGate.resume(['index.ts'])
   partialGate.record('list_files', { path: '.' }, '[file] package.json', 'observed')
