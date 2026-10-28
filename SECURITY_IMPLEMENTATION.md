@@ -1,5 +1,17 @@
 # Security implementation record
 
+Current context/privacy correction (2026-10-28): Sophon uses one assistant mode.
+Research requests can include enabled, scope-matching saved memories, retained
+conversation history, custom Behavior instructions and profile preferences in
+requests to the selected local or hosted inference provider. Web access does not
+create an isolated conversation or strip this context. Keeping private data out
+of public search queries and fetched URLs is model guidance, not automatic
+redaction. Web enablement and tool permissions govern those outgoing actions
+separately. See [MEMORY_HARNESS.md](MEMORY_HARNESS.md) for current privacy behavior
+and [CODING_HARNESS.md](CODING_HARNESS.md) for file editing and approved command
+execution. The dated audit baseline below describes former modes and restrictions;
+its isolation promises and closed-capability lists are not current guarantees.
+
 Exa search update (2026-10-24): the search broker now supports Exa's keyless hosted MCP endpoint at `https://mcp.exa.ai/mcp`. This fixed adapter permits only `tools/call` → `web_search_exa`; it has no discovery or general MCP tool execution. It sends the approved query only to the selected provider, pins public DNS to the socket, blocks redirects/credentials/cookies, and bounds JSON/SSE replies to 2 MB and 15 seconds. Exa is the default only for new profiles; existing provider selections and permissions are preserved. Switching an enabled profile still uses the existing consent flow. Live search via the actual adapter returned five public sources for the test query; this establishes current connectivity, not unlimited availability or source correctness. Free-tier failures remain possible.
 
 Current agent/confirmation update (2026-10-24): four bounded specialist profiles now share the local model and task budget. Only Researcher receives enabled public web tools, through the existing permission broker; all other specialist tools and recursive delegation are rejected. Handoffs remain untrusted. Security confirmations use the shared shadcn AlertDialog and buttons inside the existing application window; no extra BrowserWindow, preload or renderer page is created. The main process retains the immutable request and one-use ID. The narrow consent IPC checks the trusted main frame and exact owning window, rejects stale/replayed IDs, and never accepts replacement settings from the renderer. Escape, timeout, owner hide/reload/crash and destruction deny. Settings compare the approved before/after snapshots before committing. This supersedes the earlier separate confirmation-window design and native message-box requirements. The main app renderer now displays and resolves confirmations; it remains an application trust boundary, and this does not protect against a compromised main app renderer.
@@ -10,7 +22,7 @@ Current web update (2026-10-24): the earlier closed page-retrieval gate below is
 
 Implemented on 2026-10-23 against the audit's reviewed revision. This historical record distinguishes code and test evidence from release approval. See the README and current source for subsequent behavior changes; reproducible security checks remain in `scripts/security` and `scripts/smoke-security.cjs`.
 
-## What is available
+## Historical audit baseline (2026-10-23)
 
 | Mode | Context and authority |
 
