@@ -98,7 +98,7 @@ export function ApprovalCard({ action }: { action: ToolAction }): React.JSX.Elem
       data-approval-card
       aria-labelledby={titleId}
       aria-busy={submitting}
-      className="no-drag min-w-0 overflow-hidden rounded-xl border border-white/8 bg-[#262625] p-3.5 text-foreground shadow-sm"
+      className="no-drag min-w-0 overflow-hidden rounded-xl border border-border bg-popover p-3.5 text-foreground shadow-sm"
     >
       <h3
         id={titleId}
@@ -141,7 +141,7 @@ export function ApprovalCard({ action }: { action: ToolAction }): React.JSX.Elem
       ) : (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button
-            className={buttonClass + ' bg-white/8 text-foreground/75 hover:bg-white/12'}
+            className={buttonClass}
             variant="secondary"
             disabled={submitting}
             onClick={() => void decide('deny')}
@@ -151,7 +151,7 @@ export function ApprovalCard({ action }: { action: ToolAction }): React.JSX.Elem
           <div className="ml-auto flex flex-wrap gap-2">
             {action.canAlwaysAllow && (
               <Button
-                className={buttonClass + ' bg-white/8 text-foreground/75 hover:bg-white/12'}
+                className={buttonClass}
                 variant="secondary"
                 disabled={submitting}
                 onClick={() => setReviewAlways(true)}
@@ -160,7 +160,7 @@ export function ApprovalCard({ action }: { action: ToolAction }): React.JSX.Elem
               </Button>
             )}
             <Button
-              className={buttonClass + ' bg-zinc-100 text-zinc-900 hover:bg-white'}
+              className={buttonClass}
               disabled={submitting}
               onClick={() => void decide('once')}
             >

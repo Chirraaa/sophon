@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Hint } from '../ui/tooltip'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 
 export function PageLink({
   url,
@@ -99,14 +100,14 @@ export function PageLink({
               <Button disabled={busy} onClick={() => void open('browser')}>
                 Open in browser
               </Button>
-              <label className="flex items-center gap-2 text-sm">
+              <Label className="flex items-center gap-2 text-sm">
                 <Switch
                   aria-label="Remember my choice"
                   checked={remember}
                   onCheckedChange={setRemember}
                 />
                 Remember my choice
-              </label>
+              </Label>
             </span>
           )}
           {preview && (
