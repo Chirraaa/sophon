@@ -59,11 +59,11 @@ export function CodingRun({
     view.label === 'Waiting for your input' ? (
       <Circle className="size-4 text-muted-foreground" />
     ) : view.attention ? (
-      <TriangleAlert className="size-4 text-amber-300" />
+      <TriangleAlert className="size-4 text-warning" />
     ) : item.pending ? (
       <Spinner className="size-4 text-primary" />
     ) : (
-      <CircleCheck className="size-4 text-emerald-400" />
+      <CircleCheck className="size-4 text-success" />
     )
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -130,7 +130,7 @@ export function CodingRun({
                       className={cn(
                         'h-1 rounded-full bg-muted',
                         index <= view.stage && 'bg-primary/70',
-                        view.attention && index === view.stage && 'bg-amber-300/70'
+                        view.attention && index === view.stage && 'bg-warning/70'
                       )}
                     />
                     <span
@@ -239,7 +239,7 @@ export function CodingRun({
                     {task.status === 'active' ? (
                       <Spinner className="mt-0.5 size-4 shrink-0 text-primary" />
                     ) : task.status === 'verified' ? (
-                      <CircleCheck className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+                      <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" />
                     ) : task.status === 'implemented' ? (
                       <Check className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                     ) : (
@@ -350,9 +350,9 @@ export function CodingRun({
                       className={cn(
                         'text-[10px]',
                         status === 'Passed'
-                          ? 'text-emerald-400'
+                          ? 'text-success'
                           : status.startsWith('Failed') || status === 'Stopped'
-                            ? 'text-amber-300'
+                            ? 'text-warning'
                             : 'text-muted-foreground'
                       )}
                     >

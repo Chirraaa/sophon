@@ -133,7 +133,7 @@ export function Notice({
       className={cn(
         'rounded-xl px-3.5 py-3 text-[11px] leading-relaxed',
         tone === 'warn'
-          ? 'border-amber-300/15 bg-amber-300/5 text-amber-200'
+          ? 'border-warning/15 bg-warning/5 text-warning'
           : 'border-white/7 bg-white/3 text-muted-foreground'
       )}
     >

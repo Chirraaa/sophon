@@ -54,10 +54,10 @@ export function ContextDetails({ report }: { report: ContextReport }): React.JSX
             aria-label="Estimated context window used"
             value={Math.min(100, Math.max(0, percentage))}
             aria-valuetext={`${percentage.toFixed(1)}% used, estimated`}
-            indicatorClassName={percentage >= 85 ? 'bg-amber-400' : undefined}
+            indicatorClassName={percentage >= 85 ? 'bg-warning' : undefined}
           />
           {percentage >= 85 && (
-            <p className="mt-2 text-amber-400">The latest input is close to the window limit.</p>
+            <p className="mt-2 text-warning">The latest input is close to the window limit.</p>
           )}
         </div>
       )}
