@@ -11,6 +11,7 @@ async function main() {
     'Pass --live to test the loaded local model with a real disposable project'
   )
   const connected = process.argv.includes('--chatgpt')
+  const sandMode = process.argv.includes('--sand')
   const modelIndex = process.argv.indexOf('--model')
   const modelId = modelIndex >= 0 ? process.argv[modelIndex + 1] : 'gpt-6-luna'
   const catalog = connected
@@ -72,6 +73,16 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
       historyTurns: 4,
       specialists: false
     }
+  }
+  if (sandMode) {
+    assert(!connected, '--sand uses the loaded local model')
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(process.env.APPDATA, 'voice-agent/settings.json'), 'utf8')
+    )
+    Object.assign(settings.model, saved.model, { specialists: false })
+    assert.equal(settings.model.provider, 'local')
+    assert.equal(settings.model.endpoint, 'http://127.0.0.1:1234/v1')
+    console.log('SAND REPRO', JSON.stringify(settings.model), 'workspace:', workspace)
   }
   const settingsModule = {
     getSettings: () => settings,
@@ -218,7 +229,52 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
       requestJson: async (url, options) => {
         assert.equal(url.origin, connected ? 'https://api.openai.com' : 'http://127.0.0.1:1234')
         if (options.body) requests.push(JSON.parse(options.body))
-        return transport.requestJson(url, options)
+        if (!sandMode) return transport.requestJson(url, options)
+        const id = requests.length
+        const started = Date.now()
+        let chunks = 0,
+          textChars = 0,
+          argumentChars = 0,
+          lastProgress = 0
+        const mark = (event) => {
+          const entry = { request: id, elapsedMs: Date.now() - started, ...event }
+          fs.appendFileSync(path.join(directory, 'stream.jsonl'), JSON.stringify(entry) + '\n')
+          if (event.phase || Date.now() - lastProgress >= 10000) {
+            console.log('STREAM', JSON.stringify(entry))
+            lastProgress = Date.now()
+          }
+        }
+        mark({ phase: 'start' })
+        const onEvent = options.onEvent
+        try {
+          const result = await transport.requestJson(url, {
+            ...options,
+            onEvent: (data) => {
+              chunks++
+              if (data !== '[DONE]') {
+                const event = JSON.parse(data)
+                const choice = event.choices?.[0]
+                const delta = choice?.delta
+                textChars += delta?.content?.length ?? 0
+                for (const call of delta?.tool_calls ?? [])
+                  argumentChars += call.function?.arguments?.length ?? 0
+                mark({
+                  chunks,
+                  textChars,
+                  argumentChars,
+                  finishReason: choice?.finish_reason,
+                  delta
+                })
+              } else mark({ phase: 'done-marker', chunks, textChars, argumentChars })
+              onEvent?.(data)
+            }
+          })
+          mark({ phase: 'http-end', chunks, textChars, argumentChars })
+          return result
+        } catch (error) {
+          mark({ phase: 'error', error: error.message, chunks, textChars, argumentChars })
+          throw error
+        }
       }
     },
     '../security/run-manager': manager,
@@ -252,7 +308,11 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
     './client': client,
     './run-tool': runner,
     './visuals': visuals,
-    './visual-reply': {},
+    './visual-reply': load('src/main/llm/visual-reply.ts', {
+      './client': client,
+      './visuals': visuals,
+      './visual-routing': routing
+    }),
     './visual-routing': routing,
     '../security/run-manager': manager,
     '../security/tool-contracts': contracts,
@@ -272,13 +332,16 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
   let reply, error
   try {
     reply = await chat(
-      deletionMode
-        ? 'Delete remove-me.txt, delete the empty empty-folder, and delete old-folder with all its contents. Inspect first, then use delete_file and delete_directory; use recursive: true only for old-folder. Keep keep-me.txt untouched. Stop after confirming those paths were removed.'
-        : 'Implement a small CommonJS Node.js project in this empty workspace. Inspect it, save one active task mapped to all needed tools with skill none, then run npm init -y. Create src/unique.cjs with the named CommonJS export module.exports = { uniqueStrings }, where uniqueStrings(values) is the function. Require an array of strings or throw TypeError, preserve first occurrence order, do not mutate input, and handle large arrays efficiently. Use edit_file on package.json to set scripts.test to exactly "node ../oracle.cjs"; the trusted test file already exists outside this workspace, do not edit it. Create the src folder with create_directory, write the new module, mark the task implemented, and let the host run verification. Record a final checkpoint with the complexity tradeoff, review limits (specialists disabled), and lesson "No reusable lesson found". No dependencies, downloads, shell commands, or deletion. Do the work with tools.',
+      sandMode
+        ? 'Coding Benchmark: Build a 2D Falling-Sand Physics Sandbox. Build a complete interactive simulator in index.html in this empty workspace. Include sand, water, stone, erase, gravity, brush size, pause and clear controls. Use tools to create the file and verify the result. Keep everything self-contained with no dependencies or downloads.'
+        : deletionMode
+          ? 'Delete remove-me.txt, delete the empty empty-folder, and delete old-folder with all its contents. Inspect first, then use delete_file and delete_directory; use recursive: true only for old-folder. Keep keep-me.txt untouched. Stop after confirming those paths were removed.'
+          : 'Implement a small CommonJS Node.js project in this empty workspace. Inspect it, save one active task mapped to all needed tools with skill none, then run npm init -y. Create src/unique.cjs with the named CommonJS export module.exports = { uniqueStrings }, where uniqueStrings(values) is the function. Require an array of strings or throw TypeError, preserve first occurrence order, do not mutate input, and handle large arrays efficiently. Use edit_file on package.json to set scripts.test to exactly "node ../oracle.cjs"; the trusted test file already exists outside this workspace, do not edit it. Create the src folder with create_directory, write the new module, mark the task implemented, and let the host run verification. Record a final checkpoint with the complexity tradeoff, review limits (specialists disabled), and lesson "No reusable lesson found". No dependencies, downloads, shell commands, or deletion. Do the work with tools.',
       (e) => {
         events.push(e)
         if (e.type === 'tool_start') console.log('TOOL', e.name)
         if (e.type === 'tool_end') console.log('RESULT', e.result.slice(0, 180))
+        if (sandMode && e.type !== 'text') console.log('EVENT', JSON.stringify(e).slice(0, 450))
       },
       []
     )
@@ -295,7 +358,7 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
           settings: settings.model,
           modelCalls: run.modelCalls,
           usage: run.usage ?? null,
-          scenario: deletionMode ? 'deletion' : 'coding',
+          scenario: sandMode ? 'sand' : deletionMode ? 'deletion' : 'coding',
           elapsedMs: Date.now() - started,
           reply,
           error,
@@ -311,6 +374,21 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
     )
   }
   console.log('Report:', path.join(directory, 'report.json'))
+  if (sandMode) {
+    console.log(
+      'SAND RESULT',
+      JSON.stringify({
+        error,
+        elapsedMs: Date.now() - started,
+        modelCalls: run.modelCalls,
+        files: fs.readdirSync(workspace),
+        reply
+      })
+    )
+    assert(!error, error)
+    assert(fs.existsSync(path.join(workspace, 'index.html')), 'No index.html was produced')
+    return
+  }
   assert(!error, error)
   if (deletionMode) {
     for (const target of ['remove-me.txt', 'empty-folder', 'old-folder'])
