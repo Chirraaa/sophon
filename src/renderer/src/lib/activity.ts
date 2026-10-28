@@ -40,6 +40,13 @@ export function actionActivity(actions: ToolAction[]): string | undefined {
 export function replyActivity(item: ChatItem): string {
   const action = actionActivity(item.actions)
   if (action) return action
+  if (item.pending && item.modelProgress) {
+    const { toolName, generatedChars } = item.modelProgress
+    const label = ['write_file', 'edit_file'].includes(toolName)
+      ? 'Generating file contents'
+      : 'Preparing an action'
+    return `${label}… ${generatedChars.toLocaleString()} characters received`
+  }
   if (item.quality === 'checking') return 'Checking answer…'
   const specialist = item.specialists?.findLast((agent) => agent.status === 'running')
   if (specialist) {

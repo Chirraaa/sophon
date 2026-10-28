@@ -123,7 +123,8 @@ export function responsesStream(
   onText: (text: string) => void,
   model: string,
   namespace?: string,
-  scope?: string
+  scope?: string,
+  onProgress?: (progress: ModelProgress) => void
 ): {
   accept: (data: string) => void
   reply: () => ModelReply
@@ -134,6 +135,8 @@ export function responsesStream(
   let result: ModelReply | undefined
   const completedItems = new Map<number, ResponseItem>()
   const pendingTools = new Set<number>()
+  const toolNames = new Map<number, string>()
+  let generatedChars = 0
   const identity = (item: ResponseItem): unknown =>
     item.type === 'function_call' ? (item.call_id ?? item.id) : item.id
   return {
@@ -156,6 +159,8 @@ export function responsesStream(
         )
           throw new Error('Invalid Responses tool index.')
         pendingTools.add(event.output_index)
+        toolNames.set(event.output_index, event.item.name ?? '')
+        onProgress?.({ toolName: event.item.name ?? '', generatedChars })
       }
       if (event.type === 'response.function_call_arguments.delta') {
         if (
@@ -170,6 +175,8 @@ export function responsesStream(
             'Tool arguments arrived after the tool item completed. No tools were executed.'
           )
         pendingTools.add(event.output_index)
+        generatedChars += event.delta.length
+        onProgress?.({ toolName: toolNames.get(event.output_index) ?? '', generatedChars })
       }
       if (event.type === 'response.output_item.done') {
         if (

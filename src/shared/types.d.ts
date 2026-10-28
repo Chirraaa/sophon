@@ -347,7 +347,12 @@ declare global {
     preview?: string
     canAlwaysAllow?: boolean
   }
+  interface ModelProgress {
+    toolName: string
+    generatedChars: number
+  }
   interface ChatItem {
+    modelProgress?: ModelProgress
     quality?: 'checking' | 'reviewed'
     specialists?: SpecialistRun[]
     workflow?: WorkflowState

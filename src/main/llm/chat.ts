@@ -604,12 +604,17 @@ export async function chat(
       }
       partialDraft = ''
       let msg
+      let generatingTool = false
       try {
         msg = await callLLM(model, messages, {
           visual,
           allowTools: !finalCall && !answerReviewed && (!inlineVisual || modelTools().length > 0),
           tools: finalCall ? [] : modelTools(),
-          onText
+          onText,
+          onProgress: (progress) => {
+            generatingTool = true
+            onEvent({ type: 'model_progress', progress })
+          }
         })
       } catch (error) {
         assertRun(run)
@@ -632,6 +637,8 @@ export async function chat(
           continue
         }
         throw error
+      } finally {
+        if (generatingTool) onEvent({ type: 'model_progress' })
       }
       assertRun(run)
       if (!msg) throw new Error('The model returned no answer.')
