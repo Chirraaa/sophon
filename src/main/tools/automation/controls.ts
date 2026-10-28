@@ -3,6 +3,7 @@ import { automationWorker } from './worker'
 import { assertRun, type RunContext } from '../../security/run-manager'
 import { getProcess } from '../win32'
 import type { WinInfo } from '../window-types'
+import { windowReference } from '../windows'
 import type { ExecutionScope } from '../../security/local-action'
 import { untrustedData } from '../../llm/untrusted-data'
 
@@ -188,6 +189,7 @@ export async function inspectApp(
     win.title,
     JSON.stringify({
       observation: id,
+      windowRef: windowReference(win),
       window: win.title,
       windowSize: { width: win.width, height: win.height },
       controls: compact,

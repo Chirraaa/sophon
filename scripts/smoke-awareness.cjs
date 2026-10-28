@@ -24,7 +24,7 @@ const settings = {
   research: { enabled: false },
   tools: registry.defaultToolPermissions()
 }
-let run, requests, replies, executions, guidanceReads
+let run, requests, replies, executions, guidanceReads, toolHandler
 const tools = () =>
   schema.toolSchemas.filter(
     (tool) =>
@@ -98,6 +98,7 @@ const chat = load('src/main/llm/chat.ts', {
   './run-tool': {
     runTool: async (name, args) => {
       executions.push(name)
+      if (toolHandler) return toolHandler(name, args)
       if (name === 'list_files') return '[file] AGENTS.md\n[file] package.json\n[file] app.ts'
       if (name === 'plugin_read')
         return envelope.untrustedData('plugin-guidance', args.path, '# Example skill')
@@ -134,6 +135,7 @@ function reset(next) {
   replies = next
   executions = []
   guidanceReads = 0
+  toolHandler = undefined
   run = {
     id: crypto.randomUUID(),
     mode: 'assistant',
@@ -166,9 +168,14 @@ async function main() {
   )
   staged.load(['list_audio'], schema.toolSchemas)
   assert(
-    !staged.select(schema.toolSchemas).some((t) => t.function.name === 'open_app'),
-    'Loading replaces optional schemas instead of accumulating forever'
+    staged.select(schema.toolSchemas).some((t) => t.function.name === 'open_app'),
+    'Loading retains recent schemas to avoid discovery ping-pong'
   )
+  for (const tool of schema.toolSchemas) staged.load([tool.function.name], schema.toolSchemas)
+  assert(staged.select(schema.toolSchemas).length <= 9, 'Optional working set stays bounded')
+  staged.load(['inspect_app'], schema.toolSchemas)
+  assert(staged.select(schema.toolSchemas).some((t) => t.function.name === 'act_on_control'))
+  assert(staged.select(schema.toolSchemas).some((t) => t.function.name === 'list_windows'))
   for (const provider of ['local', 'compatible', 'openai', 'chatgpt']) {
     settings.model.provider = provider
     for (const window of [8192, 16384, 32000]) {
@@ -242,6 +249,164 @@ async function main() {
     /Discover tool schemas separately/
   )
   assert.deepEqual(executions, [], 'Discovery cannot hide a side effect in the same batch')
+
+  const windowRef = 'win-12345678-1234-1234-1234-123456789abc'
+  const observation = (n) => 'obs-' + String(n).padStart(12, '0')
+  const snapshot = (n) =>
+    envelope.untrustedData(
+      'app-controls',
+      'Spotify',
+      JSON.stringify({
+        windowRef,
+        observation: observation(n),
+        controls: [
+          { control: 'c1', name: n === 1 ? 'Play Midnight City' : 'Pause', actions: ['invoke'] }
+        ]
+      })
+    )
+  const action = (n) =>
+    call('act_on_control', { observation: observation(n), control: 'c1', action: 'invoke' })
+  reset([
+    call('list_apps', { query: 'Spotify' }),
+    call('open_app', { name: 'Spotify' }),
+    call('inspect_app', { window: windowRef }),
+    { tool_calls: [...action(1).tool_calls, ...action(1).tool_calls] },
+    {
+      content: 'The fresh controls show Pause; the original action was not independently verified.'
+    }
+  ])
+  let inspections = 0
+  const states = []
+  toolHandler = (name, args) => {
+    if (name === 'list_apps') return 'Spotify'
+    if (name === 'open_app') return 'Opened Spotify. Window: ' + windowRef
+    if (name === 'inspect_app') {
+      assert.equal(args.window, windowRef, 'Read-back targets the original exact app')
+      return snapshot(++inspections)
+    }
+    if (name === 'act_on_control') return 'Unverified: Control operation returned. Inspect again.'
+    throw new Error('Unexpected tool ' + name)
+  }
+  const desktopHistory = []
+  await chat(
+    'Can you please open Spotify and pick a song that you would like to play?',
+    (e) => {
+      if (e.type === 'workflow') states.push(e.state)
+    },
+    desktopHistory
+  )
+  assert.deepEqual(executions, [
+    'list_apps',
+    'open_app',
+    'inspect_app',
+    'act_on_control',
+    'inspect_app'
+  ])
+  assert.equal(requests.length, 5, 'Read-back adds no model round-trip')
+  assert.equal(states.at(-1).evidence.find((e) => e.tool === 'act_on_control').status, 'uncertain')
+  assert.equal(states.at(-1).outcome, 'needs_review', 'Inspection alone must not promote evidence')
+  assert(
+    !requests.some((r) =>
+      r.messages.some((m) => m.tool_calls?.some((c) => c.function.name === 'discover_tools'))
+    )
+  )
+  for (let i = 0; i < 4; i++) {
+    const expected = ['list_apps', 'open_app', 'inspect_app', 'act_on_control'][i]
+    assert(
+      requests[i].options.tools.some((t) => t.function.name === expected),
+      expected + ' must already be loaded'
+    )
+  }
+  const lastMessages = requests.at(-1).messages
+  for (let i = 0; i < lastMessages.length; i++) {
+    const calls = lastMessages[i].tool_calls
+    if (!calls) continue
+    assert.deepEqual(
+      lastMessages.slice(i + 1, i + 1 + calls.length).map((m) => m.tool_call_id),
+      calls.map((c) => c.id),
+      'Recovery must close the skipped batch before adding read-back'
+    )
+  }
+  reset([{ content: 'I need fresh window references to continue.' }])
+  await chat('keep going', () => {}, desktopHistory, [], '', states.at(-1))
+  assert(
+    !JSON.stringify(requests[0].messages).includes(windowRef),
+    'Continuation must not expose old window refs in model history'
+  )
+  assert(requests[0].options.tools.some((t) => t.function.name === 'list_windows'))
+
+  for (const failure of [
+    'Denied by the user.',
+    'Failed to inspect app controls.',
+    'empty',
+    'wrong-window'
+  ]) {
+    reset([call('inspect_app', { window: windowRef }), action(1)])
+    inspections = 0
+    toolHandler = (name) => {
+      if (name === 'act_on_control') return 'Unverified: Control operation returned.'
+      if (++inspections === 1) return snapshot(1)
+      if (failure === 'wrong-window')
+        return snapshot(2).replace(windowRef, 'win-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+      if (failure === 'empty')
+        return envelope.untrustedData(
+          'app-controls',
+          'Spotify',
+          JSON.stringify({ windowRef, observation: observation(2), controls: [] })
+        )
+      return failure
+    }
+    assert.match(await chat('Open Spotify and play a song', () => {}, []), /uncertain/)
+    assert.equal(
+      requests.length,
+      2,
+      'Failed read-back stops without further inference or mutations'
+    )
+  }
+  reset([call('inspect_app', { window: windowRef }), action(1)])
+  toolHandler = (name) => (name === 'inspect_app' ? snapshot(1) : 'Denied by the user.')
+  assert.match(await chat('Open Spotify and play a song', () => {}, []), /denied/)
+  assert.deepEqual(
+    executions,
+    ['inspect_app', 'act_on_control'],
+    'Denied mutations never trigger read-back'
+  )
+
+  for (const limit of ['blocked-inspection', 'action-budget']) {
+    reset([call('inspect_app', { window: windowRef }), action(1)])
+    toolHandler = (name) => {
+      if (name === 'inspect_app') return snapshot(1)
+      if (limit === 'blocked-inspection') settings.tools.inspect_app = 'block'
+      else run.tools = load('src/shared/loop-limits.ts').ACTION_LIMIT
+      return 'Unverified: Control operation returned.'
+    }
+    assert.match(await chat('Open Spotify and play a song', () => {}, []), /uncertain/)
+    assert.deepEqual(
+      executions,
+      ['inspect_app', 'act_on_control'],
+      'Read-back honors current policy and the shared action budget'
+    )
+    settings.tools.inspect_app = 'ask'
+  }
+  reset([action(1)])
+  toolHandler = () => 'Unverified: Control operation returned.'
+  assert.match(await chat('Open Spotify and play a song', () => {}, []), /uncertain/)
+  assert.deepEqual(
+    executions,
+    ['act_on_control'],
+    'Never guess a read-back target without a current observation'
+  )
+
+  reset([call('inspect_app', { window: windowRef }), action(1), action(2), action(3)])
+  inspections = 0
+  toolHandler = (name) =>
+    name === 'inspect_app' ? snapshot(++inspections) : 'Unverified: Control operation returned.'
+  assert.match(await chat('Open Spotify and play a song', () => {}, []), /Stopped/)
+  assert.equal(inspections, 3, 'At most two automatic read-backs per run')
+  assert.equal(executions.filter((name) => name === 'act_on_control').length, 3)
+  console.log(
+    'PASS Spotify fixture: 5 model calls, 5 actions, zero discovery calls; bounded read-back, denied/failed/empty/wrong-target recovery, batch integrity and continuation refs'
+  )
 
   settings.behavior.systemPrompt = 'Custom persona: respond warmly.'
   reset([{ content: 'Hi' }])

@@ -31,6 +31,108 @@ assert.equal(compact[3], latest)
 assert(Array.isArray(first.content), 'Do not mutate stored observations')
 assert(context.estimateMessages(compact) < context.estimateMessages(messages) - 1900)
 
+// Model context drops obsolete accessibility trees without changing the log,
+// the current tree, user attachments, tool-call IDs or unrelated tool output.
+const envelope = load('src/main/llm/untrusted-data.ts', { crypto })
+const windowRef = 'win-12345678-1234-1234-1234-123456789abc'
+const otherWindow = 'win-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+const inspection = (n, window = windowRef) => ({
+  role: 'tool',
+  tool_call_id: 'inspect-' + n,
+  content: envelope.untrustedData(
+    'app-controls',
+    'Spotify',
+    JSON.stringify({
+      observation: 'obs-' + String(n).padStart(12, '0'),
+      windowRef: window,
+      controls: Array.from({ length: 30 }, (_, i) => ({
+        control: 'c' + i,
+        role: 'Button',
+        name: 'Track ' + i,
+        bounds: { x: i, y: i, width: 100, height: 40 },
+        enabled: true,
+        value: 'Track metadata '.repeat(8),
+        actions: ['invoke']
+      }))
+    })
+  )
+})
+const act = {
+  role: 'assistant',
+  content: '',
+  tool_calls: [
+    { id: 'act', type: 'function', function: { name: 'act_on_control', arguments: '{}' } }
+  ]
+}
+const trees = [
+  inspection(1),
+  inspection(2),
+  act,
+  { role: 'tool', tool_call_id: 'act', content: 'Unverified: outcome unknown' },
+  inspection(3),
+  attachment
+]
+const packedTrees = context.latestDesktopObservations(trees)
+assert.equal(JSON.parse(packedTrees[0].content).kind, 'expired-app-controls')
+assert.equal(JSON.parse(packedTrees[1].content).trust, 'untrusted-data')
+assert(!packedTrees[0].content.includes('obs-'))
+assert.deepEqual(
+  packedTrees.slice(2),
+  trees.slice(2),
+  'Keep actions, uncertainty and current observations intact'
+)
+assert.equal(
+  JSON.parse(trees[0].content).kind,
+  'app-controls',
+  'Stored action details remain complete'
+)
+assert.equal(context.appControlSnapshot('Failed: unavailable'), undefined)
+assert.equal(
+  context.appControlSnapshot(JSON.stringify({ kind: 'app-controls', content: '{}' })),
+  undefined
+)
+const multiWindow = [inspection(1), inspection(2, otherWindow)]
+assert.deepEqual(
+  context.latestDesktopObservations(multiWindow),
+  multiWindow,
+  'Independent live windows retain their controls'
+)
+assert.equal(
+  JSON.parse(context.latestDesktopObservations([...multiWindow, act])[1].content).kind,
+  'expired-app-controls',
+  'A control action invalidates all control observations'
+)
+const before = context.estimateMessages(trees.slice(0, -1))
+const after = context.estimateMessages(packedTrees.slice(0, -1))
+assert(after < before * 0.45, 'Obsolete trees should cost only a short historical excerpt')
+assert.deepEqual(
+  context.latestDesktopObservations(packedTrees),
+  packedTrees,
+  'Compaction is idempotent'
+)
+const oldCalls = [
+  {
+    role: 'assistant',
+    content: '',
+    tool_calls: [
+      {
+        id: 'call-id',
+        type: 'function',
+        function: { name: 'inspect_app', arguments: JSON.stringify({ window: windowRef }) }
+      }
+    ]
+  },
+  trees[0]
+]
+const historical = context.historicalDesktopReferences(oldCalls)
+assert.equal(historical[0].tool_calls[0].id, 'call-id')
+assert(!JSON.stringify(historical).includes(windowRef))
+assert(!JSON.stringify(historical).includes('obs-000000000001'))
+assert(JSON.stringify(oldCalls).includes(windowRef), 'Stored history is immutable')
+console.log(
+  `PASS accessibility context fixture: ${before} -> ${after} estimated tokens (${Math.round((1 - after / before) * 100)}% reduction); current snapshot, uncertainty and full stored logs preserved`
+)
+
 let run = { id: 'capture-test' }
 let win = {
   hwnd: 1,

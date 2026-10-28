@@ -40,6 +40,33 @@ For long content, explicitly request replacement rather than appending to a trun
 
 ## Verification and limits
 
+The NCS-0007 orchestration regression uses the 2026-10-28 Spotify screenshots:
+21 visible actions across two requests, including nine tool-instruction loads,
+an uncertain control action that stopped the task, and an expired window target
+on continuation. The screenshots do not contain token usage or timings.
+
+The runtime now keeps related desktop tools in a bounded working set, includes
+an exact `windowRef` in accessibility results, and can read back an uncertain
+control action without asking the model to schedule the inspection. The read-back
+uses normal permissions and has a two-attempt limit per run. Earlier control
+trees are compacted for inference, and old request references are marked expired.
+
+`smoke:awareness` scripts an analogous Spotify flow in five model calls and five
+actions with zero discovery calls, including one automatic read-back. It also
+checks denied/failed/empty/wrong-window read-backs, missing targets, policy and
+action-budget limits, skipped batch results, bounded recovery and continuation.
+`smoke:screen` measures three synthetic accessibility trees: 9,299 estimated
+tokens before packing versus 3,887 after (58% less), retaining the latest full
+tree and uncertainty evidence. These are deterministic fixture results, not a
+live Spotify/model benchmark or a measured end-to-end latency improvement.
+
+For live acceptance on `dev`, repeat the original Spotify request with the same
+model and permissions. Check that inspect/action schemas remain available,
+read-back continues after an uncertain operation when usable controls exist,
+and a final playback claim is supported by observed track/playback state. Record
+model calls, input tokens and elapsed time; fixture results do not establish
+real-app playback reliability.
+
 `npm run smoke:controls` tests the actual approval → binding → dispatch path with controlled native edges: duplicate titles, changing process/window identities, field previews, denial/native veto, reference expiry/replay, compact outputs, blocked apps and research isolation.
 
 `npm run smoke:controls:native` briefly opens its own WPF fixture and exercises real UI Automation field entry/readback, Unicode/literal text, stale-value rejection, checkbox toggling, selection, expansion/collapse, scrolling, button invocation, password exclusion and cancellation. It closes only its fixture. The model remains offline. The built hidden UI test `npm run smoke:memory:electron` also checks the readable control preview. Empty or non-finite provider rectangles are excluded from inspection.

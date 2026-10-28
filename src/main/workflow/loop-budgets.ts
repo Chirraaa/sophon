@@ -14,6 +14,7 @@ export class LoopBudgets {
   private targets = new Map<string, number>()
   private screenshotRefreshes = 0
   private targetRefreshes = 0
+  private controlReadbacks = 0
 
   count(kind: Retry): number {
     return this.retries[kind] ?? 0
@@ -30,6 +31,7 @@ export class LoopBudgets {
     if (event === 'arguments') this.retries.arguments = 0
   }
   recover(tool: string, path: string, result: string, status: string): boolean {
+    if (tool === 'act_on_control' && status === 'uncertain') return this.controlReadbacks++ < 2
     const target = path.replace(/\\/g, '/').toLowerCase()
     if (status === 'verified' && ['edit_file', 'write_file', 'create_directory'].includes(tool)) {
       this.workspaceRefreshes = 0

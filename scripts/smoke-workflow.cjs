@@ -50,6 +50,28 @@ const workflow = require('./security/workflow-load.cjs')(load)
   assert.equal(budget.recover('edit_file', 'a', 'Denied by user', 'denied'), false)
 }
 const validation = load('src/main/workflow/results.ts')
+{
+  const controller = new workflow.WorkflowController(
+    'readback',
+    'assistant',
+    '',
+    'play music',
+    undefined,
+    () => {}
+  )
+  controller.beforeAction('act', 'act_on_control', { action: 'invoke' })
+  controller.afterAction('act', { action: 'invoke' }, 'Unverified: provider returned no state')
+  assert(controller.canRecover('act'))
+  assert.throws(
+    () => controller.beforeAction('replay', 'act_on_control', { action: 'invoke' }),
+    /Inspect/
+  )
+  controller.beforeAction('read', 'inspect_app', { window: 'fixture' })
+  controller.afterAction('read', {}, 'Observed current controls')
+  assert.equal(controller.snapshot().evidence[0].status, 'uncertain')
+  controller.finish()
+  assert.equal(controller.snapshot().outcome, 'needs_review')
+}
 const envelope = load('src/main/llm/untrusted-data.ts', { crypto })
 const schemas = load('src/main/tools/schemas.ts', {
   '../harness/schemas': load('src/main/harness/schemas.ts'),
