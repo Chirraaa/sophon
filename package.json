@@ -25,6 +25,8 @@
     "smoke:memory": "node scripts/smoke-memory.cjs",
     "smoke:notes": "node scripts/smoke-notes.cjs",
     "smoke:desktop-cards": "node scripts/smoke-desktop-cards.cjs",
+    "smoke:microsoft": "node scripts/smoke-microsoft.cjs",
+    "smoke:microsoft:ui": "electron scripts/smoke-microsoft-ui.cjs --hidden",
     "smoke:harness": "node scripts/smoke-harness.cjs",
     "smoke:plugins": "node scripts/smoke-plugins.cjs",
     "smoke:plugins:ui": "electron scripts/smoke-plugins-ui.cjs --hidden",

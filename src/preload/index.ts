@@ -86,6 +86,14 @@ const api: Api = {
     acknowledgeWelcome: () => ipcRenderer.invoke('chatgpt:welcome'),
     manageUsage: () => ipcRenderer.invoke('chatgpt:usage')
   },
+  microsoft: {
+    status: () => ipcRenderer.invoke('microsoft:status'),
+    setClientId: (clientId) => ipcRenderer.invoke('microsoft:set-client', clientId),
+    signIn: (accountId) => ipcRenderer.invoke('microsoft:sign-in', accountId),
+    cancel: () => ipcRenderer.invoke('microsoft:cancel'),
+    select: (accountId) => ipcRenderer.invoke('microsoft:select', accountId),
+    remove: (accountId) => ipcRenderer.invoke('microsoft:remove', accountId)
+  },
   visuals: {
     image: (dataUrl) => ipcRenderer.invoke('visuals:image', dataUrl),
     diagram: (source) => ipcRenderer.invoke('visuals:diagram', source),

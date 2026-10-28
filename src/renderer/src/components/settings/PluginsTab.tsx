@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { CONNECTOR_PRESETS, type PluginState } from '../../../../shared/plugins'
+import { MicrosoftConnection } from './MicrosoftConnection'
 
 export function PluginsTab(): React.JSX.Element {
   const [state, setState] = useState<PluginState>({ plugins: [], servers: [] })
@@ -100,6 +101,7 @@ export function PluginsTab(): React.JSX.Element {
   }
   return (
     <div className="space-y-6">
+      <MicrosoftConnection />
       <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"

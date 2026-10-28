@@ -19,6 +19,14 @@ import {
   acknowledgeChatgptWelcome,
   openChatgptUsage
 } from '../security/chatgpt-auth'
+import {
+  microsoftStatus,
+  setMicrosoftClientId,
+  signInMicrosoft,
+  cancelMicrosoftSignIn,
+  selectMicrosoftAccount,
+  removeMicrosoftAccount
+} from '../security/microsoft-auth'
 import { getLlmStatus, listModels, listModelChoices, getModelInfo, getDefaultPrompt } from '../llm'
 import {
   clear,
@@ -161,6 +169,18 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
   ipcMain.handle('chatgpt:sign-out', signOutChatgpt)
   ipcMain.handle('chatgpt:welcome', acknowledgeChatgptWelcome)
   ipcMain.handle('chatgpt:usage', openChatgptUsage)
+  ipcMain.handle('microsoft:status', microsoftStatus)
+  ipcMain.handle('microsoft:set-client', (_event, clientId: string) =>
+    setMicrosoftClientId(clientId)
+  )
+  ipcMain.handle('microsoft:sign-in', (_event, accountId?: string) => signInMicrosoft(accountId))
+  ipcMain.handle('microsoft:cancel', cancelMicrosoftSignIn)
+  ipcMain.handle('microsoft:select', (_event, accountId: string) =>
+    selectMicrosoftAccount(accountId)
+  )
+  ipcMain.handle('microsoft:remove', (_event, accountId: string) =>
+    removeMicrosoftAccount(accountId)
+  )
   ipcMain.handle('model:has-key', (_event, provider: ModelProvider, endpoint: string) =>
     hasModelKey(provider, endpoint)
   )
