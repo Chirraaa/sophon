@@ -398,7 +398,7 @@ html[data-compact-backdrop='true'] {
   [data-slot='alert-dialog-content'] {
     left: var(--popup-center-x, 50%);
     width: min(calc(100vw - 3rem), var(--popup-max-width, 100vw));
-    max-height: var(--popup-max-height, calc(100vh - 3rem));
+    max-height: min(var(--popup-max-height, 100vh), calc(100vh - 3rem));
   }
 }
 @keyframes compact-arrive {
