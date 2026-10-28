@@ -38,7 +38,7 @@ export function VoiceButton({
             }}
             className={cn(
               'size-8 touch-none rounded-full text-muted-foreground',
-              recording && 'bg-red-400/15 text-red-300'
+              recording && 'bg-destructive/15 text-destructive'
             )}
           />
         }

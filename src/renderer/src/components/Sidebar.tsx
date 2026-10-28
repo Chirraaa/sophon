@@ -198,8 +198,8 @@ export function Sidebar({ view, onView, status, hotkey, onOpenModel }: Props): R
               status === null
                 ? 'bg-muted-foreground'
                 : status.online
-                  ? 'bg-emerald-400'
-                  : 'bg-amber-400/80'
+                  ? 'bg-success'
+                  : 'bg-warning/80'
             )}
           />
           {!collapsed && (

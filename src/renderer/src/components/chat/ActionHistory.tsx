@@ -27,7 +27,7 @@ export function ActionHistory({
           <span className="text-[11px]" role="status">
             {actionActivity(actions) ?? (failed ? 'Finished with errors' : 'Complete')}
           </span>
-          {failed > 0 && <span className="text-red-300">{failed} failed</span>}
+          {failed > 0 && <span className="text-destructive">{failed} failed</span>}
         </CollapsibleTrigger>
         <CollapsibleContent>
           {expanded && (
