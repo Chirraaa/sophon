@@ -78,6 +78,7 @@ let result = { status: 'verified' }
 const workerCalls = []
 const controls = load('src/main/tools/automation/controls.ts', {
   crypto,
+  '../windows': windows,
   '../../security/run-manager': runs,
   '../win32': native,
   '../../llm/untrusted-data': envelope,
@@ -167,7 +168,8 @@ const runner = load('src/main/llm/run-tool.ts', {
   '../security/local-action': local
 }).runTool
 const events = []
-const execute = (name, args) => runner(name, args, crypto.randomUUID(), (e) => events.push(e))
+const execute = (name, args) =>
+  runner(name, args, crypto.randomUUID(), (e) => events.push(e)).then((outcome) => outcome.text)
 const unwrap = (text) => JSON.parse(JSON.parse(text).content)
 async function main() {
   await assert.rejects(
@@ -196,6 +198,7 @@ async function main() {
   const view = unwrap(await execute('inspect_app', { window: refs[1] }))
   assert.equal(workerCalls[0].hwnd, 2, 'Exact duplicate-title window reaches the worker')
   assert.equal(view.controls[0].control, 'c1')
+  assert.equal(view.windowRef, refs[1], 'Inspection exposes the same exact window identity')
   assert.match(view.observation, /^obs-[a-f0-9]{12}$/)
   assert.deepEqual(view.windowSize, { width: 500, height: 400 })
   assert.deepEqual(view.controls[0].bounds, { x: 10, y: 10, width: 200, height: 25 })

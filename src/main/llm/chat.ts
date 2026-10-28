@@ -26,7 +26,8 @@ import {
   assembleContext,
   estimateMessages,
   contextBudget,
-  latestScreenObservation
+  latestDesktopObservations,
+  historicalDesktopReferences
 } from './context'
 import { RecentResults, releaseCheckpointedMessages } from './retention'
 import { compactContext, compactionInfo, isSummaryTurn } from './compaction'
@@ -38,9 +39,8 @@ import { rankMemories } from '../memory/records'
 import { activeToolSchemas } from '../tools'
 import { environmentPrompt, requestedDesktopTool } from './environment'
 import { correctDesktopReply } from './desktop-reply'
-import { WorkflowController, WORKFLOW_INSTRUCTIONS } from '../workflow/controller'
-import { CodingVerification } from '../workflow/coding-verification'
-import { CodingSession, wantsCodingSession } from '../workflow/coding-session'
+import { WORKFLOW_INSTRUCTIONS } from '../workflow/controller'
+import { TaskRuntime } from '../workflow/runtime'
 import { saveCodingDocuments } from '../workflow/coding-documents'
 import { CodingResources, CodingOutputLimitError } from '../../shared/coding-resources'
 import {
@@ -125,7 +125,7 @@ export async function chat(
   if (!run) throw new Error('No active task.')
   assertRun(run)
   const settings = getSettings()
-  const workflow = new WorkflowController(
+  const runtime = new TaskRuntime(
     run.id ?? randomUUID(),
     run.mode,
     run.workspace ?? '',
@@ -133,39 +133,23 @@ export async function chat(
     previousWorkflow,
     (state) => onEvent({ type: 'workflow', state })
   )
+  const { workflow, coding, session } = runtime
 
   const turn: Msg[] = []
-  const coding = new CodingVerification()
   const resources = new CodingResources(settings.model.codingResources ?? 'auto')
-  const session = new CodingSession(
-    wantsCodingSession(workflow.snapshot().goal, run.workspace ?? ''),
-    workflow.resumed ? workflow.snapshot().codingSession : undefined
-  )
   const persistSession = (documents = false): string => {
     if (!session.active) return ''
     workflow.trackCodingSession(session.snapshot())
     return documents ? saveCodingDocuments(workflow.snapshot().id, session.documents()) : ''
   }
-  if (workflow.resumed) {
-    coding.resume(workflow.snapshot().codingPaths ?? [])
-    coding.resume(
-      workflow
-        .snapshot()
-        .evidence.filter(
-          (item) =>
-            ['write_file', 'edit_file', 'delete_file'].includes(item.tool) &&
-            /\.(?:[cm]?[jt]sx?|css|scss|html?|json|py|rs|go|c|cpp|h|toml|ya?ml|sql)$/i.test(
-              item.target
-            )
-        )
-        .map((item) => item.target)
-    )
-  }
   let partialDraft = ''
   try {
     const taskText = workflow.resumed ? workflow.snapshot().goal : userText
     const discovery = new ToolDiscovery(taskText)
-    const history = settings.model.historyTurns === 0 ? [] : turns.map(repairToolHistory)
+    const history =
+      settings.model.historyTurns === 0
+        ? []
+        : turns.map((saved) => historicalDesktopReferences(repairToolHistory(saved)))
     const books = selectPlaybooks(taskText)
     const memories = settings.memory?.enabled
       ? rankMemories(listMemories(), taskText, run.workspace, chatId)
@@ -385,7 +369,7 @@ export async function chat(
         (session.active ? '\n' + session.feedback() : '') +
         (verificationSetup ? '\nVerification setup needs repair: ' + verificationSetup : '')
 
-      const observations = latestScreenObservation(turn)
+      const observations = latestDesktopObservations(turn)
       for (let index = 0; index < turn.length; index++) turn[index] = observations[index]
       const current = (): Msg[] => [
         { role: 'user', content: workflow.context() },
@@ -524,12 +508,10 @@ export async function chat(
         onEvent({ type: 'tool_start', id, name: next.tool, args: next.args })
         const result = await runTool(next.tool, next.args, id, onEvent)
         assertRun(run)
-        const text = typeof result === 'string' ? result : result.text
-        const status = workflow.afterAction(id, next.args, result)
-        coding.record(next.tool, next.args, text, status)
-        session.record(next.tool, next.args, text, status, true)
+        const text = result.text
+        const status = runtime.record(id, result).outcome.status
         persistSession()
-        onEvent({ type: 'tool_end', id, result: text })
+        onEvent({ type: 'tool_end', id, result: text, outcome: result.status })
         turn.push({ role: 'tool', tool_call_id: id, content: text })
         if (['denied', 'failed', 'uncertain'].includes(status)) {
           blocked = text
@@ -567,12 +549,10 @@ export async function chat(
       onEvent({ type: 'tool_start', id, name: 'list_files', args })
       const result = await runTool('list_files', args, id, onEvent)
       assertRun(run)
-      const text = typeof result === 'string' ? result : result.text
-      const status = workflow.afterAction(id, args, result)
-      coding.record('list_files', args, text, status)
-      session.record('list_files', args, text, status)
+      const text = result.text
+      const status = runtime.record(id, result).outcome.status
       persistSession()
-      onEvent({ type: 'tool_end', id, result: text })
+      onEvent({ type: 'tool_end', id, result: text, outcome: result.status })
       turn.push({ role: 'tool', tool_call_id: id, content: text })
       if (['denied', 'failed', 'uncertain'].includes(status) || session.needsInspection)
         throw new Error('Project inspection stopped: ' + text)
@@ -601,7 +581,7 @@ export async function chat(
             content:
               'Task-boundary verification failed. Fix the diagnostics before beginning the next task. Keep checks intact; checkpoint the repaired task. The last permitted repair gets fresh review when available.'
           })
-        else if (coding.active) session.verified(coding.summary())
+        else if (coding.active) session.verified(coding.report())
         persistSession(true)
       }
       const messages = await context()
@@ -779,7 +759,7 @@ export async function chat(
             return reply
           }
           if (session.active) {
-            session.verified(coding.summary())
+            session.verified(coding.report())
             persistSession(true)
           }
         }
@@ -840,7 +820,7 @@ export async function chat(
             : '')
         if (answerReviewed && !retainedDraft && !truncated)
           onEvent({ type: 'quality', status: 'reviewed' })
-        workflow.finish(truncated || (finalCall && session.active), coding.active)
+        workflow.finish(truncated || (finalCall && session.active), coding.report())
         persistSession(true)
         turn.push({ role: 'assistant', content: reply })
         saveTurn(turns, turn)
@@ -906,12 +886,15 @@ export async function chat(
         if (calls.length !== 1) throw new Error('Ask questions separately from actions.')
         parseQuestions(JSON.stringify(questionCall.args.questions))
       }
-      if (calls.some((call) => call.function.name === 'coding_checkpoint') && calls.length !== 1)
-        throw new Error('Save a coding checkpoint separately from tool actions.')
-
-      const codingIssue = !inlineVisual
-        ? calls.map((call) => session.guard(call.function.name, call.args)).find(Boolean)
-        : undefined
+      const checkpointIssue =
+        calls.some((call) => call.function.name === 'coding_checkpoint') && calls.length !== 1
+          ? 'Save coding_checkpoint in a separate tool batch. No checkpoint or action was executed. Submit the checkpoint alone, then continue the authorized actions.'
+          : undefined
+      const codingIssue =
+        checkpointIssue ??
+        (!inlineVisual
+          ? calls.map((call) => session.guard(call.function.name, call.args)).find(Boolean)
+          : undefined)
       if (codingIssue) {
         const rejection = 'No calls in this batch ran. Coding stage gate: ' + codingIssue
         turn.push({
@@ -1077,10 +1060,9 @@ export async function chat(
               onEvent({ type: 'tool_start', id, name, args: parameters })
               const result = await runTool(name, parameters, id, onEvent)
               assertRun(run)
-              const text = typeof result === 'string' ? result : result.text
-              workflow.afterAction(id, parameters, result)
-              onEvent({ type: 'tool_end', id, result: text })
-              return text
+              runtime.record(id, result)
+              onEvent({ type: 'tool_end', id, result: result.text, outcome: result.status })
+              return result
             }
           })
           turn.push({ role: 'tool', tool_call_id: call.id, content: findings.text })
@@ -1116,10 +1098,14 @@ export async function chat(
         onEvent?.({ type: 'tool_start', id: actionId, name: call.function.name, args })
         const result = await runTool(call.function.name, args, actionId, onEvent)
         assertRun(run)
-        const resultText = typeof result === 'string' ? result : result.text
+        const resultText = result.text
         if (session.active)
           resources.consume(estimateMessages([{ role: 'tool', content: resultText }]))
-        const status = workflow.afterAction(actionId, args, result)
+        const neededInspection = session.needsInspection
+        const action = runtime.record(actionId, result)
+        const status = result.status
+        if (!['failed', 'denied', 'uncertain'].includes(status)) discovery.used(call.function.name)
+        const readbackWindow = action.readbackWindow
         if (
           call.function.name === 'harness_manage' &&
           args.action === 'read' &&
@@ -1135,10 +1121,6 @@ export async function chat(
           !['failed', 'denied', 'uncertain'].includes(status)
         )
           readSkills.add(pluginSkillId(String(args.plugin), String(args.path)))
-        if (call.function.name !== 'delete_directory' || session.active)
-          coding.record(call.function.name, args, resultText, status)
-        const neededInspection = session.needsInspection
-        session.record(call.function.name, args, resultText, status)
 
         if (
           (neededInspection && !session.needsInspection) ||
@@ -1156,21 +1138,87 @@ export async function chat(
         if (status === 'verified' && ['edit_file', 'write_file'].includes(call.function.name))
           resources.observeEdit(args)
         persistSession()
-        workflow.trackCoding(coding.paths())
         harnessPhase = 'after_tool'
         onEvent?.({
           type: 'tool_end',
           id: actionId,
           result: resultText,
-          image: typeof result === 'string' ? undefined : result.image
+          image: result.image,
+          outcome: result.status
         })
         assertRun(run)
         results.push(resultText)
         turn.push({ role: 'tool', tool_call_id: call.id, content: resultText })
-        if (typeof result !== 'string') images.push(result)
+        if (result.image) images.push({ text: result.text, image: result.image })
         if (
-          (resultText.startsWith('Missing workspace path:') ||
-            (call.function.name === 'edit_file' && resultText.startsWith('Patch not applied:'))) &&
+          call.function.name === 'act_on_control' &&
+          status === 'uncertain' &&
+          workflow.canRecover(actionId)
+        ) {
+          for (const pending of calls.slice(index + 1))
+            turn.push({
+              role: 'tool',
+              tool_call_id: pending.id,
+              content: 'Not executed: read back the uncertain control action first.'
+            })
+          let readbackFailure =
+            'The original app could not be inspected under the current scope or action budget.'
+          if (
+            readbackWindow &&
+            run.tools < ACTION_LIMIT &&
+            stepTools().some((tool) => tool.function.name === 'inspect_app')
+          ) {
+            const id = randomUUID()
+            const inspectArgs = { window: readbackWindow }
+            workflow.beforeAction(id, 'inspect_app', inspectArgs)
+            turn.push({
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id,
+                  type: 'function',
+                  function: { name: 'inspect_app', arguments: JSON.stringify(inspectArgs) }
+                }
+              ]
+            })
+            onEvent({ type: 'tool_start', id, name: 'inspect_app', args: inspectArgs })
+            const readback = await runTool('inspect_app', inspectArgs, id, onEvent)
+            assertRun(run)
+            const text = readback.text
+            const readbackStatus = runtime.record(id, readback).outcome.status
+            onEvent({ type: 'tool_end', id, result: text, outcome: readback.status })
+            turn.push({ role: 'tool', tool_call_id: id, content: text })
+            results.push(text)
+            const snapshot = readback.observation
+            if (
+              readbackStatus === 'observed' &&
+              snapshot?.windowRef === readbackWindow &&
+              snapshot.controls > 0
+            ) {
+              discovery.used('inspect_app')
+              turn.push({
+                role: 'system',
+                content:
+                  'The host inspected the same app after an uncertain control action. The original action remains uncertain; inspection is not proof of success. Assess the fresh state against the user goal. Do not blindly replay the action. Continue only with a supported next step using fresh references, or report what remains unverified.'
+              })
+              break
+            }
+            readbackFailure = text
+          }
+          const reply =
+            'The control action outcome is uncertain and read-back could not establish usable state. ' +
+            resultText +
+            '\n' +
+            readbackFailure
+          workflow.finish(true)
+          turn.push({ role: 'assistant', content: reply })
+          saveTurn(turns, turn)
+          return reply
+        }
+        if (
+          (result.code === 'workspace-missing' ||
+            (call.function.name === 'edit_file' && result.code === 'patch-not-applied')) &&
           workflow.canRecover(actionId)
         ) {
           for (const pending of calls.slice(index + 1))
@@ -1181,15 +1229,16 @@ export async function chat(
             })
           turn.push({
             role: 'system',
-            content: resultText.startsWith('Patch not applied:')
-              ? 'The patch matched zero or multiple excerpts; no file was changed. This is not a permission denial. Read the current file and copy a short unique old_text exactly, including whitespace and JSON escaping. Use edit_file for the corrected patch and obtain normal approval again; never fall back to a whole-file overwrite. Keep task scope and permissions. Do not retry a denied or uncertain write.'
-              : 'The workspace action did not execute: its file or parent folder was missing at preflight, not denied by the user. Inspect the nearest existing parent with list_files and use the paths actually returned. For an inspection-only request, read the observed files and do not create anything. If creation is part of the user request, create required folders one level at a time with create_directory, waiting for each result before writing inside it. Use only authorized paths and available tools. Never retry a denied or uncertain action.'
+            content:
+              result.code === 'patch-not-applied'
+                ? 'The patch matched zero or multiple excerpts; no file was changed. This is not a permission denial. Read the current file and copy a short unique old_text exactly, including whitespace and JSON escaping. Use edit_file for the corrected patch and obtain normal approval again; never fall back to a whole-file overwrite. Keep task scope and permissions. Do not retry a denied or uncertain write.'
+                : 'The workspace action did not execute: its file or parent folder was missing at preflight, not denied by the user. Inspect the nearest existing parent with list_files and use the paths actually returned. For an inspection-only request, read the observed files and do not create anything. If creation is part of the user request, create required folders one level at a time with create_directory, waiting for each result before writing inside it. Use only authorized paths and available tools. Never retry a denied or uncertain action.'
           })
           break
         }
         if (
           call.function.name === 'click' &&
-          resultText.startsWith('Screenshot required:') &&
+          result.code === 'screenshot-required' &&
           workflow.canRecover(actionId)
         ) {
           for (const pending of calls.slice(index + 1))
@@ -1205,7 +1254,7 @@ export async function chat(
           })
           break
         }
-        if (resultText.startsWith('Target not found:') && workflow.canRecover(actionId)) {
+        if (result.code === 'target-missing' && workflow.canRecover(actionId)) {
           for (const pending of calls.slice(index + 1))
             turn.push({
               role: 'tool',
@@ -1221,7 +1270,7 @@ export async function chat(
         }
         if (
           ['web_search', 'web_fetch'].includes(call.function.name) &&
-          resultText.startsWith('Web unavailable:')
+          result.code === 'web-unavailable'
         ) {
           for (const pending of calls.slice(index + 1))
             turn.push({
@@ -1284,6 +1333,7 @@ export async function chat(
     saveTurn(turns, turn)
     return reply
   } catch (error) {
+    runtime.interrupt()
     try {
       persistSession(true)
     } catch (checkpointError) {
@@ -1292,7 +1342,6 @@ export async function chat(
         error.message +=
           ' Markdown checkpoint could not be saved: ' + (checkpointError as Error).message
     }
-    workflow.interrupt()
     if (turn.length) {
       if (partialDraft) turn.push({ role: 'assistant', content: partialDraft })
 

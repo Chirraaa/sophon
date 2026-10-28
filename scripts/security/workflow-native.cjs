@@ -35,17 +35,17 @@ module.exports = async ({ load }) => {
     '../services/isolated-parser': {}
   })
   assert.match(
-    await files.writeWorkspaceFile({ path: 'test.txt', content: 'Verified bytes' }),
+    (await files.writeWorkspaceFile({ path: 'test.txt', content: 'Verified bytes' })).text,
     /Verified by reading back/
   )
   readback = 'mismatch'
   assert.match(
-    await files.writeWorkspaceFile({ path: 'test.txt', content: 'Verified bytes' }),
+    (await files.writeWorkspaceFile({ path: 'test.txt', content: 'Verified bytes' })).text,
     /^Unverified/
   )
   readback = 'error'
   assert.match(
-    await files.writeWorkspaceFile({ path: 'test.txt', content: 'Verified bytes' }),
+    (await files.writeWorkspaceFile({ path: 'test.txt', content: 'Verified bytes' })).text,
     /^Unverified/
   )
 

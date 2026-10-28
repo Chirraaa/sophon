@@ -1,6 +1,7 @@
 import { realpath, readdir, stat, lstat, mkdir } from 'fs/promises'
 import { resolve, relative, isAbsolute, dirname, extname, basename } from 'path'
 import { getSettings } from '../settings'
+import { toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
 import type { CapturedScreen } from './screen'
 import {
   lockWorkspaceParents,
@@ -101,7 +102,7 @@ export async function deleteWorkspaceEntry(
   args: { path: string; recursive?: boolean },
   directory: boolean,
   snapshot?: WorkspaceDeletion
-): Promise<string> {
+): Promise<ToolOutcome> {
   if (
     !snapshot ||
     snapshot.path !== args.path ||
@@ -117,18 +118,27 @@ export async function deleteWorkspaceEntry(
     )
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'DELETE_PARTIAL')
-      return 'Unverified: ' + (error as Error).message
+      return toolOutcome('uncertain', 'Unverified: ' + (error as Error).message)
     throw error
   }
 
   try {
     await lstat(snapshot.target)
-    return 'Unverified: the approved objects were removed but the path exists again. Inspect it before any further action.'
+    return toolOutcome(
+      'uncertain',
+      'Unverified: the approved objects were removed but the path exists again. Inspect it before any further action.'
+    )
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-      return 'Unverified: deletion ran but path absence could not be checked. Inspect before continuing.'
+      return toolOutcome(
+        'uncertain',
+        'Unverified: deletion ran but path absence could not be checked. Inspect before continuing.'
+      )
   }
-  return `Deleted ${directory ? 'folder' : 'file'} ${args.path}. Verified path is absent.`
+  return toolOutcome(
+    'verified',
+    `Deleted ${directory ? 'folder' : 'file'} ${args.path}. Verified path is absent.`
+  )
 }
 function contained(root: string, path: string): boolean {
   const rel = relative(root, path)
@@ -303,7 +313,7 @@ export async function readWorkspaceCsv(pathName: string, identity?: FileIdentity
     throw new Error('CSV must be UTF-8 text up to 512000 bytes.')
   return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
 }
-export async function createWorkspaceDirectory(args: { path: string }): Promise<string> {
+export async function createWorkspaceDirectory(args: { path: string }): Promise<ToolOutcome> {
   const target = await workspacePath(args.path, true, true)
   const root = await realpath(getSettings().files.workspace)
   checkRun()
@@ -312,7 +322,7 @@ export async function createWorkspaceDirectory(args: { path: string }): Promise<
     await mkdir(target)
     checkRun()
     await workspacePath(args.path)
-    return `Created folder ${args.path}.`
+    return toolOutcome('verified', `Created folder ${args.path}.`)
   } finally {
     release()
   }
@@ -325,7 +335,7 @@ export async function editWorkspaceFile(
     edits?: { old_text: string; new_text: string }[]
   },
   identity?: FileIdentity
-): Promise<string> {
+): Promise<ToolOutcome> {
   if (!identity) throw new Error('Editing requires an approved file identity.')
   const target = await workspacePath(args.path, true)
   const root = await realpath(getSettings().files.workspace)
@@ -352,8 +362,8 @@ export async function editWorkspaceFile(
     content = content.slice(0, index) + edit.new_text + content.slice(index + edit.old_text.length)
   }
   const result = await writeWorkspaceFile({ path: args.path, content, overwrite: true }, identity)
-  return result.startsWith('Saved ')
-    ? `Edited ${args.path}. Verified by reading back identical bytes.`
+  return result.status === 'verified'
+    ? toolOutcome('verified', `Edited ${args.path}. Verified by reading back identical bytes.`)
     : result
 }
 export async function writeWorkspaceFile(
@@ -363,7 +373,7 @@ export async function writeWorkspaceFile(
     overwrite?: boolean
   },
   identity?: FileIdentity
-): Promise<string> {
+): Promise<ToolOutcome> {
   if (typeof args.content !== 'string' || Buffer.byteLength(args.content) > 512 * 1024)
     throw new Error('Provide UTF-8 text up to 512 KB.')
   const path = await workspacePath(args.path, true)
@@ -382,10 +392,19 @@ export async function writeWorkspaceFile(
     const observed = readLockedDocument(root, path)
     checkRun()
     if (!observed.equals(Buffer.from(args.content, 'utf8')))
-      return 'Unverified: the document was created, but its bytes did not match the requested content. Inspect it before retrying.'
+      return toolOutcome(
+        'uncertain',
+        'Unverified: the document was created, but its bytes did not match the requested content. Inspect it before retrying.'
+      )
   } catch {
     checkRun()
-    return 'Unverified: the document was created, but its contents could not be read back. Inspect it before retrying.'
+    return toolOutcome(
+      'uncertain',
+      'Unverified: the document was created, but its contents could not be read back. Inspect it before retrying.'
+    )
   }
-  return `Saved ${args.path} (${Buffer.byteLength(args.content)} bytes). Verified by reading back identical bytes.`
+  return toolOutcome(
+    'verified',
+    `Saved ${args.path} (${Buffer.byteLength(args.content)} bytes). Verified by reading back identical bytes.`
+  )
 }

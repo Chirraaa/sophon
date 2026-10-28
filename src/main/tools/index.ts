@@ -40,6 +40,8 @@ import {
 import { captureScreen, type CapturedScreen, type CaptureArgs } from './screen'
 import { clickScreen, focusWindow, pressKeys, scrollWindow, typeText } from './interact'
 import { inspectApp, actOnControl } from './automation/controls'
+import { commandOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
+import { MUTATIONS } from '../workflow/results'
 export const activeToolSchemas = (): typeof toolSchemas =>
   toolSchemas.filter(
     (t) =>
@@ -52,7 +54,7 @@ const handlers: Record<
   (
     args: Record<string, unknown>,
     scope: ExecutionScope
-  ) => Promise<string | CapturedScreen> | string
+  ) => Promise<string | CapturedScreen | ToolOutcome> | string
 > = {
   open_app: (a, scope) => openApp(a.name as string, scope.app),
   list_apps: (a) => listApps(a.query as string | undefined),
@@ -87,7 +89,7 @@ export async function executeTool(
   run: RunContext,
   scope: ExecutionScope = {},
   onOutput?: (output: string) => void
-): Promise<string | CapturedScreen> {
+): Promise<string | CapturedScreen | ToolOutcome> {
   authorizeTool(run, name)
   const parameters = validateToolArguments(name, args)
   if (['list_audio', 'list_radios', 'set_volume', 'set_radio'].includes(name)) {
@@ -99,13 +101,23 @@ export async function executeTool(
       return await setDevice(parameters, scope.device, run)
     } catch (error) {
       assertRun(run)
-      return `Tool error: ${(error as Error).message}`
+      return toolOutcome(
+        MUTATIONS.has(name) ? 'uncertain' : 'failed',
+        `Tool error: ${(error as Error).message}`,
+        { execution: 'unknown' }
+      )
     }
   }
   if (name === 'run_npm')
-    return await runNpm(parameters as { path?: string; args: string[] }, run, onOutput)
+    return commandOutcome(
+      await runNpm(parameters as { path?: string; args: string[] }, run, onOutput),
+      parameters.action === 'stop'
+    )
   if (name === 'run_command')
-    return await runCommand(parameters as Parameters<typeof runCommand>[0], run, onOutput)
+    return commandOutcome(
+      await runCommand(parameters as Parameters<typeof runCommand>[0], run, onOutput),
+      parameters.action === 'stop'
+    )
   if (['plugins_list', 'plugin_read', 'mcp_catalog', 'mcp_call', 'mcp_read'].includes(name)) {
     const { executePluginTool } = await import('../plugins/tools')
     assertRun(run)
@@ -174,7 +186,7 @@ export async function executeTool(
   if (name === 'web_fetch') return JSON.stringify(await webFetch(String(parameters.url), run))
   const handler = handlers[name]
   if (!handler && name !== 'inspect_app' && name !== 'act_on_control')
-    return `Unknown tool: ${name}`
+    return toolOutcome('failed', `Unknown tool: ${name}`, { execution: 'not-started' })
   try {
     assertRun(run)
     scope.guard?.()
@@ -190,7 +202,12 @@ export async function executeTool(
       rememberEditedWindow(scope.window, scope.pid)
     return result
   } catch (e) {
+    assertRun(run)
     if ((e as NodeJS.ErrnoException).code === 'PATCH_NOT_APPLIED') throw e
-    return `Tool error: ${(e as Error).message}`
+    return toolOutcome(
+      MUTATIONS.has(name) ? 'uncertain' : 'failed',
+      `Tool error: ${(e as Error).message}`,
+      { execution: 'unknown' }
+    )
   }
 }

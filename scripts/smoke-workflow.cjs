@@ -1,3 +1,4 @@
+const { record, normalizeToolOutcome } = require('./security/action-fixture.cjs')
 const assert = require('node:assert/strict')
 const crypto = require('node:crypto')
 const path = require('node:path')
@@ -17,7 +18,7 @@ const workflow = require('./security/workflow-load.cjs')(load)
   const action = (path, result, tool = 'edit_file') => {
     const id = String(++next)
     controller.beforeAction(id, tool, { path })
-    controller.afterAction(id, { path }, result)
+    controller.afterAction(id, normalizeToolOutcome(tool, { path }, result))
     return controller.canRecover(id)
   }
   for (const path of ['a.ts', 'b.ts', 'c.ts']) {
@@ -46,10 +47,48 @@ const workflow = require('./security/workflow-load.cjs')(load)
   assert.equal(budget.count('completion'), 1)
   assert.equal(budget.count('protocol'), 1)
   for (let i = 0; i < 3; i++)
-    assert.equal(budget.recover('click', '', 'Screenshot required: stale', 'failed'), i < 2)
-  assert.equal(budget.recover('edit_file', 'a', 'Denied by user', 'denied'), false)
+    assert.equal(
+      budget.recover('click', '', normalizeToolOutcome('click', {}, 'Screenshot required: stale')),
+      i < 2
+    )
+  assert.equal(
+    budget.recover('edit_file', 'a', normalizeToolOutcome('edit_file', {}, 'Denied by user')),
+    false
+  )
 }
 const validation = load('src/main/workflow/results.ts')
+{
+  const controller = new workflow.WorkflowController(
+    'readback',
+    'assistant',
+    '',
+    'play music',
+    undefined,
+    () => {}
+  )
+  controller.beforeAction('act', 'act_on_control', { action: 'invoke' })
+  controller.afterAction(
+    'act',
+    normalizeToolOutcome(
+      'act_on_control',
+      { action: 'invoke' },
+      'Unverified: provider returned no state'
+    )
+  )
+  assert(controller.canRecover('act'))
+  assert.throws(
+    () => controller.beforeAction('replay', 'act_on_control', { action: 'invoke' }),
+    /Inspect/
+  )
+  controller.beforeAction('read', 'inspect_app', { window: 'fixture' })
+  controller.afterAction(
+    'read',
+    normalizeToolOutcome('inspect_app', {}, 'Observed current controls')
+  )
+  assert.equal(controller.snapshot().evidence[0].status, 'uncertain')
+  controller.finish()
+  assert.equal(controller.snapshot().outcome, 'needs_review')
+}
 const envelope = load('src/main/llm/untrusted-data.ts', { crypto })
 const schemas = load('src/main/tools/schemas.ts', {
   '../harness/schemas': load('src/main/harness/schemas.ts'),
@@ -341,7 +380,7 @@ async function review() {
   )
   for (let i = 0; i < 20; i++) {
     controller.beforeAction('a-' + i, 'list_windows', {})
-    controller.afterAction('a-' + i, {}, 'Windows data')
+    controller.afterAction('a-' + i, normalizeToolOutcome('list_windows', {}, 'Windows data'))
   }
   assert.equal(pending.evidence.length, 16)
   assert.equal(pending.omittedEvidence, 4)
@@ -498,13 +537,14 @@ async function review() {
     for (const tool of ['write_file', 'edit_file', 'delete_file']) {
       assert.equal(codingMutation(tool, { path }), true)
       const changed = new CodingVerification()
-      changed.record(tool, { path }, 'saved', 'verified')
+      record(changed, tool, { path }, 'saved', 'verified')
       assert.equal(changed.active, true)
       assert.deepEqual(changed.next(), { tool: 'list_files', args: { path: path.split('/')[0] } })
     }
   }
   const commandGate = new CodingVerification()
-  commandGate.record(
+  record(
+    commandGate,
     'run_command',
     { path: 'project', purpose: 'change' },
     '{"exitCode":0}',
@@ -514,13 +554,17 @@ async function review() {
   assert.deepEqual(commandGate.next(), { tool: 'list_files', args: { path: 'project' } })
   for (const status of ['failed', 'denied', 'uncertain']) {
     const ignored = new CodingVerification()
-    ignored.record('edit_file', { path: 'App.vue' }, 'not saved', status)
-    assert.deepEqual(ignored.next(), { done: true })
+    record(ignored, 'edit_file', { path: 'App.vue' }, 'not saved', status)
+    assert.deepEqual(
+      ignored.next(),
+      status === 'uncertain' ? { tool: 'list_files', args: { path: '.' } } : { done: true }
+    )
   }
   const partialGate = new CodingVerification()
   partialGate.resume(['index.ts'])
-  partialGate.record('list_files', { path: '.' }, '[file] package.json', 'observed')
-  partialGate.record(
+  record(partialGate, 'list_files', { path: '.' }, '[file] package.json', 'observed')
+  record(
+    partialGate,
     'read_file',
     { path: 'package.json', start_line: 1, line_count: 1 },
     envelope.untrustedData(
@@ -543,8 +587,9 @@ async function review() {
       JSON.stringify({ scripts, dependencies })
     )
   gate.resume(['apps/web/page.tsx'])
-  gate.record('list_files', { path: 'apps/web' }, '[file] package.json', 'observed')
-  gate.record(
+  record(gate, 'list_files', { path: 'apps/web' }, '[file] package.json', 'observed')
+  record(
+    gate,
     'read_file',
     { path: 'apps/web/package.json' },
     manifest({ lint: 'eslint .' }, { next: '16' }),
@@ -554,7 +599,8 @@ async function review() {
   assert.match(gate.requestSetupRepair(), /Setup repair 1 of 2/)
   assert.match(gate.requestSetupRepair(), /Setup repair 2 of 2/)
   assert.equal(gate.requestSetupRepair(), undefined, 'Setup repair cannot loop forever')
-  gate.record(
+  record(
+    gate,
     'read_file',
     { path: 'apps/web/package.json' },
     manifest({ lint: 'eslint .', build: 'next build' }, { next: '16' }),
@@ -565,7 +611,8 @@ async function review() {
     args: { path: 'apps/web', args: ['run', 'lint'] }
   })
   for (let i = 0; i < 2; i++) {
-    gate.record(
+    record(
+      gate,
       'read_file',
       { path: 'apps/web/package.json' },
       manifest({ build: 'next build' }),

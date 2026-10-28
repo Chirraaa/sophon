@@ -418,7 +418,13 @@ async function respond(
           action.canAlwaysAllow = event.canAlwaysAllow
         } else if (event.type === 'tool_resume') action.status = 'running'
         else {
-          action.status = resultFailure(event.result) ? 'failed' : 'done'
+          action.status = (
+            event.outcome
+              ? ['denied', 'failed', 'uncertain'].includes(event.outcome)
+              : resultFailure(event.result)
+          )
+            ? 'failed'
+            : 'done'
           action.detail = event.result
           if (event.image)
             images.push(

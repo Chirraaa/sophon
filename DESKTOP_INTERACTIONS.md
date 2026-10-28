@@ -1,5 +1,11 @@
 # Desktop interaction
 
+The shared action ledger now owns live accessibility observation identities and
+their expiry. An uncertain action uses the exact inspected window for its bounded
+read-back. The chat loop consumes structured outcomes and no longer keeps a
+parallel observation map. App text is display evidence, never a trusted status
+or window-identity protocol.
+
 Current behavior (2026-10-23): one assistant mode supports desktop actions, conversation, creative work and optional web search. Settings → Permissions offers **Always allow**, **Ask first** and **Block**, with an accepted, styled permission review before persistent grants are saved. Ask first uses a single in-app approval. Changing chats keeps the request running in its original conversation; Stop remains explicit.
 
 Mouse clicks, wheel scrolling, keyboard shortcuts and literal typing are enabled with exact window/process binding. Clicks require a screenshot from the same request, expire after two minutes, and reject moved/resized windows. Screenshots are capped at native size and 1280×960. Text input is paced for Windows text services and checks focus/cancellation. An editor title changed by Sophon's input can be resolved for the rest of that request only while the exact window/process and observed replacement title still match. Close-window results distinguish verified closure from a remaining save prompt.
@@ -39,6 +45,33 @@ Example: “In the editor, replace the Draft message field with ‘Hello Alex’
 For long content, explicitly request replacement rather than appending to a truncated preview. Controls without a writable Value pattern cannot receive text through this tool. The assistant can use enabled window-bound keyboard and screenshot-directed pointer tools as a fallback.
 
 ## Verification and limits
+
+The NCS-0007 orchestration regression uses the 2026-10-28 Spotify screenshots:
+21 visible actions across two requests, including nine tool-instruction loads,
+an uncertain control action that stopped the task, and an expired window target
+on continuation. The screenshots do not contain token usage or timings.
+
+The runtime now keeps related desktop tools in a bounded working set, includes
+an exact `windowRef` in accessibility results, and can read back an uncertain
+control action without asking the model to schedule the inspection. The read-back
+uses normal permissions and has a two-attempt limit per run. Earlier control
+trees are compacted for inference, and old request references are marked expired.
+
+`smoke:awareness` scripts an analogous Spotify flow in five model calls and five
+actions with zero discovery calls, including one automatic read-back. It also
+checks denied/failed/empty/wrong-window read-backs, missing targets, policy and
+action-budget limits, skipped batch results, bounded recovery and continuation.
+`smoke:screen` measures three synthetic accessibility trees: 9,299 estimated
+tokens before packing versus 3,887 after (58% less), retaining the latest full
+tree and uncertainty evidence. These are deterministic fixture results, not a
+live Spotify/model benchmark or a measured end-to-end latency improvement.
+
+For live acceptance on `dev`, repeat the original Spotify request with the same
+model and permissions. Check that inspect/action schemas remain available,
+read-back continues after an uncertain operation when usable controls exist,
+and a final playback claim is supported by observed track/playback state. Record
+model calls, input tokens and elapsed time; fixture results do not establish
+real-app playback reliability.
 
 `npm run smoke:controls` tests the actual approval → binding → dispatch path with controlled native edges: duplicate titles, changing process/window identities, field previews, denial/native veto, reference expiry/replay, compact outputs, blocked apps and research isolation.
 

@@ -1,8 +1,10 @@
 import { LoopBudgets } from './loop-budgets'
 import { createHash, randomUUID } from 'crypto'
 import { untrustedData } from '../llm/untrusted-data'
-import { MUTATIONS, assessResult, unsupportedCompletion } from './results'
-import { validCodingSession } from './coding-session'
+import { MUTATIONS, unsupportedCompletion } from './results'
+import { ActionLedger, type ActionRecord, type VerificationReport } from './action-ledger'
+import type { ToolOutcome } from './tool-outcome'
+import { validCodingSession, wantsCodingSession } from './coding-session'
 
 const MAX_EVIDENCE = 16
 const ACTIVE_PHASES = ['inspect', 'act', 'verify', 'respond', 'finished']
@@ -45,6 +47,8 @@ export function validWorkflow(value: unknown): value is WorkflowState {
     Number.isInteger(value.omittedEvidence) &&
     Number(value.omittedEvidence) >= 0 &&
     (value.codingSession === undefined || validCodingSession(value.codingSession)) &&
+    (value.mutationRevision === undefined ||
+      (Number.isSafeInteger(value.mutationRevision) && Number(value.mutationRevision) >= 0)) &&
     (value.codingPaths === undefined ||
       (Array.isArray(value.codingPaths) &&
         value.codingPaths.length <= 256 &&
@@ -59,6 +63,7 @@ export function validWorkflow(value: unknown): value is WorkflowState {
         str(e.tool, 80) &&
         str(e.target, 160) &&
         member(e.status, STATUSES) &&
+        (e.code === undefined || str(e.code, 80)) &&
         str(e.summary, 240) &&
         date(e.at)
     )
@@ -89,7 +94,9 @@ export const WORKFLOW_INSTRUCTIONS =
 
 export class WorkflowController {
   readonly budgets = new LoopBudgets()
+  readonly actions: ActionLedger
   private recoveryAction?: string
+  private controlReadbackPending = false
   canRecover(actionId: string): boolean {
     return this.recoveryAction === actionId
   }
@@ -101,7 +108,8 @@ export class WorkflowController {
     workspace: string,
     goal: string,
     previous: WorkflowState | undefined,
-    private publish: (state: WorkflowState) => void
+    private publish: (state: WorkflowState) => void,
+    publishInitial = true
   ) {
     const workspaceKey = createHash('sha256').update(workspace.toLowerCase()).digest('hex')
     this.resumed =
@@ -133,22 +141,46 @@ export class WorkflowController {
           omittedEvidence: 0,
           updatedAt: Date.now()
         }
-    this.emit()
+    this.actions = new ActionLedger(
+      runId,
+      this.resumed ? (previous?.mutationRevision ?? previous?.codingSession?.revision ?? 0) : 0,
+      this.resumed ? previous?.codingPaths : [],
+      wantsCodingSession(this.state.goal, workspace) || !!this.state.codingSession
+    )
+    if (this.resumed)
+      this.actions.restore(
+        this.state.evidence
+          .filter(
+            (entry) =>
+              ['write_file', 'edit_file', 'delete_file', 'delete_directory'].includes(entry.tool) &&
+              (entry.tool !== 'delete_directory' ||
+                wantsCodingSession(this.state.goal, workspace) ||
+                !!this.state.codingSession ||
+                !!this.state.codingPaths?.length) &&
+              ['verified', 'reported', 'uncertain', 'pending'].includes(entry.status)
+          )
+          .map((entry) => entry.target)
+      )
+    if (publishInitial) this.emit()
   }
   snapshot(): WorkflowState {
     return structuredClone(this.state)
-  }
-  trackCoding(paths: string[]): void {
-    if (!paths.length) return
-    this.state.codingPaths = paths.slice(-256)
-    this.emit()
   }
   trackCodingSession(session: CodingSessionState): void {
     if (!validCodingSession(session)) throw new Error('Invalid coding checkpoint.')
     this.state.codingSession = structuredClone(session)
     this.emit()
   }
+  publishEvidence(session?: CodingSessionState): void {
+    if (session) {
+      if (!validCodingSession(session)) throw new Error('Invalid coding projection.')
+      this.state.codingSession = structuredClone(session)
+    }
+    this.emit()
+  }
   private emit(): void {
+    this.state.mutationRevision = this.actions.revision
+    this.state.codingPaths = this.actions.paths().slice(-256)
     this.state.updatedAt = Date.now()
     this.publish(this.snapshot())
   }
@@ -164,7 +196,10 @@ export class WorkflowController {
         evidence: recent.map(({ actionId, tool, target, status, summary, at, runId }) => ({
           actionId,
           tool,
-          target: target.slice(0, 100),
+          target: (runId === this.runId
+            ? target
+            : target.replace(/\b(?:win-[a-f0-9-]{36}|obs-[a-f0-9]{12})\b/gi, '[expired reference]')
+          ).slice(0, 100),
           status,
           summary: summary.slice(0, 120),
           at,
@@ -176,6 +211,9 @@ export class WorkflowController {
   }
   beforeAction(actionId: string, tool: string, args: Record<string, unknown>): void {
     if (this.state.outcome !== 'running') throw new Error('This workflow has stopped.')
+    if (this.controlReadbackPending && tool !== 'inspect_app')
+      throw new Error('Inspect the uncertain control action before any further action.')
+    this.actions.begin(actionId, tool, args)
     this.state.phase = MUTATIONS.has(tool) ? 'act' : 'inspect'
     this.state.nextStep = 'Wait for the approved tool result before deciding what to do next.'
     this.state.evidence.push({
@@ -195,39 +233,41 @@ export class WorkflowController {
     }
     this.emit()
   }
-  afterAction(
-    actionId: string,
-    args: Record<string, unknown>,
-    result: string | { text: string; image: string }
-  ): EvidenceStatus {
+  afterAction(actionId: string, result: ToolOutcome, publish = true): ActionRecord {
     const evidence = this.state.evidence.find((e) => e.actionId === actionId)
     if (!evidence || evidence.status !== 'pending') throw new Error('No pending workflow action.')
     this.state.phase = 'verify'
-    const assessment = assessResult(evidence.tool, args, result)
-    Object.assign(evidence, assessment, { at: Date.now() })
-    const resultText = typeof result === 'string' ? result : result.text
+    const record = this.actions.complete(actionId, result)
+    const args = record.args
+    const assessment = result
+    Object.assign(evidence, {
+      status: result.status,
+      summary: result.summary.slice(0, 240),
+      at: Date.now(),
+      code: result.code
+    })
     this.recoveryAction = undefined
-    const recover = this.budgets.recover(
-      evidence.tool,
-      String(args.path ?? ''),
-      resultText,
-      assessment.status
-    )
-    if (evidence.tool === 'click' && resultText.startsWith('Screenshot required:') && recover) {
+    const recover = this.budgets.recover(evidence.tool, String(args.path ?? ''), result)
+    if (evidence.tool === 'act_on_control' && result.code === 'control-uncertain' && recover) {
+      this.recoveryAction = actionId
+      this.controlReadbackPending = true
+      this.state.nextStep =
+        'Read back the same app before continuing. The action may have occurred; do not replay it or claim it was verified.'
+    } else if (evidence.tool === 'click' && result.code === 'screenshot-required' && recover) {
       this.recoveryAction = actionId
       this.state.nextStep =
         'No click was executed. Capture the intended window again and choose fresh coordinates inside the new image.'
-    } else if (recover && /^(?:Missing workspace path:|Patch not applied:)/.test(resultText)) {
+    } else if (recover && ['workspace-missing', 'patch-not-applied'].includes(result.code)) {
       this.recoveryAction = actionId
       this.state.nextStep =
         'No workspace change occurred. Inspect the current file or intended parent before a corrected action; at most two consecutive refreshes per path are allowed.'
-    } else if (resultText.startsWith('Target not found:') && recover) {
+    } else if (result.code === 'target-missing' && recover) {
       this.recoveryAction = actionId
       this.state.nextStep =
         'No action was executed. Refresh the window list and resolve the exact intended target, or ask the user.'
     } else if (
       ['web_search', 'web_fetch'].includes(evidence.tool) &&
-      resultText.startsWith('Web unavailable:')
+      result.code === 'web-unavailable'
     ) {
       this.state.nextStep =
         'The public web service was unavailable, not denied by the user. Do not repeat a failed search or change providers. Read an available public source or explain the verification limit. Permission denials still stop the task.'
@@ -243,8 +283,10 @@ export class WorkflowController {
         assessment.status === 'reported'
           ? 'Check the relevant outcome with an available observation tool, or clearly report that it is unverified.'
           : 'Use this evidence to choose the next step or give a supported answer.'
-    this.emit()
-    return assessment.status
+    if (evidence.tool === 'inspect_app' && assessment.status === 'observed')
+      this.controlReadbackPending = false
+    if (publish) this.emit()
+    return record
   }
   completionIssue(text: string, expectedTool?: string): string | undefined {
     this.state.phase = 'respond'
@@ -262,7 +304,7 @@ export class WorkflowController {
       return 'A completion claim has no matching action evidence in this request.'
     return unsupportedCompletion(text, this.state.evidence, this.runId)
   }
-  finish(incomplete = false, codingVerified = false): void {
+  finish(incomplete = false, verification?: VerificationReport): void {
     if (this.state.outcome !== 'running') return
     const actions = this.state.evidence.filter(
       (e) => e.runId === this.runId && MUTATIONS.has(e.tool)
@@ -273,7 +315,7 @@ export class WorkflowController {
       actions.some((e, index) => {
         if (e.status === 'verified') return false
         if (
-          codingVerified &&
+          this.actions.accepts(verification) &&
           ['run_npm', 'run_command'].includes(e.tool) &&
           e.status === 'reported'
         )
@@ -281,7 +323,7 @@ export class WorkflowController {
 
         if (
           e.status === 'failed' &&
-          /^(?:Patch not applied:|Missing workspace path:)/.test(e.summary) &&
+          ['patch-not-applied', 'workspace-missing'].includes(e.code ?? '') &&
           actions
             .slice(index + 1)
             .some(
@@ -305,9 +347,10 @@ export class WorkflowController {
           : 'Answer delivered; no external action completion is implied.'
     this.emit()
   }
-  interrupt(): void {
+  interrupt(publish = true): void {
     if (this.state.outcome !== 'running') return
+    this.actions.interrupt()
     this.state = interruptedWorkflow(this.state)
-    this.emit()
+    if (publish) this.emit()
   }
 }

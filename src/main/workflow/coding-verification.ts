@@ -1,4 +1,4 @@
-import { codingMutation, codingMutationPath } from './coding-mutation'
+import { ActionLedger, type ActionRecord, type VerificationReport } from './action-ledger'
 
 type Action = {
   tool: 'list_files' | 'read_file' | 'run_npm' | 'run_command'
@@ -29,7 +29,9 @@ const file = (folder: string): string =>
   folder === '.' ? 'package.json' : `${folder}/package.json`
 
 export class CodingVerification {
-  private touched = new Set<string>()
+  constructor(readonly ledger = new ActionLedger('standalone')) {}
+  private observedRevision = -1
+  private observedCheckRevision = -1
   private listings = new Map<string, boolean>()
   private projects = new Map<string, Project>()
   private pendingNpmChecks = new Map<string, Check>()
@@ -43,16 +45,29 @@ export class CodingVerification {
   >()
   private missingCommand?: string
   get active(): boolean {
-    return this.touched.size > 0
+    return this.ledger.paths().length > 0
   }
   resume(paths: string[]): void {
-    for (const path of paths) this.dirty(path)
+    this.ledger.restore(paths)
+    this.observedRevision = -1
   }
   paths(): string[] {
-    return [...this.touched]
+    return this.ledger.paths()
   }
-  private dirty(path: string): void {
-    this.touched.add(pathName(path))
+  private synchronize(): void {
+    if (this.observedRevision === this.ledger.revision) {
+      if (this.observedCheckRevision !== this.ledger.checkRevision) {
+        // An interrupted action may be committed without returning to record().
+        for (const project of this.projects.values())
+          for (const check of project.checks) check.passed = false
+        for (const command of this.commands.values()) command.passed = false
+        this.pendingNpmChecks.clear()
+      }
+      this.observedCheckRevision = this.ledger.checkRevision
+      return
+    }
+    this.observedRevision = this.ledger.revision
+    this.observedCheckRevision = this.ledger.checkRevision
     this.listings.clear()
     this.manifestReads.clear()
     this.pendingNpmChecks.clear()
@@ -60,31 +75,34 @@ export class CodingVerification {
       for (const check of project.checks) check.passed = false
     for (const command of this.commands.values()) command.passed = false
   }
-  record(tool: string, args: Record<string, unknown>, text: string, status: EvidenceStatus): void {
-    if (['denied', 'failed', 'uncertain'].includes(status)) return
+  record(record: ActionRecord): void {
+    this.observedCheckRevision = this.ledger.checkRevision
+    this.synchronize()
+    const {
+      tool,
+      args,
+      outcome: { text, status, command }
+    } = record
+    if (record.outcome.execution === 'not-started') return
+    const successful = !['denied', 'failed', 'uncertain'].includes(status)
     const path = pathName(args.path)
-    if (codingMutation(tool, args)) this.dirty(codingMutationPath(tool, args))
     if (tool === 'run_command') {
       if (args.purpose === 'check') {
-        try {
-          const result = JSON.parse(text)
-          if (!Number.isInteger(result.exitCode) || result.stopped) return
-          const key = path + '\0' + String(args.command)
-          const previous = this.commands.get(key)
-          this.commands.set(key, {
-            path,
-            args: structuredClone(args),
-            passed: result.exitCode === 0,
-            failures: (previous?.failures ?? 0) + (result.exitCode === 0 ? 0 : 1)
-          })
-        } catch {
-          /* Unrecognized output is never a passed check. */
-        }
+        const key = path + '\0' + String(args.command)
+        const previous = this.commands.get(key)
+        this.commands.set(key, {
+          path,
+          args: structuredClone(args),
+          passed: successful && command?.exitCode === 0 && !command.stopped && !command.running,
+          failures:
+            (previous?.failures ?? 0) +
+            (successful && command?.exitCode === 0 && !command.stopped && !command.running ? 0 : 1)
+        })
       }
     }
-    if (tool === 'list_files')
+    if (successful && tool === 'list_files')
       this.listings.set(path, text.split(/\r?\n/).includes('[file] package.json'))
-    if (tool === 'read_file' && /(?:^|\/)package\.json$/i.test(path)) {
+    if (successful && tool === 'read_file' && /(?:^|\/)package\.json$/i.test(path)) {
       try {
         const envelope = JSON.parse(text)
         if (envelope.trust !== 'untrusted-data' || envelope.kind !== 'local-file') return
@@ -126,11 +144,6 @@ export class CodingVerification {
     }
     if (tool === 'run_npm') {
       if (args.action === 'stop') return
-      try {
-        if (JSON.parse(text).running === true) return
-      } catch {
-        /* Command results are handled below. */
-      }
       const argv = args.args as string[]
       const script =
         argv?.length === 2 && argv[0] === 'run'
@@ -143,26 +156,22 @@ export class CodingVerification {
         const key = path + '\0' + script
         const check = this.projects.get(path)?.checks.find((item) => item.name === script) ??
           this.pendingNpmChecks.get(key) ?? { name: script, passed: false, failures: 0 }
-        try {
-          const result = JSON.parse(text)
-          check.passed = result.exitCode === 0 && result.stopped === false
-          if (!check.passed) check.failures++
-        } catch {
-          check.passed = false
-          check.failures++
-        }
+        check.passed =
+          successful && command?.exitCode === 0 && command.stopped === false && !command.running
+        if (!check.passed) check.failures++
         this.pendingNpmChecks.set(key, check)
       }
     }
   }
   next(): VerificationStep {
+    this.synchronize()
     this.missingCommand = undefined
     if (!this.active) return { done: true }
     if (this.failure) return { blocked: this.failure }
     const limit = this.limitIssue()
     if (limit) return { blocked: limit }
     const required = new Set<string>()
-    for (const changed of this.touched) {
+    for (const changed of this.ledger.paths().map(pathName)) {
       let folder = parent(changed)
       while (true) {
         if (!this.listings.has(folder)) return { tool: 'list_files', args: { path: folder } }
@@ -208,6 +217,7 @@ export class CodingVerification {
     return { done: true }
   }
   summary(): string {
+    this.synchronize()
     return [
       ...[...this.projects]
         .filter(([folder]) => this.required.has(folder))
@@ -222,6 +232,15 @@ export class CodingVerification {
           `${check.path}: ${check.args.command} — ${check.passed ? 'passed' : 'not passed'}`
       )
     ].join('\n')
+  }
+  report(): VerificationReport {
+    return Object.freeze({
+      runId: this.ledger.runId,
+      revision: this.ledger.revision,
+      checkRevision: this.ledger.checkRevision,
+      status: !this.active ? 'not-required' : 'done' in this.next() ? 'passed' : 'pending',
+      summary: this.summary()
+    })
   }
   requestSetupRepair(): string | undefined {
     if (this.missingCommand) {

@@ -25,6 +25,21 @@ flowchart TD
 
 ## Ownership
 
+`workflow/runtime.ts` commits each host `ToolOutcome` once to `ActionLedger`, then
+updates the workflow, coding verifier and saved session before publishing them.
+The ledger owns mutation revisions, changed paths, check-evidence revisions and
+short-lived desktop observation identities. A verification report is valid only
+for its run, current mutation revision and current check revision. Possible writes
+and interrupted actions invalidate earlier checks; failed rechecks invalidate
+saved verification even when no file changed. Resume requires fresh check evidence.
+
+File writes, commands and accessibility controls produce structured status,
+execution certainty and evidence. Display text remains model-visible data.
+Remaining legacy tools are classified once at `workflow/tool-outcome.ts`; their
+string adapters are a migration boundary, not a second completion authority.
+`chat.ts` coordinates actions through the runtime rather than maintaining its own
+desktop identity map or separately updating three mutation histories.
+
 | Component                                                     | Responsibility                                                                        |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `src/main/chat/session.ts`                                    | Conversation events, streaming updates, persistence and run lifetime                  |
@@ -58,6 +73,25 @@ flowchart TD
 Discovery, questions, design suggestions, coding checkpoints and resource sizing
 are coordinator operations handled by the chat loop. They do not provide an
 alternative route to execute file, command, desktop or connected-service actions.
+
+Desktop tool discovery maintains at most eight optional schemas, prioritizing
+explicitly loaded tools, related observation/action tools, then recent tools.
+Every selection is intersected with the current permitted catalog; retaining a
+schema never retains authorization. Opening an app exposes the inspect/action
+loop immediately, avoiding a model call merely to switch between its tools.
+
+Desktop context is a projection of the action log. Expired or superseded control
+trees become bounded historical excerpts while the latest live tree stays intact.
+Full tool results still reach the action log. Window and observation references
+from previous requests are marked expired in model history and workflow targets.
+
+An uncertain control action may trigger at most two host-owned read-backs per
+run. The coordinator uses the window reference from the exact originating
+inspection, closes any unexecuted calls in the batch, then invokes `inspect_app`
+through the normal tool gate and shared action budget. No mutation is replayed.
+Denied, unavailable, empty or mismatched read-backs stop recovery. Fresh controls
+let the model choose a supported next step without an extra discovery/inference
+round-trip; they do not promote the original action's evidence to verified.
 
 ## Coding within the same loop
 

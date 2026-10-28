@@ -81,6 +81,7 @@ declare global {
   type EvidenceStatus =
     'pending' | 'observed' | 'reported' | 'verified' | 'failed' | 'denied' | 'uncertain'
   interface ActionEvidence {
+    code?: string
     actionId: string
     runId: string
     tool: string
@@ -101,6 +102,7 @@ declare global {
     evidence: ActionEvidence[]
     omittedEvidence: number
     codingPaths?: string[]
+    mutationRevision?: number
     codingSession?: CodingSessionState
     updatedAt: number
   }

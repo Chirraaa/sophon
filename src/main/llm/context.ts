@@ -103,6 +103,87 @@ export function latestScreenObservation(messages: ModelMessage[]): ModelMessage[
       : message
   )
 }
+
+export function appControlSnapshot(text: string):
+  | {
+      observation: string
+      windowRef: string
+      controls: Record<string, unknown>[]
+    }
+  | undefined {
+  try {
+    const envelope = JSON.parse(text)
+    if (envelope.kind !== 'app-controls' || envelope.trust !== 'untrusted-data') return
+    const snapshot = JSON.parse(envelope.content)
+    if (
+      /^obs-[a-f0-9]{12}$/.test(snapshot.observation) &&
+      /^win-[a-f0-9-]{36}$/.test(snapshot.windowRef) &&
+      Array.isArray(snapshot.controls) &&
+      snapshot.controls.every((control: unknown) => control && typeof control === 'object')
+    )
+      return snapshot
+  } catch {
+    // Failed inspections and older saved excerpts are not live observations.
+  }
+  return undefined
+}
+
+// Keep complete results in the action log; only pack useful live references for
+// inference. Control actions invalidate every observation in the native layer.
+export function latestDesktopObservations(messages: ModelMessage[]): ModelMessage[] {
+  const seenWindows = new Set<string>()
+  let invalidated = false
+  return latestScreenObservation(messages)
+    .map((message) => ({ ...message }))
+    .reverse()
+    .map((message) => {
+      if (message.tool_calls?.some((call) => call.function.name === 'act_on_control'))
+        invalidated = true
+      if (message.role !== 'tool' || typeof message.content !== 'string') return message
+      const snapshot = appControlSnapshot(message.content)
+      if (!snapshot) return message
+      const stale = invalidated || seenWindows.has(snapshot.windowRef)
+      seenWindows.add(snapshot.windowRef)
+      if (!stale) return message
+      return {
+        ...message,
+        content: untrustedData(
+          'expired-app-controls',
+          snapshot.windowRef,
+          JSON.stringify({
+            note: 'Historical inspection; control references expired or were superseded. Inspect again for actions. Full details remain in action history.',
+            excerpt: snapshot.controls.slice(0, 6).map((control) => ({
+              name: String(control.name ?? '').slice(0, 80),
+              ...(control.value ? { valueExcerpt: String(control.value).slice(0, 80) } : {})
+            }))
+          })
+        )
+      }
+    })
+    .reverse()
+}
+
+export function historicalDesktopReferences(messages: ModelMessage[]): ModelMessage[] {
+  const expired = (text: string): string =>
+    text.replace(
+      /\b(?:win-[a-f0-9-]{36}|obs-[a-f0-9]{12})\b/gi,
+      '[expired reference; refresh list_windows or inspect_app]'
+    )
+  return messages.map((message) => ({
+    ...message,
+    ...(message.role === 'tool' && typeof message.content === 'string'
+      ? { content: expired(message.content) }
+      : {}),
+    ...(message.tool_calls
+      ? {
+          tool_calls: message.tool_calls.map((call) => ({
+            ...call,
+            function: { ...call.function, arguments: expired(call.function.arguments) }
+          }))
+        }
+      : {})
+  }))
+}
 export function estimateMessages(messages: ModelMessage[]): number {
   return messages.reduce(
     (total, message) =>
@@ -166,7 +247,7 @@ export function assembleContext(options: {
   info?: ModelChoice
 }): { messages: ModelMessage[]; report: ContextReport } {
   const { system, history, memories, model, tools, visual } = options
-  const current = latestScreenObservation(options.current)
+  const current = latestDesktopObservations(options.current)
   const budget = contextBudget(model, tools, visual, options.info)
   const systemMessage: ModelMessage = { role: 'system', content: system }
   if (estimateMessages([systemMessage]) > budget.inputBudget)
