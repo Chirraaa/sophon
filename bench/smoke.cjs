@@ -158,8 +158,57 @@ async function main() {
   assert.throws(() =>
     visualCheck(explorer, { helper: 'explorer', control: 'x', formula: { at: 3, expected: 7 } })
   )
+  // Proportionate paths: a single-intent command is offered only its tool first.
+  const focused = await createHarness({
+    id: 'smoke-focused',
+    prompt: 'Open Calculator.',
+    responses: [response('', [call('open_app', { name: 'calculator' })]), response('Opened.')]
+  }).run()
+  assert.deepEqual(
+    focused.requests[0].body.tools.map((t) => t.function.name),
+    ['open_app', 'discover_tools']
+  )
+  assert(focused.requests[1].body.tools.length > 2)
+  // Fresh simple turns carry no empty checkpoint envelope.
+  const greeting = await createHarness({
+    id: 'smoke-greeting',
+    prompt: 'hi',
+    responses: [response('Hello!')]
+  }).run()
+  assert.equal(greeting.requests.length, 1)
+  assert(!JSON.stringify(greeting.requests[0].body.messages).includes('task-checkpoint'))
+  // An announced but untaken step gets exactly one nudge.
+  const stalled = await createHarness({
+    id: 'smoke-stall',
+    prompt: 'Read source.txt and tell me its first word.',
+    responses: [
+      response('Let me read the file first.'),
+      response('', [call('read_file', { path: 'source.txt' })]),
+      response('alpha')
+    ]
+  }).run()
+  assert.deepEqual(
+    stalled.calls.map((c) => c.name),
+    ['read_file']
+  )
+  assert.equal(stalled.reply, 'alpha')
+  // A current-facts answer from memory is sent back once for a lookup.
+  const current = await createHarness({
+    id: 'smoke-current',
+    prompt: 'What is the latest Atlas release?',
+    responses: [
+      response('Atlas 9.'),
+      response('', [call('web_search', { query: 'Atlas latest release' })]),
+      response('Atlas 2.4 https://example.com/atlas'),
+      response('Atlas 2.4 https://example.com/atlas')
+    ]
+  }).run()
+  assert.equal(current.calls[0]?.name, 'web_search')
+  assert(
+    JSON.stringify(current.requests[1].body.messages).includes('depends on current information')
+  )
   console.log(
-    'PASS 110-task split; scorer positive/negative cases; real chat, contracts, approval denial, atomic batch and mock read/write; no network or native tools'
+    'PASS 110-task split; scorer positive/negative cases; real chat, contracts, approval denial, atomic batch, mock read/write and proportionate-path nudges; no network or native tools'
   )
 }
 main().catch((error) => {

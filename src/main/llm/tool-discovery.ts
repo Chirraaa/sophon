@@ -67,7 +67,7 @@ export class ToolDiscovery {
         ['list_files', 'read_file', 'edit_file', 'write_file', 'run_command', 'run_npm']
       ],
       [
-        /\b(search|research|latest|browse|sources?|chercher)\b|https:\/\//i,
+        /\b(search|research|latest|newest|news|headlines?|today|weather|prices?|currently|recent(?:ly)?|browse|sources?|chercher)\b|https:\/\//i,
         ['web_search', 'web_fetch']
       ],
       [/\b(calculate|csv|sum|average)\b|\d\s*[+*/=]\s*\d/i, ['python_calculate']],

@@ -234,7 +234,7 @@ function compactEnvironment(state: Environment): string {
       'open_app',
       'list_windows'
     )
-      ? 'Desktop: prefer inspect_app and supported control actions. Use fresh action read-back or inspect again; old control references expire. set_value replaces a whole field without submitting. Window win- references last only this request; use the exact reference returned by open_app/list_windows. Click only coordinates from a fresh screenshot of the same window. Accepted input is not proof of change. Leave save prompts to the user. Built-in desktop tools provide no general shell; MCP capabilities require discovery. Image understanding depends on model support, which may be unknown.'
+      ? 'Desktop limits: window win- references last only this request. Built-in desktop tools provide no general shell; MCP capabilities require discovery. Image understanding depends on model support, which may be unknown.'
       : '',
     has('mcp_call', 'mcp_read')
       ? 'MCP calls/reads always require one-use approval. Use discovered names and schemas; local MCPs run with Windows account access outside built-in workspace restrictions. A timeout may follow a completed external action; inspect before retrying.'

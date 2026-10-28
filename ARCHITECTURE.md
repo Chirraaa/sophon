@@ -86,6 +86,15 @@ step; the normal working set returns after the first result. The bounded answer
 review runs for mathematics and research drafts, where it checks arithmetic and
 sources, and not for ordinary explanations.
 
+Two common small-model detours get one host nudge each per request (`LoopBudgets`
+`stall` and `evidence`). A short reply that only announces a next step ("Let me read
+the file.") while task tools are loaded is sent back once to take the step or answer.
+A request for current information answered without any web call while `web_search`
+is loaded is sent back once to search first. Both are prompts, not permissions;
+tool policy and approvals are unchanged. Desktop guidance lives in one ordered
+playbook (target, observe, act, check), and argument-repair messages carry hints only
+for the tools in the rejected batch.
+
 Discovery, questions, design suggestions, coding checkpoints and resource sizing
 are coordinator operations handled by the chat loop. They do not provide an
 alternative route to execute file, command, desktop or connected-service actions.

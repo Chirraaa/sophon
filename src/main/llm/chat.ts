@@ -4,7 +4,12 @@ import { githubContextPrompt } from '../../shared/github-context'
 import { HARNESS_INSTRUCTIONS, harnessContext, recordHarnessUse } from '../harness/store'
 import { toolSchemas } from '../tools/schemas'
 import { parseQuestions } from '../../shared/questions'
-import { hasToolMarkup, ANSWER_REVIEW } from '../../shared/reply-quality'
+import {
+  hasToolMarkup,
+  ANSWER_REVIEW,
+  announcesNextStep,
+  wantsCurrentFacts
+} from '../../shared/reply-quality'
 import { getSettings } from '../settings'
 import { attachmentContent } from '../services/attachments'
 import { buildSystemPrompt } from './prompt'
@@ -51,6 +56,23 @@ import {
 } from './specialists'
 const MAX_SAVED_RESULT = 300
 const clean = (s: string): string => s.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+
+// Repair hints for the tools in a rejected batch only; a small model handles
+// one relevant hint better than a catalogue of every tool's limits.
+const ARGUMENT_HINTS: Record<string, string> = {
+  edit_file:
+    'edit_file: each old_text/new_text supports 65536 characters and the serialized arguments 262144; split larger changes into focused edits across calls. An argument error does not mean a read was truncated.',
+  write_file:
+    'write_file: the serialized arguments support 262144 characters; put large new features in separate modules.',
+  harness_manage:
+    'harness_manage: list uses {"action":"list"}; other actions need the exact category and lowercase name from the catalog, without a path or .md extension.',
+  ask_questions:
+    'ask_questions: a questions array of one to three objects, each with title and two to four distinct short string options; no nested JSON strings.'
+}
+const argumentHints = (names: (string | undefined)[]): string =>
+  [...new Set(names)]
+    .flatMap((name) => (name && ARGUMENT_HINTS[name] ? [' ' + ARGUMENT_HINTS[name]] : []))
+    .join('')
 
 const visibleDraft = (text: string): string =>
   clean(
@@ -724,6 +746,44 @@ export async function chat(
           saveTurn(turns, turn)
           return reply
         }
+        // Two common small-model detours get one host nudge each: announcing a
+        // step without taking it, and answering a current-facts request from
+        // memory while web tools are loaded.
+        const offered = finalCall || answerReviewed ? [] : modelTools().map((t) => t.function.name)
+        if (
+          offered.some((name) => name !== 'discover_tools') &&
+          announcesNextStep(content) &&
+          budgets.canRetry('stall') &&
+          run.modelCalls < maxSteps
+        ) {
+          budgets.fail('stall')
+          turn.push(
+            { role: 'assistant', content },
+            {
+              role: 'system',
+              content:
+                'You described a next step but did not take it. If that step is needed for the request, call the tool now through the structured tool API. Otherwise give the final answer.'
+            }
+          )
+          continue
+        }
+        if (
+          offered.includes('web_search') &&
+          wantsCurrentFacts(taskText) &&
+          !turn.some((m) =>
+            m.tool_calls?.some((c) => ['web_search', 'web_fetch'].includes(c.function.name))
+          ) &&
+          budgets.canRetry('evidence') &&
+          run.modelCalls < maxSteps
+        ) {
+          budgets.fail('evidence')
+          turn.push({
+            role: 'system',
+            content:
+              'This request depends on current information, which may be newer than your training. Call web_search (or web_fetch for a given URL) before answering, then answer from the results and cite the returned URLs. If the search fails, say what could not be verified.'
+          })
+          continue
+        }
         const pendingCodingIssue = session.active ? session.pendingIssue(content) : undefined
         if (pendingCodingIssue) {
           if (budgets.canRetry('session') && run.modelCalls < maxSteps) {
@@ -867,7 +927,8 @@ export async function chat(
               error instanceof InvalidToolArgumentsError
                 ? 'Your last tool batch did not match its argument schema. No calls in that batch ran. ' +
                   error.message +
-                  '. Continue the authorized task with corrected tool calls. For edit_file, each old_text/new_text supports 65536 characters and the complete serialized arguments support 262144 characters. Read bounded excerpts and split larger changes into focused edits across calls; use separate modules for large new features. Do not resend the same invalid payload or infer that a read was truncated from an argument error. Reissue only necessary calls with the exact schema and original permissions. For harness_manage, list uses {"action":"list"}; other actions require the exact category and lowercase name from the guidance catalog, without a path or .md extension. ask_questions takes a questions array of one to three objects, each with title and two to four distinct short string options; no nested JSON strings.'
+                  '. Reissue only the necessary calls with the exact schema; do not resend the same invalid payload.' +
+                  argumentHints((msg.tool_calls ?? []).map((call) => call.function?.name))
                 : TOOL_JSON_REPAIR
           })
           continue
