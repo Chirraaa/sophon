@@ -40,11 +40,22 @@ const workflow = require('./security/workflow-load.cjs')(load)
   record(
     gate,
     'read_file',
-    { path: 'result.html' },
+    { path: 'result.html', max_chars: 60000 },
     content(document('const answer = 42;')),
     'observed'
   )
   assert('done' in gate.next())
+  record(
+    gate,
+    'read_file',
+    { path: 'result.html', start_line: 1, line_count: 20 },
+    JSON.stringify({ trust: 'untrusted-data', kind: 'local-file-excerpt', content: 'partial' }),
+    'observed'
+  )
+  assert(
+    'done' in gate.next(),
+    'An observation excerpt does not invalidate a complete source check'
+  )
   assert.match(gate.summary(), /syntax.*passed.*runtime behavior not tested/)
   record(
     gate,
@@ -55,7 +66,13 @@ const workflow = require('./security/workflow-load.cjs')(load)
   )
   assert.equal(gate.report().status, 'pending', 'An edit invalidates the HTML check')
   record(gate, 'list_files', { path: '.' }, '[file] result.html', 'observed')
-  record(gate, 'read_file', { path: 'result.html' }, content(document('function {')), 'observed')
+  record(
+    gate,
+    'read_file',
+    { path: 'result.html', max_chars: 60000 },
+    content(document('function {')),
+    'observed'
+  )
   assert.match(gate.next().blocked, /syntax error/)
   assert(gate.requestSetupRepair())
   assert(gate.requestSetupRepair())
