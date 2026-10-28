@@ -51,6 +51,15 @@ export async function bindLocalAction(
     details.browser = binding.preview
     revalidate = binding.revalidate
   }
+  if (name.startsWith('notes_')) {
+    const { bindNotesAction } = await import('../tools/notes')
+    const binding = bindNotesAction(name, args)
+    if (Object.keys(binding.preview).length) details.note = binding.preview
+    revalidate = async (): Promise<void> => {
+      assertRun(run)
+      binding.revalidate()
+    }
+  }
   if (name === 'set_volume' || name === 'set_radio') {
     const { prepareDeviceTarget, revalidateDeviceTarget } = await import('../tools/system-control')
     const target = await prepareDeviceTarget(name, args, run)

@@ -52,6 +52,7 @@ function key(create = true): Buffer {
           : []
       }),
       join(profile, 'memories.json'),
+      join(profile, 'notes.json'),
       ...(existsSync(attachmentDirectory)
         ? readdirSync(attachmentDirectory)
             .filter((name) => /\.(bin|json)$/.test(name))

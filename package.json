@@ -23,6 +23,7 @@
     "setup:voice": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-whisper.ps1",
     "smoke:voice": "node scripts/smoke-voice.cjs",
     "smoke:memory": "node scripts/smoke-memory.cjs",
+    "smoke:notes": "node scripts/smoke-notes.cjs",
     "smoke:harness": "node scripts/smoke-harness.cjs",
     "smoke:plugins": "node scripts/smoke-plugins.cjs",
     "smoke:plugins:ui": "electron scripts/smoke-plugins-ui.cjs --hidden",

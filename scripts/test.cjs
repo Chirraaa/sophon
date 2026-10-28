@@ -34,6 +34,7 @@ const suites = [
   'long-task-memory',
   'memory',
   'model-insights',
+  'notes',
   'npm',
   'pages',
   'plugins',

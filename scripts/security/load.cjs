@@ -102,6 +102,8 @@ function load(file, dependencies = {}) {
         return load('src/main/plugins/schemas.ts')
       if (!Object.hasOwn(dependencies, name) && name === './browser/schemas')
         return load('src/main/tools/browser/schemas.ts')
+      if (!Object.hasOwn(dependencies, name) && name === './notes-schemas')
+        return load('src/main/tools/notes-schemas.ts')
 
       if (
         !Object.hasOwn(dependencies, name) &&

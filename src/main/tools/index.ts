@@ -119,6 +119,11 @@ export async function executeTool(
       )
     }
   }
+  if (name.startsWith('notes_')) {
+    const { executeNotesTool } = await import('./notes')
+    assertRun(run)
+    return executeNotesTool(name, parameters)
+  }
   if (name === 'run_npm')
     return commandOutcome(
       await runNpm(parameters as { path?: string; args: string[] }, run, onOutput),
