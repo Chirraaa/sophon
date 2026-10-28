@@ -1,7 +1,13 @@
 import { toolSchemas } from './schemas'
 import { getSettings } from '../settings'
 import { wait } from './wait'
-import { manageHarness, readHarness, scriptExpression, recordHarnessUse } from '../harness/store'
+import {
+  manageHarness,
+  readHarness,
+  scriptExpression,
+  recordHarnessUse,
+  harnessLifecycle
+} from '../harness/store'
 import { pythonExpression } from '../harness/python'
 import {
   listFiles,
@@ -127,6 +133,9 @@ export async function executeTool(
       throw new Error('Use an expression or a recipe, not both.')
     if (parameters.recipe && !getSettings().memory.enabled)
       throw new Error('Procedural memory is disabled.')
+    const recipeVersion = parameters.recipe
+      ? harnessLifecycle('script-tools', String(parameters.recipe)).version
+      : undefined
     const expression = parameters.recipe
       ? scriptExpression(readHarness('script-tools', String(parameters.recipe), true))
       : String(parameters.expression ?? '')
@@ -144,7 +153,8 @@ export async function executeTool(
           String(parameters.recipe),
           run.id,
           true,
-          'The saved expression executed successfully under the bounded Python worker; numerical correctness still depends on inputs.'
+          'The saved expression executed successfully under the bounded Python worker; numerical correctness still depends on inputs.',
+          recipeVersion
         )
       return result
     } catch (error) {
@@ -154,7 +164,8 @@ export async function executeTool(
           String(parameters.recipe),
           run.id,
           false,
-          'Saved expression execution failed.'
+          'Saved expression execution failed.',
+          recipeVersion
         )
       throw error
     }

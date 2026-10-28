@@ -191,14 +191,22 @@ export async function chat(
     let verifyBoundary = false
     let verificationSetup = ''
     const readSkills = new Set<string>()
+    const readVersions = new Map<string, number>()
     const learnFromRun = (success: boolean): void => {
       if (!session.active || !settings.memory?.enabled) return
       for (const skill of new Set(session.snapshot().tasks.map((task) => task.skill))) {
         const key = skill.replace(/\.md$/, '')
-        if (!readSkills.has(key) || !/^(skills|script-tools)\/[a-z][a-z0-9-]{0,47}$/.test(key))
+        if (!readVersions.has(key) || !/^(skills|script-tools)\/[a-z][a-z0-9-]{0,47}$/.test(key))
           continue
         const [category, name] = key.split('/')
-        recordHarnessUse(category, name, run.id, success, coding.summary() || 'Coding run outcome')
+        recordHarnessUse(
+          category,
+          name,
+          run.id,
+          success,
+          coding.summary() || 'Coding run outcome',
+          readVersions.get(key)
+        )
       }
     }
     const exclusiveTools =
@@ -266,9 +274,13 @@ export async function chat(
           tools.some((tool) => ['harness_manage', 'python_calculate'].includes(tool.function.name)))
       let recalledGuidance: string[] = []
       const procedural = needsProcedural
-        ? harnessContext(taskText, 'before_task', (names) => {
+        ? harnessContext(taskText, 'before_task', (names, versions) => {
             recalledGuidance = names
-            names.forEach((name) => readSkills.add(name.replace(/\.md$/, '')))
+            names.forEach((name) => {
+              const key = name.replace(/\.md$/, '')
+              readSkills.add(key)
+              readVersions.set(key, versions[name])
+            })
           }) +
           '\n' +
           harnessContext(taskText, 'before_answer') +
@@ -1112,8 +1124,12 @@ export async function chat(
           call.function.name === 'harness_manage' &&
           args.action === 'read' &&
           !['failed', 'denied', 'uncertain'].includes(status)
-        )
-          readSkills.add(`${args.category}/${args.name}`)
+        ) {
+          const key = `${args.category}/${args.name}`
+          readSkills.add(key)
+          const version = resultText.match(/^\[Procedural state: [a-z]+, version (\d+)/)?.[1]
+          if (version !== undefined) readVersions.set(key, Number(version))
+        }
         if (
           call.function.name === 'plugin_read' &&
           !['failed', 'denied', 'uncertain'].includes(status)
