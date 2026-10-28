@@ -11,6 +11,8 @@ export function requestJson(
     headers?: Record<string, string>
     lookup?: LookupFunction
     timeout?: number
+    /** Refresh the deadline on accepted SSE events; JSON keeps the absolute deadline. */
+    streamIdleTimeout?: number
     maxBytes?: number
     modelErrors?: boolean
     errorDetails?: boolean
@@ -18,10 +20,25 @@ export function requestJson(
     onEvent?: (data: string) => void
   } = {}
 ): Promise<unknown> {
+  const deadline = new AbortController()
+  let timer = setTimeout(() => deadline.abort(), options.timeout ?? 15000)
+  const streamEvent = (data: string): void => {
+    options.onEvent!(data)
+    if (options.streamIdleTimeout !== undefined) {
+      clearTimeout(timer)
+      timer = setTimeout(() => deadline.abort(), options.streamIdleTimeout)
+    }
+  }
   return new Promise((resolve, reject) => {
     const signal = options.signal
-      ? AbortSignal.any([options.signal, AbortSignal.timeout(options.timeout ?? 15000)])
-      : AbortSignal.timeout(options.timeout ?? 15000)
+      ? AbortSignal.any([options.signal, deadline.signal])
+      : deadline.signal
+    const abortMessage = (): string =>
+      options.signal?.aborted
+        ? 'Request stopped.'
+        : options.streamIdleTimeout !== undefined
+          ? 'The model stopped responding for too long. Retry the request or check that the model server is still running.'
+          : 'Request timed out.'
     const request = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
       url,
       {
@@ -55,7 +72,9 @@ export function requestJson(
               chunks.push(chunk)
             })
             response.on('error', reject)
-            response.on('aborted', () => fail('Service error response was interrupted.'))
+            response.on('aborted', () =>
+              fail(signal.aborted ? abortMessage() : 'Service error response was interrupted.')
+            )
             response.on('end', () => {
               let code = ''
               try {
@@ -150,7 +169,7 @@ export function requestJson(
         }
         let size = 0
         const chunks: Buffer[] = []
-        let stream = streaming ? eventStream(options.onEvent!) : undefined
+        let stream = streaming ? eventStream(streamEvent) : undefined
         let failed = false
         response.on('data', (chunk: Buffer) => {
           if (failed) return
@@ -182,7 +201,7 @@ export function requestJson(
                     'The service returned an unrecognized body without Content-Type. Expected a model stream or JSON.'
                   )
                 detecting = false
-                stream = eventStream(options.onEvent!)
+                stream = eventStream(streamEvent)
                 for (const buffered of chunks) stream.write(buffered)
                 chunks.length = 0
               } else if (size > 8192) {
@@ -200,7 +219,9 @@ export function requestJson(
           }
         })
         response.on('error', reject)
-        response.on('aborted', () => fail('Service response was interrupted. Please retry.'))
+        response.on('aborted', () =>
+          fail(signal.aborted ? abortMessage() : 'Service response was interrupted. Please retry.')
+        )
         response.on('end', () => {
           if (failed) return
           try {
@@ -242,13 +263,9 @@ export function requestJson(
     })
     request.on('error', () =>
       reject(
-        new Error(
-          signal.aborted
-            ? 'Request stopped or timed out.'
-            : 'Could not connect to the configured service.'
-        )
+        new Error(signal.aborted ? abortMessage() : 'Could not connect to the configured service.')
       )
     )
     request.end(options.body)
-  })
+  }).finally(() => clearTimeout(timer))
 }
