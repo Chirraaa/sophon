@@ -33,6 +33,7 @@ const suites = [
   'live-comparison',
   'long-task-memory',
   'memory',
+  'microsoft',
   'model-insights',
   'npm',
   'pages',

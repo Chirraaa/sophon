@@ -163,6 +163,12 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'chatgpt:sign-out': {},
   'chatgpt:welcome': {},
   'chatgpt:usage': {},
+  'microsoft:status': {},
+  'microsoft:set-client': { required: [text(64)] },
+  'microsoft:sign-in': { optional: [id] },
+  'microsoft:cancel': {},
+  'microsoft:select': { required: [id] },
+  'microsoft:remove': { required: [id] },
   'model:set-key': { required: [oneOf('openai', 'compatible'), text(1000), text(4096)] },
   'research:set-key': { required: [text(512)] }
 }
