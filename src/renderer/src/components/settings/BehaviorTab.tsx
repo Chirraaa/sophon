@@ -54,9 +54,12 @@ export function BehaviorTab({ settings }: { settings: AppSettings }): React.JSX.
   const [defaultPrompt, setDefaultPrompt] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
-    window.api.defaultPrompt().then((p) => {
-      if (alive) setDefaultPrompt(p)
-    })
+    window.api
+      .defaultPrompt()
+      .then((p) => {
+        if (alive) setDefaultPrompt(p)
+      })
+      .catch(() => {})
     return () => {
       alive = false
     }
