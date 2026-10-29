@@ -188,10 +188,10 @@ async function main() {
     'tutor',
     'reviewer'
   ])
-  assert.equal(specialists.specialistLimits(4096).consultations, 2)
-  assert.equal(specialists.specialistLimits(16384).consultations, 4)
-  assert.equal(specialists.specialistLimits(60000).consultations, 8)
-  assert.equal(specialists.specialistLimits(100000).consultations, 8)
+  assert.equal(specialists.specialistLimits(4096).consultations, 4)
+  assert.equal(specialists.specialistLimits(16384).consultations, 8)
+  assert.equal(specialists.specialistLimits(60000).consultations, 16)
+  assert.equal(specialists.specialistLimits(100000).consultations, 16)
   assert.equal(await runChat([{ content: 'Quick answer' }], 'What is 2 + 2?'), 'Quick answer')
   assert.equal(requests.length, 1)
   assert.equal(events.filter((event) => event.type === 'specialist').length, 0)
@@ -318,6 +318,19 @@ async function main() {
   const lean = requests.find((r) => r.messages[0].content.includes('Sophon Agent'))
   assert.deepEqual(lean.options.tools, [])
   assert(lean.messages[0].content.length < 400, 'The simple profile keeps its prompt minimal')
+  settings.model.maxSteps = 20
+  peak = 0
+  const ten = await runChat([
+    {
+      tool_calls: Array.from({ length: 10 }, (_, i) =>
+        call('consult_specialist', { profile: 'simple', task: 'Job ' + i })
+      )
+    },
+    ...Array.from({ length: 10 }, (_, i) => slow('FINDING_' + i)),
+    { content: 'Ten-way synthesis' }
+  ])
+  assert.equal(ten, 'Ten-way synthesis')
+  assert.equal(peak, 10, 'Ten specialists run at the same time')
   settings.model.maxSteps = 3
   await assert.rejects(
     runChat([
@@ -328,7 +341,7 @@ async function main() {
         ]
       }
     ]),
-    /budget exhausted/
+    /Not enough model calls/
   )
   settings.model.maxSteps = 10
   settings.model.provider = 'openai'

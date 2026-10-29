@@ -52,12 +52,12 @@ export function specialistLimits(
   consultations: number
   handoffChars: number
 } {
-  if (provider === 'chatgpt') return { consultations: 8, handoffChars: 6000 }
+  if (provider === 'chatgpt') return { consultations: 16, handoffChars: 6000 }
   return contextWindow < 8192
-    ? { consultations: 2, handoffChars: 1600 }
+    ? { consultations: 4, handoffChars: 1600 }
     : contextWindow < 32768
-      ? { consultations: 4, handoffChars: 3200 }
-      : { consultations: 8, handoffChars: 6000 }
+      ? { consultations: 8, handoffChars: 3200 }
+      : { consultations: 16, handoffChars: 6000 }
 }
 
 export function coordinatorTools(enabled: boolean): typeof toolSchemas {
