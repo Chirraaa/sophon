@@ -107,6 +107,7 @@ export function Message({
                 <span className="font-medium text-foreground">
                   {
                     {
+                      simple: 'Agent',
                       researcher: 'Researcher',
                       visual_explainer: 'Visual Explainer',
                       tutor: 'Tutor',
