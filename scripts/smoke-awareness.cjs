@@ -197,7 +197,13 @@ async function main() {
     inlineVisual: false,
     compact: true
   })
-  assert.match(subagents, /SUBAGENTS: consult_specialist/, 'The model knows it can start subagents')
+  assert.match(subagents, /SUBAGENTS: you can spawn subagents/, 'The model knows it can spawn them')
+  assert(
+    new ToolDiscovery('Are you able to spawn some agents?')
+      .select(schema.toolSchemas)
+      .some((t) => t.function.name === 'consult_specialist'),
+    'Asking about agents loads the subagent tool directly'
+  )
   assert.doesNotMatch(subagents, /"remaining"/, 'Per-call budgets are not in the stable prompt')
   const state = environment.runStatePrompt({
     remainingCalls: 3,
