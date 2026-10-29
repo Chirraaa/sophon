@@ -161,6 +161,10 @@ const api: Api = {
   },
   compact: {
     hide: () => ipcRenderer.send('compact:hide'),
+    drag: (dx, dy) =>
+      dx === undefined || dy === undefined
+        ? ipcRenderer.send('compact:drag')
+        : ipcRenderer.send('compact:drag', dx, dy),
     setTaskVisible: (visible) => ipcRenderer.send('compact:task-visible', visible),
     workArea: () => ipcRenderer.invoke('compact:work-area'),
     onWorkArea: (cb) => listen<{ width: number; height: number }>('compact:work-area', cb),
