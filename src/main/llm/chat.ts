@@ -1061,8 +1061,14 @@ export async function chat(
         const perSpecialist = Math.floor(
           (maxSteps - run.modelCalls - 1) / Math.max(1, consultCalls.length)
         )
-        if (consultCalls.length > slots || perSpecialist < 1)
-          throw new Error('Specialist consultation budget exhausted. No further consultation ran.')
+        if (consultCalls.length > slots)
+          throw new Error(
+            `Specialist limit reached: ${consultCalls.length} requested, ${slots} allowed. No consultation ran.`
+          )
+        if (perSpecialist < 1)
+          throw new Error(
+            `Not enough model calls left for ${consultCalls.length} specialists (${maxSteps - run.modelCalls - 1} remain; raise Max steps). No consultation ran.`
+          )
         consulted += consultCalls.length
         // Model calls overlap; tool executions are serialized so permission prompts never stack.
         let toolQueue: Promise<unknown> = Promise.resolve()
