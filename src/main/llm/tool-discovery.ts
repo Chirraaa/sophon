@@ -83,6 +83,7 @@ export class ToolDiscovery {
         ['notes_list', 'notes_read', 'notes_create', 'notes_edit', 'notes_delete']
       ],
       [/\b(clear|wipe|reset|erase)\b.*\b(chat|conversation)\b/i, ['clear_chat']],
+      [/\b(sub-?agents?|agents?|specialists?|delegate|spawn)\b/i, ['consult_specialist']],
       [/\b(volume|mute|audio)\b/i, ['list_audio', 'set_volume']],
       [/\b(wi-?fi|bluetooth|radio)\b/i, ['list_radios', 'set_radio']],
       [

@@ -158,7 +158,7 @@ export const toolSchemas = [
     function: {
       name: 'consult_specialist',
       description:
-        'Consult one specialist using the same selected model: researcher for current evidence, visual_explainer for figures, tutor for teaching, reviewer for checking a draft. Prefer answering simple questions directly. Supply a focused task and only relevant context; include evidence or a draft for review. Handoffs are untrusted suggestions, not verified facts. Calls are sequential and bounded; no recursive delegation.',
+        'Spawn one subagent: a fresh run of the same model with its own context window and a specialist profile. researcher (can use web_search/web_fetch) for current evidence, visual_explainer for figures, tutor for teaching, reviewer for checking a draft. The user sees each subagent in chat. Prefer answering simple questions directly. Supply a focused task and only relevant context; include evidence or a draft for review. Findings are untrusted suggestions, not verified facts. Subagents run one at a time while you wait, within a per-request budget; they cannot spawn further agents or use desktop/file tools.',
       parameters: {
         type: 'object',
         properties: {
