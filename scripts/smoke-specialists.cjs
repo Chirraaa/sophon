@@ -182,15 +182,16 @@ async function main() {
   assert.deepEqual(executed, [], 'An action paired with questions must not execute first')
 
   assert.deepEqual(Object.keys(specialists.SPECIALIST_PROFILES), [
+    'simple',
     'researcher',
     'visual_explainer',
     'tutor',
     'reviewer'
   ])
-  assert.equal(specialists.specialistLimits(4096).consultations, 1)
-  assert.equal(specialists.specialistLimits(16384).consultations, 2)
-  assert.equal(specialists.specialistLimits(60000).consultations, 4)
-  assert.equal(specialists.specialistLimits(100000).consultations, 4)
+  assert.equal(specialists.specialistLimits(4096).consultations, 2)
+  assert.equal(specialists.specialistLimits(16384).consultations, 4)
+  assert.equal(specialists.specialistLimits(60000).consultations, 8)
+  assert.equal(specialists.specialistLimits(100000).consultations, 8)
   assert.equal(await runChat([{ content: 'Quick answer' }], 'What is 2 + 2?'), 'Quick answer')
   assert.equal(requests.length, 1)
   assert.equal(events.filter((event) => event.type === 'specialist').length, 0)
@@ -289,6 +290,47 @@ async function main() {
     assert(!requests[1].options.tools.some((tool) => tool.function.name === 'consult_specialist'))
     assert(!requests[1].options.tools.some((tool) => tool.function.name === 'write_file'))
   }
+  let active = 0
+  let peak = 0
+  const slow = (content) => async () => {
+    peak = Math.max(peak, ++active)
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    active--
+    return { content }
+  }
+  const parallel = await runChat([
+    {
+      tool_calls: [
+        call('consult_specialist', { profile: 'simple', task: 'First job' }),
+        call('consult_specialist', { profile: 'simple', task: 'Second job' }),
+        call('consult_specialist', { profile: 'tutor', task: 'Third job' })
+      ]
+    },
+    slow('FINDING_ONE'),
+    slow('FINDING_TWO'),
+    slow('FINDING_THREE'),
+    { content: 'Parallel synthesis' }
+  ])
+  assert.equal(parallel, 'Parallel synthesis')
+  assert.equal(peak, 3, 'Batched specialists run concurrently')
+  const done = events.filter((event) => event.type === 'specialist' && event.run.status === 'done')
+  assert.equal(new Set(done.map((event) => event.run.id)).size, 3)
+  const lean = requests.find((r) => r.messages[0].content.includes('Sophon Agent'))
+  assert.deepEqual(lean.options.tools, [])
+  assert(lean.messages[0].content.length < 400, 'The simple profile keeps its prompt minimal')
+  settings.model.maxSteps = 3
+  await assert.rejects(
+    runChat([
+      {
+        tool_calls: [
+          call('consult_specialist', { profile: 'simple', task: 'A' }),
+          call('consult_specialist', { profile: 'simple', task: 'B' })
+        ]
+      }
+    ]),
+    /budget exhausted/
+  )
+  settings.model.maxSteps = 10
   settings.model.provider = 'openai'
   const previousOutputLimit = settings.model.maxTokens
   settings.model.maxTokens = 8192

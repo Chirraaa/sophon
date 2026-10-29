@@ -52,6 +52,7 @@ export function replyActivity(item: ChatItem): string {
   const specialist = item.specialists?.findLast((agent) => agent.status === 'running')
   if (specialist) {
     return {
+      simple: 'Running a subagent…',
       researcher: 'Consulting the researcher…',
       visual_explainer: 'Preparing a visual explanation…',
       tutor: 'Consulting the tutor…',

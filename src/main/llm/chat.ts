@@ -1054,6 +1054,43 @@ export async function chat(
         text: string
         image: string
       }[] = []
+      const consultCalls = calls.filter((call) => call.function.name === 'consult_specialist')
+      const consultJobs = new Map<string, ReturnType<typeof consultSpecialist>>()
+      if (consultCalls.length) {
+        const slots = Math.max(0, specialistLimit - consulted)
+        const perSpecialist = Math.floor(
+          (maxSteps - run.modelCalls - 1) / Math.max(1, consultCalls.length)
+        )
+        if (consultCalls.length > slots || perSpecialist < 1)
+          throw new Error('Specialist consultation budget exhausted. No further consultation ran.')
+        consulted += consultCalls.length
+        // Model calls overlap; tool executions are serialized so permission prompts never stack.
+        let toolQueue: Promise<unknown> = Promise.resolve()
+        for (const call of consultCalls) {
+          const job = consultSpecialist({
+            model,
+            args: call.args,
+            remainingCalls: perSpecialist,
+            onEvent,
+            execute: (name, parameters) => {
+              const result = toolQueue.then(async () => {
+                const id = randomUUID()
+                workflow.beforeAction(id, name, parameters)
+                onEvent({ type: 'tool_start', id, name, args: parameters })
+                const outcome = await runTool(name, parameters, id, onEvent)
+                assertRun(run)
+                runtime.record(id, outcome)
+                onEvent({ type: 'tool_end', id, result: outcome.text, outcome: outcome.status })
+                return outcome
+              })
+              toolQueue = result.catch(() => undefined)
+              return result
+            }
+          })
+          job.catch(() => undefined)
+          consultJobs.set(call.id, job)
+        }
+      }
       for (const [index, call] of calls.entries()) {
         assertRun(run)
         const args = call.args
@@ -1174,27 +1211,7 @@ export async function chat(
           return reply
         }
         if (call.function.name === 'consult_specialist') {
-          if (consulted >= specialistLimit || maxSteps - run.modelCalls < 2)
-            throw new Error(
-              'Specialist consultation budget exhausted. No further consultation ran.'
-            )
-          consulted++
-          const findings = await consultSpecialist({
-            model,
-            args,
-            remainingCalls: maxSteps - run.modelCalls - 1,
-            onEvent,
-            execute: async (name, parameters) => {
-              const id = randomUUID()
-              workflow.beforeAction(id, name, parameters)
-              onEvent({ type: 'tool_start', id, name, args: parameters })
-              const result = await runTool(name, parameters, id, onEvent)
-              assertRun(run)
-              runtime.record(id, result)
-              onEvent({ type: 'tool_end', id, result: result.text, outcome: result.status })
-              return result
-            }
-          })
+          const findings = await consultJobs.get(call.id)!
           turn.push({ role: 'tool', tool_call_id: call.id, content: findings.text })
           if (session.active) resources.consume(estimateMessages([turn[turn.length - 1]]))
           if (findings.failed) {
