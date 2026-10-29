@@ -562,7 +562,6 @@ declare global {
       hide: () => void
       resize: (height: number, width?: number, mainOffset?: number) => void
       setDocked: (docked: boolean) => void
-      drag: (dx?: number, dy?: number) => void
       setTaskVisible: (visible: boolean) => void
       workArea: () => Promise<{ width: number; height: number }>
       onWorkArea: (cb: (area: { width: number; height: number }) => void) => () => void

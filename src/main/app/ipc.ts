@@ -364,11 +364,6 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
     if (event.sender === desktop.compact?.webContents && typeof docked === 'boolean')
       desktop.dockCompact(docked)
   })
-  ipcMain.on('compact:drag', (event, dx?: unknown, dy?: unknown) => {
-    if (event.sender !== desktop.compact?.webContents) return
-    if (dx === undefined) desktop.dragCompact()
-    else if (typeof dx === 'number' && typeof dy === 'number') desktop.dragCompact(dx, dy)
-  })
   ipcMain.on('compact:hide', desktop.hideCompact)
   ipcMain.on('compact:open-main', () => {
     desktop.showMain()
