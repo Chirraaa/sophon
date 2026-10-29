@@ -34,6 +34,8 @@ export class Desktop {
   private modalDepth = 0
   private compactTaskVisible = false
   private compactMainOffset = 0
+  private compactDocked = false
+  private undockedY: number | null = null
   private hideTimer: NodeJS.Timeout | null = null
   readonly voice = new VoiceSession({
     publish: (state) => broadcast('voice:state', state),
@@ -48,7 +50,8 @@ export class Desktop {
     }))
     onSession((state) => {
       this.cancelHide()
-      if (state.busy || this.compactTaskVisible || !this.compact?.isVisible()) return
+      if (state.busy || this.compactTaskVisible || this.compactDocked || !this.compact?.isVisible())
+        return
       if (!this.compact.isFocused())
         this.hideTimer = setTimeout(() => {
           if (
@@ -180,6 +183,7 @@ export class Desktop {
     win.on('blur', () => {
       if (
         this.modalDepth ||
+        this.compactDocked ||
         this.compactTaskVisible ||
         snapshot().busy ||
         this.voice.active() ||
@@ -201,7 +205,8 @@ export class Desktop {
     win.on('move', reportArea)
     screen.on('display-metrics-changed', fitWorkArea)
     screen.on('display-removed', fitWorkArea)
-    win.on('will-move', (_event, bounds) => {
+    win.on('will-move', (event, bounds) => {
+      if (this.compactDocked) return event.preventDefault()
       this.commandPosition = { x: bounds.x, y: bounds.y }
     })
     win.on('closed', () => {
@@ -222,6 +227,8 @@ export class Desktop {
     rememberExternalWindow()
     const win = this.compact && !this.compact.isDestroyed() ? this.compact : this.createCompact()
     this.cancelHide()
+    this.compactDocked = false
+    this.undockedY = null
     const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
     const [currentWidth, currentHeight] = win.getSize()
     const width = Math.min(currentWidth, area.width)
@@ -264,6 +271,8 @@ export class Desktop {
   }
   hideCompact = (): void => {
     this.cancelHide()
+    this.compactDocked = false
+    this.undockedY = null
     if (!this.compact || this.compact.isDestroyed()) return
     this.voice.detached(this.compact.webContents)
     this.compact.hide()
@@ -291,9 +300,11 @@ export class Desktop {
         area.x + area.width - nextWidth
       )
     )
-    const y = Math.max(area.y, Math.min(bounds.y, area.y + area.height - nextHeight))
+    const y = this.compactDocked
+      ? area.y
+      : Math.max(area.y, Math.min(bounds.y, area.y + area.height - nextHeight))
     this.compactMainOffset = mainOffset
-    if (this.commandPosition) this.commandPosition = { x, y }
+    if (this.commandPosition && !this.compactDocked) this.commandPosition = { x, y }
     if (
       bounds.height !== nextHeight ||
       bounds.y !== y ||
@@ -308,6 +319,25 @@ export class Desktop {
         ? screen.getDisplayMatching(this.compact.getBounds()).workArea
         : screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
     return { width: area.width, height: area.height }
+  }
+  dockCompact(docked: boolean): void {
+    const win = this.compact
+    if (!win || win.isDestroyed() || docked === this.compactDocked) return
+    const bounds = win.getBounds()
+    this.compactDocked = docked
+    if (docked) {
+      this.undockedY = bounds.y
+      this.cancelHide()
+      win.setBounds({ ...bounds, y: screen.getDisplayMatching(bounds).workArea.y })
+      return
+    }
+    const area = screen.getDisplayMatching(bounds).workArea
+    const y = Math.max(
+      area.y,
+      Math.min(this.undockedY ?? bounds.y, area.y + area.height - bounds.height)
+    )
+    this.undockedY = null
+    win.setBounds({ ...bounds, y })
   }
   setCompactTaskVisible(visible: boolean): void {
     this.compactTaskVisible = visible

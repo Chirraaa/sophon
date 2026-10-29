@@ -171,6 +171,7 @@ const api: Api = {
   },
   compact: {
     hide: () => ipcRenderer.send('compact:hide'),
+    setDocked: (docked) => ipcRenderer.send('compact:dock', docked),
     setTaskVisible: (visible) => ipcRenderer.send('compact:task-visible', visible),
     workArea: () => ipcRenderer.invoke('compact:work-area'),
     onWorkArea: (cb) => listen<{ width: number; height: number }>('compact:work-area', cb),

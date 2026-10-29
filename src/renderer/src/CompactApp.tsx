@@ -9,6 +9,8 @@ import {
   GripHorizontal,
   Maximize2,
   Minimize2,
+  PanelTopClose,
+  PanelTopOpen,
   X
 } from 'lucide-react'
 import { useSession } from '@/hooks/useSession'
@@ -21,7 +23,8 @@ import { Button } from '@/components/ui/button'
 import { VoiceActivity } from '@/components/compact/VoiceActivity'
 import { ApprovalRequests } from '@/components/chat/ApprovalCard'
 import { CodingRun } from '@/components/chat/CodingRun'
-import { shortcutCodingItem } from '@/lib/coding'
+import { codingView, shortcutCodingItem } from '@/lib/coding'
+import { Spinner } from '@/components/ui/spinner'
 import { useChatScroll } from '@/hooks/useChatScroll'
 import { useCompactBackdrop } from '@/hooks/useCompactBackdrop'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -40,6 +43,10 @@ export default function CompactApp(): React.JSX.Element {
   const [designGuideOpen, setDesignGuideOpen] = useState(false)
   const [hiddenTasks, setHiddenTasks] = useState<Set<string>>(() => new Set())
   const [taskCollapsed, setTaskCollapsed] = useState<boolean | null>(null)
+  const [docked, setDocked] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [githubVisibility, setGithubVisibility] = useState<Record<string, boolean>>({})
   const [workArea, setWorkArea] = useState({
     width: window.screen.availWidth,
@@ -59,6 +66,12 @@ export default function CompactApp(): React.JSX.Element {
     (item) => item.pending && item.actions.some((action) => action.status === 'waiting')
   )
   const collapsed = presentation.mode === 'voice' && voiceActive && !waiting
+  // A docked window rests as a slim bar and opens fully on hover, focus, or
+  // whenever something needs the user's attention.
+  const barMode = docked && !hovered && !focused && !waiting
+  const status = coding
+    ? codingView(coding)
+    : { label: busy ? 'Working on it…' : 'Ready', attention: false }
   const visible = items.slice(start.chatId === chatId ? Math.min(start.index, items.length) : 0)
   const roomy =
     !collapsed &&
@@ -74,8 +87,8 @@ export default function CompactApp(): React.JSX.Element {
   // window width and position when a card opens races the renderer's viewport
   // update, briefly shifting the command panel on transparent Windows windows.
   const sideBySide = workArea.width >= mainWidth + 320 + 16 + 40
-  const mainOffset = sideBySide ? 336 : 0
-  const popupWidth = mainWidth + 40 + mainOffset
+  const mainOffset = sideBySide && !barMode ? 336 : 0
+  const popupWidth = barMode ? 360 : mainWidth + 40 + mainOffset
 
   const visibleOffset = `clamp(0px, calc(100vw - ${mainWidth + 40}px), 336px)`
   const maxHeight = Math.max(0, Math.min(roomy ? 840 : 640, workArea.height - 40))
@@ -106,6 +119,15 @@ export default function CompactApp(): React.JSX.Element {
     }
   }, [])
   useEffect(() => {
+    window.api.compact.setDocked(docked)
+  }, [docked])
+  useEffect(
+    () => () => {
+      if (leaveTimer.current) clearTimeout(leaveTimer.current)
+    },
+    []
+  )
+  useEffect(() => {
     window.api.compact.setTaskVisible(taskVisible)
     return () => window.api.compact.setTaskVisible(false)
   }, [taskVisible])
@@ -117,6 +139,8 @@ export default function CompactApp(): React.JSX.Element {
       })
       setPresentation(next)
       setSizeChoice('auto')
+      setDocked(false)
+      setHovered(false)
     }
     void window.api.compact.presentation().then(setPresentation)
     return window.api.compact.onShown(shown)
@@ -143,7 +167,7 @@ export default function CompactApp(): React.JSX.Element {
       const modal = document.querySelector('[role="dialog"], [role="alertdialog"]')
       const height = Math.min(
         workArea.height,
-        Math.max(Math.ceil(element.offsetHeight) + 40, modal ? 640 : 0)
+        Math.max(Math.ceil(element.offsetHeight) + (docked ? 20 : 40), modal ? 640 : 0)
       )
       const size = `${height}:${popupWidth}:${mainOffset}`
 
@@ -170,18 +194,72 @@ export default function CompactApp(): React.JSX.Element {
       popups.disconnect()
       cancelAnimationFrame(frame)
     }
-  }, [presentation.token, roomy, popupWidth, mainOffset, workArea.width, workArea.height])
+  }, [
+    presentation.token,
+    roomy,
+    docked,
+    barMode,
+    popupWidth,
+    mainOffset,
+    workArea.width,
+    workArea.height
+  ])
+  const enter = (): void => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current)
+    leaveTimer.current = null
+    setHovered(true)
+  }
+  const leave = (): void => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current)
+    leaveTimer.current = setTimeout(() => {
+      // Keep the layout open while a menu or dialog it owns is showing.
+      if (
+        document.querySelector(
+          'dialog:modal, [role="dialog"], [role="alertdialog"], [role="listbox"]'
+        )
+      )
+        return leave()
+      setHovered(false)
+    }, 450)
+  }
+  const toggleDock = (): void => {
+    if (!docked) (document.activeElement as HTMLElement | null)?.blur()
+    setDocked(!docked)
+  }
   return (
-    <div className="flex justify-center p-5">
+    <div className={`flex justify-center p-5 ${docked ? 'pt-0' : ''}`}>
       <div
         ref={card}
         className="grid w-full min-w-0 grid-cols-1 items-start gap-4"
+        onMouseEnter={enter}
+        onMouseLeave={leave}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         style={{
           maxHeight,
-          height: roomy ? maxHeight : undefined
+          height: roomy && !barMode ? maxHeight : undefined
         }}
       >
-        {sideVisible && (
+        {barMode && (
+          <Button
+            variant="ghost"
+            aria-label={`Sophon: ${status.label}. Show full window`}
+            aria-expanded={false}
+            onClick={enter}
+            className="glass-solid mx-auto flex h-8 w-[320px] max-w-full items-center justify-start gap-2 rounded-t-none rounded-b-[14px] px-3 text-[11px] font-normal"
+          >
+            <BrandIcon className="size-3.5 shrink-0" />
+            <span className="truncate text-muted-foreground">{status.label}</span>
+            <span className="ml-auto flex shrink-0 items-center">
+              {status.attention ? (
+                <span className="size-1.5 rounded-full bg-amber-500" aria-hidden />
+              ) : busy ? (
+                <Spinner className="size-3 text-muted-foreground" />
+              ) : null}
+            </span>
+          </Button>
+        )}
+        {!barMode && sideVisible && (
           <aside
             aria-label="Chat workspace"
             aria-hidden={!sideVisible}
@@ -264,136 +342,160 @@ export default function CompactApp(): React.JSX.Element {
             </ScrollArea>
           </aside>
         )}
-        <div
-          className={
-            'glass-solid flex min-h-0 flex-col overflow-hidden rounded-[22px] ' +
-            (collapsed ? 'w-[320px] shrink-0' : 'w-full min-w-0 flex-1')
-          }
-          style={{
-            maxHeight: commandHeight,
-            width: `min(100%, ${mainWidth}px)`,
-            marginLeft: visibleOffset,
-            gridArea: sideBySide || !sideVisible ? '1 / 1' : undefined,
-            height: roomy ? commandHeight : undefined
-          }}
-          data-compact-size={roomy ? 'expanded' : 'small'}
-        >
-          <header className="drag flex h-9 shrink-0 items-center justify-between px-3">
-            <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
-              <BrandIcon className="size-4" />
-              sophon{coding ? ' / coding' : ''}
-            </span>
-            <GripHorizontal className="size-4 text-muted-foreground/40" aria-label="Drag to move" />
-            <div className="no-drag flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger
-                  render={<Button variant="ghost" size="icon-xs" />}
-                  aria-label={githubVisible ? 'Hide GitHub context' : 'Show GitHub context'}
-                  aria-expanded={githubVisible}
-                  onClick={() =>
-                    setGithubVisibility((previous) => ({ ...previous, [chatId]: !githubVisible }))
-                  }
-                >
-                  <GitBranch className="size-3" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  {githubVisible ? 'Hide GitHub context' : 'Choose a repository and branch'}
-                </TooltipContent>
-              </Tooltip>
-              {coding && !taskVisible && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Show coding task"
-                  title="Show coding task"
-                  onClick={() =>
-                    setHiddenTasks((previous) => {
-                      const next = new Set(previous)
-                      next.delete(taskKey!)
-                      return next
-                    })
-                  }
-                >
-                  <Code2 className="size-3" />
-                </Button>
-              )}
-              {!collapsed && (
+        {!barMode && (
+          <div
+            className={
+              'glass-solid flex min-h-0 flex-col overflow-hidden rounded-[22px] ' +
+              (collapsed ? 'w-[320px] shrink-0' : 'w-full min-w-0 flex-1')
+            }
+            style={{
+              maxHeight: commandHeight,
+              width: `min(100%, ${mainWidth}px)`,
+              marginLeft: visibleOffset,
+              gridArea: sideBySide || !sideVisible ? '1 / 1' : undefined,
+              height: roomy ? commandHeight : undefined
+            }}
+            data-compact-size={roomy ? 'expanded' : 'small'}
+          >
+            <header className="drag flex h-9 shrink-0 items-center justify-between px-3">
+              <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
+                <BrandIcon className="size-4" />
+                sophon{coding ? ' / coding' : ''}
+              </span>
+              <GripHorizontal
+                className="size-4 text-muted-foreground/40"
+                aria-label="Drag to move"
+              />
+              <div className="no-drag flex items-center gap-1">
                 <Tooltip>
                   <TooltipTrigger
                     render={<Button variant="ghost" size="icon-xs" />}
-                    aria-label={roomy ? 'Use smaller window' : 'Expand quick command'}
-                    onClick={() => setSizeChoice(roomy ? 'small' : 'large')}
+                    aria-label={githubVisible ? 'Hide GitHub context' : 'Show GitHub context'}
+                    aria-expanded={githubVisible}
+                    onClick={() =>
+                      setGithubVisibility((previous) => ({ ...previous, [chatId]: !githubVisible }))
+                    }
                   >
-                    {roomy ? <Minimize2 className="size-3" /> : <Maximize2 className="size-3" />}
+                    <GitBranch className="size-3" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    {roomy ? 'Use smaller window' : 'More room to work'}
+                    {githubVisible ? 'Hide GitHub context' : 'Choose a repository and branch'}
                   </TooltipContent>
                 </Tooltip>
-              )}
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Close quick command"
-                onClick={() => window.api.compact.hide()}
-                className="no-drag text-muted-foreground"
-              >
-                <X className="size-3" />
-              </Button>
-            </div>
-          </header>
-          {collapsed ? (
-            <VoiceActivity voice={voice} />
-          ) : (
-            <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2.5">
-              {visible.length > 0 && (
-                <ScrollArea
-                  viewportProps={{ render: <div data-chat-viewport /> }}
-                  className={`mb-3 min-h-0 ${roomy ? 'flex-1' : 'max-h-[380px]'}`}
-                  viewportClassName="overscroll-contain"
-                  contentClassName="px-1 pt-1"
-                >
-                  <div ref={contentRef} className="flex flex-col gap-3">
-                    {visible.map((item) => (
-                      <Message
-                        key={`${chatId}:${item.id}`}
-                        item={item}
-                        hideCoding={item.id === coding?.id}
-                      />
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
-              <ScrollArea className="min-h-0 shrink" viewportClassName="overscroll-contain">
-                <ApprovalRequests items={items} />
-              </ScrollArea>
-              <div className="shrink-0">
-                <Composer
-                  key={chatId}
-                  chatId={chatId}
-                  variant="bar"
-                  onDesignGuideChange={setDesignGuideOpen}
-                  busy={busy}
-                  focusToken={presentation.token}
-                  autoFocus={presentation.mode === 'command'}
-                  placeholder={busy ? 'Working on it…' : 'What should I do?'}
-                  onSend={(text, attachments) => window.api.send(text, attachments)}
-                />
-                <div className="mt-2 flex items-center justify-between px-2 text-[10px] text-muted-foreground">
-                  <span>Esc to hide{busy ? ' · Task keeps running' : ' · Drag to move'}</span>
+                {(busy || coding || docked) && (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={<Button variant="ghost" size="icon-xs" />}
+                      aria-label={docked ? 'Undock from top' : 'Dock to top'}
+                      aria-pressed={docked}
+                      onClick={toggleDock}
+                    >
+                      {docked ? (
+                        <PanelTopOpen className="size-3" />
+                      ) : (
+                        <PanelTopClose className="size-3" />
+                      )}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {docked ? 'Undock from top' : 'Collapse to a bar at the top'}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {coding && !taskVisible && (
                   <Button
                     variant="ghost"
-                    size="sm"
-                    onClick={() => window.api.compact.openMain()}
-                    className="h-6 gap-1 px-1 text-[10px] font-normal text-muted-foreground"
+                    size="icon-xs"
+                    aria-label="Show coding task"
+                    title="Show coding task"
+                    onClick={() =>
+                      setHiddenTasks((previous) => {
+                        const next = new Set(previous)
+                        next.delete(taskKey!)
+                        return next
+                      })
+                    }
                   >
-                    Open chat <ArrowUpRight className="size-3" />
+                    <Code2 className="size-3" />
                   </Button>
+                )}
+                {!collapsed && (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={<Button variant="ghost" size="icon-xs" />}
+                      aria-label={roomy ? 'Use smaller window' : 'Expand quick command'}
+                      onClick={() => setSizeChoice(roomy ? 'small' : 'large')}
+                    >
+                      {roomy ? <Minimize2 className="size-3" /> : <Maximize2 className="size-3" />}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {roomy ? 'Use smaller window' : 'More room to work'}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Close quick command"
+                  onClick={() => window.api.compact.hide()}
+                  className="no-drag text-muted-foreground"
+                >
+                  <X className="size-3" />
+                </Button>
+              </div>
+            </header>
+            {collapsed ? (
+              <VoiceActivity voice={voice} />
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2.5">
+                {visible.length > 0 && (
+                  <ScrollArea
+                    viewportProps={{ render: <div data-chat-viewport /> }}
+                    className={`mb-3 min-h-0 ${roomy ? 'flex-1' : 'max-h-[380px]'}`}
+                    viewportClassName="overscroll-contain"
+                    contentClassName="px-1 pt-1"
+                  >
+                    <div ref={contentRef} className="flex flex-col gap-3">
+                      {visible.map((item) => (
+                        <Message
+                          key={`${chatId}:${item.id}`}
+                          item={item}
+                          hideCoding={item.id === coding?.id}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+                <ScrollArea className="min-h-0 shrink" viewportClassName="overscroll-contain">
+                  <ApprovalRequests items={items} />
+                </ScrollArea>
+                <div className="shrink-0">
+                  <Composer
+                    key={chatId}
+                    chatId={chatId}
+                    variant="bar"
+                    onDesignGuideChange={setDesignGuideOpen}
+                    busy={busy}
+                    focusToken={presentation.token}
+                    autoFocus={presentation.mode === 'command'}
+                    placeholder={busy ? 'Working on it…' : 'What should I do?'}
+                    onSend={(text, attachments) => window.api.send(text, attachments)}
+                  />
+                  <div className="mt-2 flex items-center justify-between px-2 text-[10px] text-muted-foreground">
+                    <span>Esc to hide{busy ? ' · Task keeps running' : ' · Drag to move'}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => window.api.compact.openMain()}
+                      className="h-6 gap-1 px-1 text-[10px] font-normal text-muted-foreground"
+                    >
+                      Open chat <ArrowUpRight className="size-3" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
