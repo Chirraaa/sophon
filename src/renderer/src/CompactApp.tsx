@@ -2,6 +2,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   ArrowUpRight,
+  Check,
   ChevronDown,
   ChevronUp,
   Code2,
@@ -45,6 +46,12 @@ export default function CompactApp(): React.JSX.Element {
   const [hiddenTasks, setHiddenTasks] = useState<Set<string>>(() => new Set())
   const [taskCollapsed, setTaskCollapsed] = useState<boolean | null>(null)
   const [docked, setDocked] = useState(false)
+  const [notice, setNotice] = useState<'finished' | null>(null)
+  const [wasBusy, setWasBusy] = useState(busy)
+  if (wasBusy !== busy) {
+    setWasBusy(busy)
+    setNotice(!busy && docked ? 'finished' : null)
+  }
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -105,6 +112,7 @@ export default function CompactApp(): React.JSX.Element {
     `${chatId}:${presentation.token}:${collapsed}:${visible.length > 0}`
   )
   const count = useRef({ total: 0, busy: false, chatId })
+  const noticeRef = useRef(notice)
   useEffect(() => {
     count.current = { total: items.length, busy, chatId }
   }, [items.length, busy, chatId])
@@ -126,6 +134,9 @@ export default function CompactApp(): React.JSX.Element {
   useEffect(() => {
     window.api.compact.setDocked(docked)
   }, [docked])
+  useEffect(() => {
+    noticeRef.current = notice
+  }, [notice])
   useEffect(
     () => () => {
       if (leaveTimer.current) clearTimeout(leaveTimer.current)
@@ -144,7 +155,8 @@ export default function CompactApp(): React.JSX.Element {
       })
       setPresentation(next)
       setSizeChoice('auto')
-      setDocked(false)
+      setDocked(next.docked === true)
+      setNotice(next.notice ?? null)
       setHovered(false)
     }
     void window.api.compact.presentation().then(setPresentation)
@@ -225,6 +237,11 @@ export default function CompactApp(): React.JSX.Element {
       )
         return leave()
       setHovered(false)
+      // The finished sign has been seen: put the bar away unless it is in use.
+      if (noticeRef.current && !count.current.busy && !document.hasFocus()) {
+        setNotice(null)
+        window.api.compact.hide()
+      }
     }, 450)
   }
   const toggleDock = (): void => {
@@ -248,13 +265,24 @@ export default function CompactApp(): React.JSX.Element {
         {barMode && (
           <Button
             variant="ghost"
-            aria-label={`Sophon: ${status.label}. Show full window`}
+            aria-label={`Sophon: ${notice ? 'Task finished' : status.label}. Show full window`}
             aria-expanded={false}
             onClick={enter}
-            className="glass-solid mx-auto flex h-8 w-[320px] max-w-full items-center justify-start gap-2 rounded-t-none rounded-b-[14px] px-3 text-[11px] font-normal"
+            className={`glass-solid mx-auto flex h-8 w-[320px] max-w-full items-center justify-start gap-2 rounded-t-none rounded-b-[14px] px-3 text-[11px] font-normal ${notice ? 'ring-1 ring-success/60' : ''}`}
           >
-            <BrandIcon className="size-3.5 shrink-0" />
-            <span className="truncate text-muted-foreground">{status.label}</span>
+            {notice ? (
+              <Check className="size-3.5 shrink-0 text-success" aria-hidden="true" />
+            ) : (
+              <BrandIcon className="size-3.5 shrink-0" />
+            )}
+            <span
+              className={`truncate ${notice ? 'font-medium text-foreground' : 'text-muted-foreground'}`}
+            >
+              {notice ? 'Task finished' : status.label}
+            </span>
+            <span className="sr-only" role="status">
+              {notice ? 'Task finished' : ''}
+            </span>
             <span className="ml-auto flex shrink-0 items-center">
               {status.attention ? (
                 <span className="size-1.5 rounded-full bg-amber-500" aria-hidden />

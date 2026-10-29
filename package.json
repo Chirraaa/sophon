@@ -41,6 +41,7 @@
     "smoke:coding:resources": "node scripts/smoke-coding-resources.cjs",
     "smoke:coding:ui": "electron scripts/smoke-coding-ui.cjs --hidden",
     "smoke:subagents:ui": "electron scripts/smoke-subagents-ui.cjs --hidden",
+    "smoke:dock:ui": "electron scripts/smoke-dock-ui.cjs --hidden",
     "smoke:questions": "electron scripts/smoke-questions-electron.cjs --hidden",
     "smoke:design-guide": "electron scripts/smoke-design-guide.cjs --hidden",
     "smoke:conversation": "node scripts/smoke-conversation.cjs",

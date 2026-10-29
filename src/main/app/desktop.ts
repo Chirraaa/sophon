@@ -3,7 +3,7 @@ import { join } from 'path'
 import { release } from 'os'
 import { rendererDocument } from '../security/trusted-document'
 import { stopRun, setInterfacePresenceProvider } from '../security/run-manager'
-import { getSettings } from '../settings'
+import { getSettings, onSettingsChange } from '../settings'
 import { onSession, send, snapshot } from '../chat/session'
 import { rememberExternalWindow } from '../tools/windows'
 import icon from '../../../resources/icon.png?asset'
@@ -37,6 +37,10 @@ export class Desktop {
   private compactDocked = false
   private undockedY: number | null = null
   private hideTimer: NodeJS.Timeout | null = null
+  private restDock = false
+  private wasBusy = false
+  private wasWaiting = false
+  private readonly offSettings: () => void
   readonly voice = new VoiceSession({
     publish: (state) => broadcast('voice:state', state),
     busy: () => snapshot().busy,
@@ -48,7 +52,26 @@ export class Desktop {
       shortcutVisible: Boolean(this.compact?.isVisible()),
       focused: this.compact?.isFocused() ? 'shortcut' : this.main?.isFocused() ? 'full-app' : null
     }))
+    this.offSettings = onSettingsChange((settings) => {
+      if (settings.dockAlwaysVisible) this.syncRest()
+      else if (
+        this.restDock &&
+        this.compact?.isVisible() &&
+        !snapshot().busy &&
+        !this.compactTaskVisible
+      )
+        this.hideCompact()
+    })
     onSession((state) => {
+      const waiting = state.items.some(
+        (item) => item.pending && item.actions.some((action) => action.status === 'waiting')
+      )
+      const finished = this.wasBusy && !state.busy
+      const needsAction = waiting && !this.wasWaiting
+      this.wasBusy = state.busy
+      this.wasWaiting = waiting
+      if ((finished || needsAction) && this.shouldAlert())
+        this.showDock(finished ? 'finished' : undefined)
       this.cancelHide()
       if (state.busy || this.compactTaskVisible || this.compactDocked || !this.compact?.isVisible())
         return
@@ -125,6 +148,8 @@ export class Desktop {
     })
     this.main = win
     win.on('focus', () => this.hideCompact())
+    win.on('hide', this.syncRest)
+    win.on('minimize', this.syncRest)
     win.on('ready-to-show', () => {
       if (!process.argv.includes('--hidden')) win.show()
     })
@@ -228,6 +253,7 @@ export class Desktop {
     const win = this.compact && !this.compact.isDestroyed() ? this.compact : this.createCompact()
     this.cancelHide()
     this.compactDocked = false
+    this.restDock = false
     this.undockedY = null
     const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
     const [currentWidth, currentHeight] = win.getSize()
@@ -275,7 +301,60 @@ export class Desktop {
     this.undockedY = null
     if (!this.compact || this.compact.isDestroyed()) return
     this.voice.detached(this.compact.webContents)
+    if (this.wantsRestDock()) return this.showDock()
+    this.restDock = false
     this.compact.hide()
+  }
+  private mainShowing(): boolean {
+    return Boolean(
+      this.main && !this.main.isDestroyed() && this.main.isVisible() && !this.main.isMinimized()
+    )
+  }
+  private wantsRestDock(): boolean {
+    return getSettings().dockAlwaysVisible && !this.mainShowing() && !this.quitting
+  }
+  // Someone looking at either window already sees what changed.
+  private shouldAlert(): boolean {
+    return (
+      getSettings().dockNotify &&
+      !this.quitting &&
+      !this.main?.isFocused() &&
+      !this.compact?.isFocused()
+    )
+  }
+  /** Rests the shortcut window as a slim top bar when the full app is away. */
+  syncRest = (): void => {
+    if (this.wantsRestDock() && !this.compact?.isVisible()) this.showDock()
+  }
+  /** Shows the docked bar without taking focus, optionally flagging a finished task. */
+  showDock = (notice?: 'finished'): void => {
+    const win = this.compact && !this.compact.isDestroyed() ? this.compact : this.createCompact()
+    this.cancelHide()
+    const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
+    const [currentWidth, height] = win.getSize()
+    const width = Math.min(currentWidth, area.width)
+    this.compactDocked = true
+    this.restDock = true
+    this.undockedY = null
+    win.setBounds({
+      width,
+      height,
+      x: Math.round(area.x + (area.width - width - this.compactMainOffset) / 2),
+      y: area.y
+    })
+    this.presentation = {
+      mode: 'command',
+      token: this.presentation.token + 1,
+      docked: true,
+      ...(notice ? { notice } : {})
+    }
+    const reveal = (): void => {
+      if (win.isDestroyed()) return
+      win.webContents.send('compact:shown', this.presentation)
+      win.showInactive()
+    }
+    if (win.webContents.isLoading()) win.webContents.once('did-finish-load', reveal)
+    else reveal()
   }
   toggleCompact = (): void => {
     if (this.compact?.isVisible() && this.compact.isFocused()) this.hideCompact()
@@ -354,6 +433,7 @@ export class Desktop {
   dispose(): void {
     setInterfacePresenceProvider(() => undefined)
     this.quitting = true
+    this.offSettings()
     this.cancelHide()
     this.voice.dispose()
   }
