@@ -472,6 +472,7 @@ async function main() {
     './time': load('src/main/llm/time.ts', { 'node:perf_hooks': require('node:perf_hooks') }),
     './stream': load('src/main/llm/stream.ts'),
     './providers': providers,
+    './anthropic': load('src/main/llm/anthropic.ts'),
     '../settings': { getSettings: () => ({ model: { ...harness.settings.model, ...config } }) },
     '../tools': { activeToolSchemas: () => [] },
     '../network/endpoint': load('src/main/network/endpoint.ts'),

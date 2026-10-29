@@ -225,6 +225,7 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
     './context': context,
     './stream': load('src/main/llm/stream.ts'),
     './providers': load('src/main/llm/providers.ts'),
+    './anthropic': load('src/main/llm/anthropic.ts'),
     '../security/model-credentials': {},
     '../security/chatgpt-auth': auth,
     'node:perf_hooks': require('node:perf_hooks'),

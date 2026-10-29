@@ -2,7 +2,7 @@ import type { PluginsApi } from './plugins'
 import type { UpdatesApi } from './updates'
 export {}
 declare global {
-  type ModelProvider = 'local' | 'openai' | 'compatible' | 'chatgpt'
+  type ModelProvider = 'local' | 'openai' | 'compatible' | 'chatgpt' | 'anthropic' | 'claude'
   type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
   interface ModelCapabilities {
     reasoningEfforts?: ReasoningEffort[]
