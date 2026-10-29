@@ -507,6 +507,8 @@ async function respond(
     await Promise.all(images)
     reply.sources = run.sources.map((source) => ({ ...source }))
     securityEvent('run_stopped', run.id)
+    // finishRun aborts the run's signal, so read whether the user stopped it first.
+    const stopped = run.signal.aborted
     finishRun(run)
     for (const action of reply.actions) {
       if (action.status === 'waiting' || action.status === 'running') {
@@ -525,6 +527,6 @@ async function respond(
     runningChatId = null
     conversation.updatedAt = Date.now()
     emit()
-    if (takeChatClear() && !run.signal.aborted) clear()
+    if (takeChatClear() && !stopped) clear()
   }
 }
