@@ -21,7 +21,8 @@ const ONE_USE = [
   'delete_directory',
   'mcp_call',
   'mcp_read',
-  'notes_delete'
+  'notes_delete',
+  'clear_chat'
 ]
 const GROUPS = [
   {
@@ -90,6 +91,11 @@ const GROUPS = [
     title: 'Notes',
     description: "Read and change Sophon's own notes, stored encrypted on this computer.",
     names: ['notes_list', 'notes_read', 'notes_create', 'notes_edit', 'notes_delete']
+  },
+  {
+    title: 'Chat',
+    description: 'Clear the current conversation.',
+    names: ['clear_chat']
   },
   {
     title: 'Audio & wireless',

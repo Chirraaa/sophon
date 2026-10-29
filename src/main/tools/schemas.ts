@@ -126,6 +126,15 @@ export const toolSchemas = [
   {
     type: 'function',
     function: {
+      name: 'clear_chat',
+      description:
+        'Erase all messages in the current chat when the user asks to clear, wipe or reset this conversation. Always asks the user first; the chat is cleared after your reply ends, so reply with one short sentence and call alone. Does not delete other chats.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'wait',
       description:
         'Pause this active task for 0.001 to 60 seconds, then resume. Cancellable with Stop. Use between observations for requested monitoring; does not itself inspect anything or schedule background work. Task and step limits still apply.',

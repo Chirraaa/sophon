@@ -23,6 +23,7 @@ import type { ChatEvent, ChatHistory } from '../llm/types'
 import { getSettings } from '../settings'
 import { startRun, finishRun, assertRun } from '../security/run-manager'
 import { securityEvent } from '../security/audit'
+import { takeChatClear } from './clear-request'
 import { pruneChatMemories, clearChatMemories } from '../memory/store'
 import { resultFailure } from '../workflow/results'
 import { searchProviderLabel } from '../network/search-provider'
@@ -494,5 +495,6 @@ async function respond(
     runningChatId = null
     conversation.updatedAt = Date.now()
     emit()
+    if (takeChatClear() && !run.signal.aborted) clear()
   }
 }
