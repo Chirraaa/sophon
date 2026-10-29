@@ -20,6 +20,7 @@ const STATUSES = ['pending', 'observed', 'reported', 'verified', 'failed', 'deni
 
 export function isContinuation(text: string): boolean {
   if (/^My answers:\s*\n/i.test(text.trim())) return true
+  if (/^(?:please\s+)?go[.!]?$/i.test(text.trim())) return true
   return /^(?:please\s+)?(?:continue|resume|try again|retry|go ahead|carry on|keep going|go on|pick up where (?:you|we) left off)(?:(?:\s+(?:the\s+)?(?:previous\s+|last\s+|current\s+)?(?:task|request|response|answer|work))|(?:\s+from where (?:you|we) (?:left off|stopped)))?[.!]?(?:\s*[,;:\u2014-]\s*[\s\S]+)?$/i.test(
     text.trim()
   )
@@ -117,7 +118,9 @@ export class WorkflowController {
       validWorkflow(previous) &&
       previous.mode === mode &&
       previous.workspaceKey === workspaceKey &&
-      ['needs_review', 'interrupted', 'answered', 'actions_checked'].includes(previous.outcome) &&
+      ['needs_review', 'interrupted', 'answered', 'actions_checked', 'blocked'].includes(
+        previous.outcome
+      ) &&
       isContinuation(goal)
     this.state = this.resumed
       ? {
@@ -145,7 +148,8 @@ export class WorkflowController {
       runId,
       this.resumed ? (previous?.mutationRevision ?? previous?.codingSession?.revision ?? 0) : 0,
       this.resumed ? previous?.codingPaths : [],
-      wantsCodingSession(this.state.goal, workspace) || !!this.state.codingSession
+      wantsCodingSession(this.state.goal, workspace) || !!this.state.codingSession,
+      workspace
     )
     if (this.resumed)
       this.actions.restore(

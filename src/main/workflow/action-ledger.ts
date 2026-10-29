@@ -34,7 +34,8 @@ export class ActionLedger {
     revision = 0,
     paths: string[] = [],
     // The request asked for coding work (or resumed a coding session).
-    readonly codingIntent = true
+    readonly codingIntent = true,
+    private workspace = ''
   ) {
     this.currentRevision = Math.max(0, revision)
     this.restore(paths)
@@ -48,8 +49,17 @@ export class ActionLedger {
   paths(): string[] {
     return [...this.changed]
   }
+  private projectPath(value: string): string {
+    const root = this.workspace.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '')
+    const target = value.replace(/\\/g, '/').replace(/\/+/g, '/')
+    if (root && target.toLowerCase() === root.toLowerCase()) return '.'
+    return root && target.toLowerCase().startsWith(root.toLowerCase() + '/')
+      ? target.slice(root.length + 1)
+      : value
+  }
   restore(paths: string[]): void {
-    for (const path of paths) this.changed.add(path.replace(/\\/g, '/').replace(/^\.\//, ''))
+    for (const path of paths)
+      this.changed.add(this.projectPath(path).replace(/\\/g, '/').replace(/^\.\//, ''))
   }
   accepts(report: VerificationReport | undefined): boolean {
     return (
@@ -89,6 +99,7 @@ export class ActionLedger {
     args: Record<string, unknown>,
     outcome: ToolOutcome
   ): ActionRecord {
+    if (typeof args.path === 'string') args = { ...args, path: this.projectPath(args.path) }
     if (this.completed.has(actionId)) throw new Error('Action outcome already recorded.')
     if (
       outcome.execution !== 'not-started' &&

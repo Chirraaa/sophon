@@ -6,6 +6,106 @@ const { load } = require('./security/load.cjs')
 const workflow = require('./security/workflow-load.cjs')(load)
 
 {
+  const { standaloneHtmlIssue } = load('src/main/workflow/html-check.ts', {
+    parse5: require('parse5'),
+    'node:vm': require('node:vm')
+  })
+  const document = (script) =>
+    '<!DOCTYPE html><html><head><title>Test</title></head><body><canvas></canvas><script>' +
+    script +
+    '</script></body></html>'
+  assert.equal(standaloneHtmlIssue(document('throw new Error("must never execute");')), undefined)
+  assert.match(standaloneHtmlIssue(document('function ( {')), /JavaScript syntax error/)
+  assert.match(standaloneHtmlIssue('<!DOCTYPE html><html>'), /incomplete/)
+  assert.match(
+    standaloneHtmlIssue(document('').replace('<script>', '<script src="app.js">')),
+    /Linked scripts/
+  )
+  const { CodingVerification } = load('src/main/workflow/coding-verification.ts')
+  const gate = new CodingVerification()
+  record(
+    gate,
+    'write_file',
+    { path: 'result.html' },
+    'Saved result.html. Verified by reading back identical bytes.',
+    'verified'
+  )
+  record(gate, 'list_files', { path: '.' }, '[file] result.html', 'observed')
+  assert.deepEqual(gate.next(), {
+    tool: 'read_file',
+    args: { path: 'result.html', max_chars: 60000 }
+  })
+  const content = (source) =>
+    JSON.stringify({ trust: 'untrusted-data', kind: 'local-file', content: source })
+  record(
+    gate,
+    'read_file',
+    { path: 'result.html', max_chars: 60000 },
+    content(document('const answer = 42;')),
+    'observed'
+  )
+  assert('done' in gate.next())
+  record(
+    gate,
+    'read_file',
+    { path: 'result.html', start_line: 1, line_count: 20 },
+    JSON.stringify({ trust: 'untrusted-data', kind: 'local-file-excerpt', content: 'partial' }),
+    'observed'
+  )
+  assert(
+    'done' in gate.next(),
+    'An observation excerpt does not invalidate a complete source check'
+  )
+  assert.match(gate.summary(), /syntax.*passed.*runtime behavior not tested/)
+  record(
+    gate,
+    'edit_file',
+    { path: 'result.html' },
+    'Edited result.html. Verified by reading back identical bytes.',
+    'verified'
+  )
+  assert.equal(gate.report().status, 'pending', 'An edit invalidates the HTML check')
+  record(gate, 'list_files', { path: '.' }, '[file] result.html', 'observed')
+  record(
+    gate,
+    'read_file',
+    { path: 'result.html', max_chars: 60000 },
+    content(document('function {')),
+    'observed'
+  )
+  assert.match(gate.next().blocked, /syntax error/)
+  assert(gate.requestSetupRepair())
+  assert(gate.requestSetupRepair())
+  assert.equal(gate.requestSetupRepair(), undefined)
+}
+
+{
+  const controller = new workflow.WorkflowController(
+    'absolute',
+    'assistant',
+    'M:\\Scratch\\project',
+    'Create result.html',
+    undefined,
+    () => {}
+  )
+  const args = { path: 'M:\\Scratch\\project\\result.html', content: '<!DOCTYPE html>' }
+  controller.beforeAction('write', 'write_file', args)
+  controller.afterAction(
+    'write',
+    normalizeToolOutcome(
+      'write_file',
+      args,
+      'Saved result.html. Verified by reading back identical bytes.'
+    )
+  )
+  assert.deepEqual(controller.actions.paths(), ['result.html'])
+  const verifier = new (load('src/main/workflow/coding-verification.ts').CodingVerification)(
+    controller.actions
+  )
+  assert.deepEqual(verifier.next(), { tool: 'list_files', args: { path: '.' } })
+}
+
+{
   const controller = new workflow.WorkflowController(
     'recovery',
     'assistant',
@@ -370,7 +470,7 @@ async function review() {
       resumeBlocked,
       () => {}
     ).resumed,
-    false
+    true
   )
   assert.equal(
     new workflow.WorkflowController(
@@ -418,6 +518,8 @@ async function review() {
   assert.deepEqual(executions, [])
   assert(JSON.stringify(captured[0]).includes('Opened Notepad'))
   for (const text of [
+    'go',
+    'Go!',
     'Resume the response.',
     'Pick up where we left off',
     'Continue, keep it concise'

@@ -1,4 +1,5 @@
 import { ActionLedger, type ActionRecord, type VerificationReport } from './action-ledger'
+import { standaloneHtmlIssue } from './html-check'
 
 type Action = {
   tool: 'list_files' | 'read_file' | 'run_npm' | 'run_command'
@@ -49,6 +50,8 @@ export class CodingVerification {
   >()
   private missingCommand?: string
   private buildSystem = false
+  private htmlChecks = new Map<string, string | undefined>()
+  private htmlRepair?: string
   get active(): boolean {
     return this.ledger.paths().length > 0
   }
@@ -76,6 +79,7 @@ export class CodingVerification {
     this.listings.clear()
     this.manifestReads.clear()
     this.pendingNpmChecks.clear()
+    this.htmlChecks.clear()
     for (const project of this.projects.values())
       for (const check of project.checks) check.passed = false
     for (const command of this.commands.values()) command.passed = false
@@ -91,6 +95,26 @@ export class CodingVerification {
     if (record.outcome.execution === 'not-started') return
     const successful = !['denied', 'failed', 'uncertain'].includes(status)
     const path = pathName(args.path)
+    if (
+      successful &&
+      tool === 'read_file' &&
+      /\.html?$/i.test(path) &&
+      args.max_chars === 60000 &&
+      args.start_line === undefined &&
+      args.line_count === undefined
+    ) {
+      try {
+        const envelope = JSON.parse(text)
+        this.htmlChecks.set(
+          path,
+          envelope.trust === 'untrusted-data' && envelope.kind === 'local-file'
+            ? standaloneHtmlIssue(envelope.content)
+            : 'Read the complete HTML document; excerpts cannot pass syntax verification.'
+        )
+      } catch {
+        this.htmlChecks.set(path, 'The HTML file could not be read for verification.')
+      }
+    }
     if (tool === 'run_command') {
       if (args.purpose === 'check') {
         const key = path + '\0' + String(args.command)
@@ -173,6 +197,7 @@ export class CodingVerification {
   next(): VerificationStep {
     this.synchronize()
     this.missingCommand = undefined
+    this.htmlRepair = undefined
     if (!this.active) return { done: true }
     if (this.failure) return { blocked: this.failure }
     const limit = this.limitIssue()
@@ -194,6 +219,14 @@ export class CodingVerification {
             // Plain documents in a folder without a build system (copying
             // notes, writing a CSV) have nothing to check.
             if (!this.ledger.codingIntent && !this.buildSystem) break
+            if (this.ledger.paths().length === 1 && /\.html?$/i.test(changed)) {
+              if (!this.htmlChecks.has(changed))
+                return { tool: 'read_file', args: { path: changed, max_chars: 60000 } }
+              const issue = this.htmlChecks.get(changed)
+              if (!issue) break
+              this.htmlRepair = `${changed}: ${issue}`
+              return { blocked: this.htmlRepair }
+            }
             this.missingCommand = changed
             return {
               blocked: `No build/test command has been recorded for ${changed}. Inspect the project's build instructions and run its relevant checks with run_command purpose check.`
@@ -229,6 +262,10 @@ export class CodingVerification {
   summary(): string {
     this.synchronize()
     return [
+      ...[...this.htmlChecks].map(
+        ([path, issue]) =>
+          `${path}: HTML structure and inline JavaScript syntax — ${issue ? 'not passed: ' + issue : 'passed (runtime behavior not tested)'}`
+      ),
       ...[...this.projects]
         .filter(([folder]) => this.required.has(folder))
         .flatMap(([folder, project]) =>
@@ -253,6 +290,16 @@ export class CodingVerification {
     })
   }
   requestSetupRepair(): string | undefined {
+    if (this.htmlRepair) {
+      const key = 'html:' + this.htmlRepair
+      const attempts = this.setupRepairs.get(key) ?? 0
+      if (attempts >= 2) return undefined
+      this.setupRepairs.set(key, attempts + 1)
+      return (
+        this.htmlRepair +
+        ' Repair the document, or run its actual project check with run_command purpose check. No runtime or physics tests have been executed.'
+      )
+    }
     if (this.missingCommand) {
       const key = 'command:' + this.missingCommand
       const attempts = this.setupRepairs.get(key) ?? 0
