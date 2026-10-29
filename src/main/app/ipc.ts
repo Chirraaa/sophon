@@ -360,6 +360,10 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
     if (event.sender === desktop.compact?.webContents && typeof visible === 'boolean')
       desktop.setCompactTaskVisible(visible)
   })
+  ipcMain.on('compact:dock', (event, docked: unknown) => {
+    if (event.sender === desktop.compact?.webContents && typeof docked === 'boolean')
+      desktop.dockCompact(docked)
+  })
   ipcMain.on('compact:hide', desktop.hideCompact)
   ipcMain.on('compact:open-main', () => {
     desktop.showMain()
