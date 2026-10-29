@@ -206,6 +206,7 @@ let run = { modelCalls: 0, id: 'run-1', mode: 'assistant', workspace: 'M:\\Proje
 let latest
 let queue = []
 let captured = []
+let offered = []
 let executions = []
 let toolResult = 'Opened Notepad'
 let toolHandler
@@ -220,9 +221,10 @@ const chat = load('src/main/llm/chat.ts', {
   './prompt': { buildSystemPrompt: () => 'Fixture assistant' },
   './client': {
     getModel: async () => 'fixture',
-    callLLM: async (_id, messages) => {
+    callLLM: async (_id, messages, options) => {
       run.modelCalls = (run.modelCalls ?? 0) + 1
       captured.push(messages)
+      offered.push((options?.tools ?? []).map((tool) => tool.function.name))
       assert(queue.length, 'Unexpected model call')
       const reply = queue.shift()
       if (reply instanceof Error) throw reply
@@ -268,6 +270,7 @@ function reset(replies) {
   run.modelCallLimit = undefined
   latest = undefined
   captured = []
+  offered = []
   executions = []
   queue = replies
 }
@@ -365,6 +368,40 @@ async function review() {
   toolResult = 'Opened Notepad. Window: win-00000000-0000-0000-0000-000000000000 "Untitled".'
   await chat('Open Notepad then tell me its title', event, [])
   assert.equal(captured.length, 2, 'Multi-step requests keep the model in the loop')
+
+  // A short confirmation continues the earlier request: its tools stay loaded,
+  // and a reply that only claims the action is sent back once to take it.
+  model.historyTurns = 4
+  reset([
+    answer('Clearing the entire chat now.'),
+    tool('clear_chat'),
+    answer('The chat will be cleared.')
+  ])
+  toolResult = 'Approved. The chat will be cleared as soon as this reply ends.'
+  const earlier = [
+    [
+      { role: 'user', content: 'Can you clear this chat?' },
+      { role: 'assistant', content: 'Please confirm: do you want me to clear this entire chat?' }
+    ]
+  ]
+  await chat('go', event, earlier)
+  assert(offered[0].includes('clear_chat'), 'Follow-up keeps the previous request tools')
+  assert.match(JSON.stringify(captured[1]), /described a next step but did not take it/)
+  assert.deepEqual(executions, ['clear_chat'])
+  model.historyTurns = 0
+  const quality = load('src/shared/reply-quality.ts')
+  for (const text of [
+    'Clearing the entire chat now.',
+    'I’ll clear this entire chat now.',
+    'Sure, deleting the file now.'
+  ])
+    assert(quality.announcesNextStep(text), text)
+  for (const text of [
+    'Nothing is pending now.',
+    'The chat is cleared now.',
+    'Should I clear it now?'
+  ])
+    assert(!quality.announcesNextStep(text), text)
 
   const args = { path: 'notes.txt', content: 'abc' }
   toolResult = 'Saved notes.txt (3 bytes). Verified by reading back identical bytes.'
