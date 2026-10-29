@@ -27,7 +27,7 @@ import {
   selectMicrosoftAccount,
   removeMicrosoftAccount
 } from '../security/microsoft-auth'
-import { getLlmStatus, listModels, listModelChoices, getModelInfo, getDefaultPrompt } from '../llm'
+import { getLlmStatus, listModelChoices, getModelInfo, getDefaultPrompt } from '../llm'
 import {
   clear,
   createChat,
@@ -280,7 +280,6 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
     resolveApproval(id, decision)
   )
   ipcMain.handle('llm:status', getLlmStatus)
-  ipcMain.handle('llm:models', listModels)
   ipcMain.handle('llm:modelInfo', () => getModelInfo())
   ipcMain.handle('llm:model-choices', () => listModelChoices())
   ipcMain.handle('llm:default-prompt', getDefaultPrompt)

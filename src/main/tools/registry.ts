@@ -235,7 +235,7 @@ export const TOOL_INFO: ToolInfo[] = [
     name: 'look_at_screen',
     label: 'Look at screen',
     description:
-      'Capture the active or named app window, optionally cropped, for visual questions. Model-directed monitor capture is blocked.',
+      'Capture the active or named app window, optionally cropped, for visual questions.',
     default: 'ask'
   },
   {

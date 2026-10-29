@@ -98,8 +98,6 @@ export async function bindLocalAction(
       'type_text'
     ].includes(name)
   ) {
-    if (name === 'look_at_screen' && args.monitor !== undefined)
-      throw new Error('Model-directed monitor capture is disabled. Approve one specific window.')
     const control = name === 'act_on_control' ? controlTarget(args, run) : undefined
     const point = name === 'click' ? captureCoordinates(Number(args.x), Number(args.y)) : undefined
     if (name === 'click' && !point?.window)

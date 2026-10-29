@@ -145,9 +145,6 @@ async function checkLlmStatus(): Promise<LlmStatus> {
     return { online: false }
   }
 }
-export async function listModels(): Promise<string[]> {
-  return (await listModelChoices()).map((choice) => choice.id)
-}
 let catalog: { key: string; expires: number; result: Promise<ModelChoice[]> } | undefined
 export async function listModelChoices(refresh = true): Promise<ModelChoice[]> {
   const settings = getSettings().model
