@@ -4,15 +4,17 @@ import { cn } from '@/lib/utils'
 function Progress({
   className,
   indicatorClassName,
+  trackClassName,
   ...props
 }: Primitive.Root.Props & {
   indicatorClassName?: string
+  trackClassName?: string
 }): React.JSX.Element {
   return (
     <Primitive.Root data-slot="progress" className={cn('w-full', className)} {...props}>
       <Primitive.Track
         data-slot="progress-track"
-        className="relative h-2 w-full overflow-hidden rounded-full bg-muted"
+        className={cn('relative h-2 w-full overflow-hidden rounded-full bg-muted', trackClassName)}
       >
         <Primitive.Indicator
           data-slot="progress-indicator"
