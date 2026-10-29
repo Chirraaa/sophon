@@ -337,6 +337,7 @@ async function respond(
   }
   const images: Promise<void>[] = []
   let textTimer: ReturnType<typeof setTimeout> | undefined
+  let compactionBefore: ContextCompactionNotice | undefined
   const onEvent = (event: ChatEvent): void => {
     reply.sources = run.sources.map((source) => ({ ...source }))
     if (event.type === 'tool_output') {
@@ -365,6 +366,16 @@ async function respond(
       const index = reply.specialists.findIndex((item) => item.id === event.run.id)
       if (index < 0) reply.specialists.push(event.run)
       else reply.specialists[index] = event.run
+      emit()
+      return
+    }
+    if (event.type === 'compaction') {
+      if (event.status === 'running') {
+        compactionBefore = reply.compaction?.status === 'done' ? reply.compaction : undefined
+        reply.compaction = { status: 'running', scope: event.scope }
+      } else if (event.status === 'skipped') reply.compaction = compactionBefore
+      else reply.compaction = { status: 'done', scope: event.scope, info: event.info }
+      if (!reply.compaction) delete reply.compaction
       emit()
       return
     }
@@ -487,6 +498,7 @@ async function respond(
     }
     reply.pending = false
     if (reply.quality === 'checking') delete reply.quality
+    if (reply.compaction?.status === 'running') delete reply.compaction
     for (const specialist of reply.specialists ?? [])
       if (specialist.status === 'running') {
         specialist.status = 'failed'

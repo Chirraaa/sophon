@@ -34,6 +34,9 @@ const RELATED: Record<string, string[]> = {
 
 export class ToolDiscovery {
   private requested = new Set<string>()
+  // Schemas the model unloaded stay out until it names them again, so related
+  // follow-ups do not quietly bring them back.
+  private dropped = new Set<string>()
 
   constructor(query: string) {
     const groups: [RegExp, string[]][] = [
@@ -80,6 +83,7 @@ export class ToolDiscovery {
         ['notes_list', 'notes_read', 'notes_create', 'notes_edit', 'notes_delete']
       ],
       [/\b(clear|wipe|reset|erase)\b.*\b(chat|conversation)\b/i, ['clear_chat']],
+      [/\b(sub-?agents?|agents?|specialists?|delegate|spawn)\b/i, ['consult_specialist']],
       [/\b(volume|mute|audio)\b/i, ['list_audio', 'set_volume']],
       [/\b(wi-?fi|bluetooth|radio)\b/i, ['list_radios', 'set_radio']],
       [
@@ -96,9 +100,15 @@ export class ToolDiscovery {
   // A bounded working set: explicit requests first, useful follow-ups next, then
   // recently loaded schemas. Availability is still checked on every selection.
   private remember(names: string[]): void {
+    names.forEach((name) => this.dropped.delete(name))
+    const related = names.flatMap((name) => RELATED[name] ?? [])
     this.requested = new Set(
       [
-        ...new Set([...names, ...names.flatMap((name) => RELATED[name] ?? []), ...this.requested])
+        ...new Set([
+          ...names,
+          ...related.filter((name) => !this.dropped.has(name)),
+          ...this.requested
+        ])
       ].slice(0, 8)
     )
   }
@@ -117,8 +127,19 @@ export class ToolDiscovery {
     )
   }
 
-  load(names: string[], catalog: Tool[]): string {
+  load(names: string[], catalog: Tool[], unload: string[] = []): string {
     const available = new Set(catalog.map((tool) => tool.function.name))
+    for (const name of unload.filter((name) => !names.includes(name))) {
+      this.requested.delete(name)
+      this.dropped.add(name)
+    }
+    if (unload.length && !names.length)
+      return `Schemas ready: ${
+        this.select(catalog)
+          .map((tool) => tool.function.name)
+          .filter((name) => name !== 'discover_tools')
+          .join(', ') || 'none'
+      }. Unloaded schemas leave context from the next step; rediscover them if needed.`
     if (names.length) {
       const unavailable = names.filter((name) => !available.has(name))
       if (unavailable.length)

@@ -27,6 +27,7 @@ import { Hint } from './ui/tooltip'
 import { ContextDetails } from './chat/ContextDetails'
 import { contextSummary } from '@/lib/context'
 import { UsageDetails } from './chat/UsageDetails'
+import { CompactionNotice } from './chat/CompactionNotice'
 export function Message({
   item,
   dockQuestions = false,
@@ -88,12 +89,9 @@ export function Message({
       )}
       {!you && <DesktopResults actions={item.actions} />}
       {!you && <ResearchActivity item={item} />}
+      {!you && item.compaction && <CompactionNotice notice={item.compaction} />}
       {!!item.specialists?.length && (
-        <div
-          className="flex w-full flex-col gap-2"
-          aria-label="Specialist consultations"
-          aria-live="polite"
-        >
+        <div className="flex w-full flex-col gap-2" aria-label="Subagents" aria-live="polite">
           {item.specialists.map((agent) => (
             <Collapsible
               key={agent.id}
@@ -114,7 +112,8 @@ export function Message({
                       tutor: 'Tutor',
                       reviewer: 'Reviewer'
                     }[agent.profile]
-                  }
+                  }{' '}
+                  subagent
                 </span>{' '}
                 ·{' '}
                 {agent.status === 'running'

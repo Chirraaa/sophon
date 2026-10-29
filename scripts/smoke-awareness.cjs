@@ -176,6 +176,39 @@ async function main() {
   staged.load(['inspect_app'], schema.toolSchemas)
   assert(staged.select(schema.toolSchemas).some((t) => t.function.name === 'act_on_control'))
   assert(staged.select(schema.toolSchemas).some((t) => t.function.name === 'list_windows'))
+  const loaded = (name) => staged.select(schema.toolSchemas).some((t) => t.function.name === name)
+  assert.match(staged.load([], schema.toolSchemas, ['act_on_control']), /^Schemas ready: /)
+  assert(!loaded('act_on_control'), 'The model can unload schemas it no longer needs')
+  staged.load(['inspect_app'], schema.toolSchemas)
+  assert(!loaded('act_on_control'), 'Related follow-ups do not reload an unloaded schema')
+  staged.load(['act_on_control'], schema.toolSchemas)
+  assert(loaded('act_on_control'), 'Naming an unloaded schema loads it again')
+  const environment = load('src/main/llm/environment.ts')
+  const subagents = environment.environmentPrompt({
+    mode: 'assistant',
+    tools: ['discover_tools'],
+    availableTools: ['discover_tools', 'consult_specialist'],
+    workspaceSelected: false,
+    inlineVisual: false,
+    compact: true
+  })
+  assert.match(subagents, /SUBAGENTS: you can spawn subagents/, 'The model knows it can spawn them')
+  assert(
+    new ToolDiscovery('Are you able to spawn some agents?')
+      .select(schema.toolSchemas)
+      .some((t) => t.function.name === 'consult_specialist'),
+    'Asking about agents loads the subagent tool directly'
+  )
+  assert.doesNotMatch(subagents, /"remaining"/, 'Per-call budgets are not in the stable prompt')
+  const state = environment.runStatePrompt({
+    remainingCalls: 3,
+    remainingActions: 10,
+    consultations: 2,
+    context: { usedTokens: 9000, budgetTokens: 10000, compactions: 1 }
+  })
+  assert.match(state, /"subagents":2/)
+  assert.match(state, /"context":\{"usedTokens":9000,"budgetTokens":10000,"compactions":1\}/)
+  assert.match(state, /Context is filling/)
   for (const provider of ['local', 'compatible', 'openai', 'chatgpt']) {
     settings.model.provider = provider
     for (const window of [8192, 16384, 32000]) {

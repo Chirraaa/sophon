@@ -24,6 +24,7 @@ import { VoiceActivity } from '@/components/compact/VoiceActivity'
 import { ApprovalRequests } from '@/components/chat/ApprovalCard'
 import { CodingRun } from '@/components/chat/CodingRun'
 import { codingView, shortcutCodingItem } from '@/lib/coding'
+import { replyActivity } from '@/lib/activity'
 import { Spinner } from '@/components/ui/spinner'
 import { useChatScroll } from '@/hooks/useChatScroll'
 import { useCompactBackdrop } from '@/hooks/useCompactBackdrop'
@@ -69,9 +70,13 @@ export default function CompactApp(): React.JSX.Element {
   // A docked window rests as a slim bar and opens fully on hover, focus, or
   // whenever something needs the user's attention.
   const barMode = docked && !hovered && !focused && !waiting
+  const pending = items.findLast((item) => item.pending)
   const status = coding
     ? codingView(coding)
-    : { label: busy ? 'Working on it…' : 'Ready', attention: false }
+    : {
+        label: busy ? (pending ? replyActivity(pending) : 'Working on it…') : 'Ready',
+        attention: false
+      }
   const visible = items.slice(start.chatId === chatId ? Math.min(start.index, items.length) : 0)
   const roomy =
     !collapsed &&

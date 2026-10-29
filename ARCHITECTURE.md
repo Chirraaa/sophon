@@ -82,7 +82,10 @@ selected. "Unavailable" entries list only reasons the user can change in Setting
 
 A plain single-intent desktop command recognised by `requestedDesktopTool` (for
 example "Open Calculator") is offered only that tool, plus discovery, on its first
-step; the normal working set returns after the first result. The bounded answer
+step; the normal working set returns after the first result. When that single call
+is host-confirmed (`open_app` reported a window, `focus_window` or `move_window`
+verified), the host replies from the result and skips the confirmation-only model
+call. Anything unconfirmed goes back to the model as usual. The bounded answer
 review runs for mathematics and research drafts, where it checks arithmetic and
 sources, and not for ordinary explanations.
 
@@ -99,8 +102,24 @@ Discovery, questions, design suggestions, coding checkpoints and resource sizing
 are coordinator operations handled by the chat loop. They do not provide an
 alternative route to execute file, command, desktop or connected-service actions.
 
+The system prompt is ordered stable-first. Values that change between model calls
+(remaining calls, actions, seconds and subagent consultations, context usage
+against the input budget, and host UI visibility) form one trailing `RUN STATE`
+line. Only in-run host notes and the clock come after it. Everything before it stays a reusable prefix for
+provider and llama.cpp prompt caches, and the model can see how full its context
+is. Above 60% of the budget the line asks for narrower reads and inspections.
+
+Conversation compaction and coding-checkpoint trimming emit `compaction` events.
+The reply shows a notice in both the full chat and the shortcut ("Compacting
+context…", then what was summarized). This notice does not require diagnostics.
+
 Desktop tool discovery maintains at most eight optional schemas, prioritizing
 explicitly loaded tools, related observation/action tools, then recent tools.
+The model can pass `unload` to `discover_tools` to drop schemas it no longer
+needs. Unloaded schemas stay out until named again, even as related follow-ups.
+`consult_specialist` is advertised as a subagent in the compact environment
+whenever it is permitted but not loaded. Each subagent runs in its own context
+window and appears in the reply in both views, including the docked shortcut bar.
 Every selection is intersected with the current permitted catalog; retaining a
 schema never retains authorization. Opening an app exposes the inspect/action
 loop immediately, avoiding a model call merely to switch between its tools.

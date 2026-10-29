@@ -39,7 +39,7 @@ export const SPECIALIST_PROFILES: Record<SpecialistId, { label: string; instruct
 }
 
 export const SPECIALIST_INSTRUCTIONS =
-  'You coordinate four specialist profiles through consult_specialist. Answer quick, straightforward questions directly. For difficult research, teaching, figures or verification, consult the relevant specialist with a focused task and relevant excerpts. For a substantial or uncertain draft, consult reviewer with the draft and evidence when budget allows. Specialists use the same selected model, so agreement is not independent verification. You own the final answer and must assess their evidence. Never delegate desktop actions or claim consultations trained model weights. Do not repeat a consultation after denial or failure.'
+  'You can spawn subagents with consult_specialist: each is a fresh run of the same model with its own context window, using one of four profiles (researcher with web access, tutor, visual_explainer, reviewer). They run one at a time while you wait, within the per-request budget shown in RUN STATE; none run in the background, spawn further agents or touch the desktop or files. When asked whether you can spawn agents, say yes and describe exactly this. Answer quick, straightforward questions directly. For difficult research, teaching, figures or verification, consult the relevant specialist with a focused task and relevant excerpts. For a substantial or uncertain draft, consult reviewer with the draft and evidence when budget allows. Specialists use the same selected model, so agreement is not independent verification. You own the final answer and must assess their evidence. Never delegate desktop actions or claim consultations trained model weights. Do not repeat a consultation after denial or failure.'
 
 export function specialistLimits(
   contextWindow: number,
@@ -107,10 +107,11 @@ export async function consultSpecialist(options: {
     Math.max(512, Math.floor(settings.model.contextWindow / 8))
   )
 
-  const outputTokens =
-    ['openai', 'chatgpt', 'anthropic', 'claude'].includes(settings.model.provider)
-      ? Math.max(localOutputTokens, settings.model.maxTokens)
-      : localOutputTokens
+  const outputTokens = ['openai', 'chatgpt', 'anthropic', 'claude'].includes(
+    settings.model.provider
+  )
+    ? Math.max(localOutputTokens, settings.model.maxTokens)
+    : localOutputTokens
   const messages: ModelMessage[] = [
     {
       role: 'user',
