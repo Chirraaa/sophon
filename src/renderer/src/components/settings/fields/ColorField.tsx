@@ -37,7 +37,7 @@ export function ColorField({
         }}
         className="gap-2 text-xs"
       >
-        <span className="size-4 rounded border border-white/20" style={{ background: value }} />
+        <span className="size-4 rounded border border-input" style={{ background: value }} />
         Custom
       </Button>
       <DialogContent closeLabel="Cancel color selection" className="max-w-sm gap-5">

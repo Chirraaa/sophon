@@ -8,9 +8,9 @@ import { Hint } from './ui/tooltip'
 import { actionError, actionHint, actionLabel } from '@/lib/action-presentation'
 import { StoredActionDetails } from './chat/StoredActionDetails'
 const STYLES: Record<ToolActionStatus, string> = {
-  running: 'border-white/8 bg-white/3 text-muted-foreground',
+  running: 'border-border bg-muted/40 text-muted-foreground',
   waiting: 'border-warning/20 bg-warning/5 text-warning',
-  done: 'border-white/8 bg-white/3 text-foreground/75 [&_svg]:text-success/80',
+  done: 'border-border bg-muted/40 text-foreground/75 [&_svg]:text-success/80',
   failed: 'border-destructive/20 bg-destructive/5 text-destructive'
 }
 export function ActionChip({ action }: { action: ToolAction }): React.JSX.Element {

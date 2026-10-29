@@ -61,7 +61,7 @@ export function ActionPreview({ preview }: { preview?: string }): React.JSX.Elem
         </p>
         <p className="selectable break-all text-xs">{text(plugin.destination)}</p>
         <p className="text-xs text-muted-foreground">{text(plugin.access)}</p>
-        <ScrollArea className="max-h-64 rounded-md bg-white/5" orientation="both">
+        <ScrollArea className="max-h-64 rounded-md bg-muted/40" orientation="both">
           <pre className="selectable whitespace-pre-wrap break-words p-2.5 font-mono text-[11px] leading-5">
             {JSON.stringify(plugin.arguments ?? args, null, 2)}
           </pre>
@@ -88,7 +88,7 @@ export function ActionPreview({ preview }: { preview?: string }): React.JSX.Elem
                 {text(data.destination) || text(record(data.app)?.name) || text(data.provider)}
               </p>
             )}
-            <ScrollArea className="rounded-md bg-white/5" orientation="both">
+            <ScrollArea className="rounded-md bg-muted/40" orientation="both">
               <pre className="selectable whitespace-pre-wrap break-words p-2.5 font-mono text-[11px] leading-5">
                 {JSON.stringify(
                   {
@@ -126,7 +126,7 @@ export function ActionPreview({ preview }: { preview?: string }): React.JSX.Elem
         {text(window.title)} <span className="opacity-60">({text(window.exe)})</span>
       </div>
       {!control && (
-        <pre className="selectable whitespace-pre-wrap break-words rounded-md bg-white/5 p-2.5 font-mono text-[11px] leading-5">
+        <pre className="selectable whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2.5 font-mono text-[11px] leading-5">
           {JSON.stringify(data?.arguments, null, 2)}
         </pre>
       )}
@@ -143,7 +143,7 @@ export function ActionPreview({ preview }: { preview?: string }): React.JSX.Elem
           {control.action === 'set_value' && (
             <>
               <div className="opacity-70">Replace the field with:</div>
-              <ScrollArea className="max-h-32 rounded-md bg-black/20" orientation="both">
+              <ScrollArea className="max-h-32 rounded-md bg-background/40" orientation="both">
                 <pre className="selectable whitespace-pre-wrap break-words p-2">
                   {text(control.replacement) || '(empty — clear this field)'}
                 </pre>

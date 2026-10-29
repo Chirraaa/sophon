@@ -47,13 +47,13 @@ export function Segmented<T extends string>({
       }}
       aria-labelledby={label}
       spacing={1}
-      className="max-w-full flex-wrap rounded-lg border border-white/5 bg-black/20 p-1"
+      className="max-w-full flex-wrap rounded-lg border border-border bg-background/40 p-1"
     >
       {options.map((option) => (
         <ToggleGroupItem
           key={option.value}
           value={option.value}
-          className="no-drag h-7 min-w-0 rounded-md px-2.5 text-[11px] font-normal text-muted-foreground transition-[background-color,color,box-shadow] duration-200 data-pressed:bg-white/12 data-pressed:text-foreground data-pressed:shadow-sm"
+          className="no-drag h-7 min-w-0 rounded-md px-2.5 text-[11px] font-normal text-muted-foreground transition-[background-color,color,box-shadow] duration-200 data-pressed:bg-muted data-pressed:text-foreground data-pressed:shadow-sm"
         >
           {option.label}
         </ToggleGroupItem>

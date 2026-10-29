@@ -59,7 +59,7 @@ export function AttachmentView({
   }, [attachment.id])
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <div className="relative min-w-0 max-w-full rounded-xl border border-white/10 bg-white/3">
+      <div className="relative min-w-0 max-w-full rounded-xl border border-input bg-muted/40">
         <DialogTrigger
           render={<Button variant="ghost" />}
           type="button"

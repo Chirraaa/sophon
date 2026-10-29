@@ -10,7 +10,7 @@ export function FilesTab({ settings }: { settings: AppSettings }): React.JSX.Ele
         description="Choose a project folder to read, create and replace source files and create subfolders. Sensitive paths and linked entries remain protected. npm commands require approval and run with your Windows account permissions."
       >
         <Row label="Folder access" stack>
-          <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/10 p-3">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-background/40 p-3">
             <FolderOpen className="size-5 shrink-0 text-muted-foreground" />
             <span className="selectable min-w-0 flex-1 break-all text-xs text-muted-foreground">
               {settings.files.workspace || 'No working folder selected'}

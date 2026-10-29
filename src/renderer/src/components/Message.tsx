@@ -155,7 +155,7 @@ export function Message({
         </div>
       )}
       {you && editing ? (
-        <div className="w-full max-w-[88%] space-y-2 rounded-[18px] rounded-br-md border border-border bg-white/8 p-3">
+        <div className="w-full max-w-[88%] space-y-2 rounded-[18px] rounded-br-md border border-border bg-muted p-3">
           <Textarea
             aria-label="Edit prompt"
             aria-describedby={`edit-help-${item.id}`}
@@ -196,7 +196,7 @@ export function Message({
             className={cn(
               'selectable min-w-0 max-w-[88%] break-words rounded-[18px] px-4 py-3 text-[13px] leading-6',
               you
-                ? 'whitespace-pre-wrap rounded-br-md border border-white/8 bg-white/8 text-foreground'
+                ? 'whitespace-pre-wrap rounded-br-md border border-border bg-muted text-foreground'
                 : 'w-full max-w-full rounded-bl-md border border-border bg-muted/10',
               !you &&
                 VISUAL_FENCE.test(item.text) &&

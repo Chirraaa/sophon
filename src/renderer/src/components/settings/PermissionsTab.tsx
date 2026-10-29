@@ -172,8 +172,8 @@ export function PermissionsTab({ settings }: { settings: AppSettings }): React.J
               className={cn(
                 'h-auto flex-col items-start gap-0 whitespace-normal rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-ring',
                 filter === level.value
-                  ? 'border-ring bg-white/8'
-                  : 'border-border bg-white/2 hover:bg-white/5'
+                  ? 'border-ring bg-muted'
+                  : 'border-border bg-muted/40 hover:bg-muted/50'
               )}
             >
               <span className="block text-lg font-medium tabular-nums">
@@ -265,7 +265,7 @@ export function PermissionsTab({ settings }: { settings: AppSettings }): React.J
                         : [...current, group.title]
                     )
                   }
-                  className="flex h-auto w-full items-center justify-start gap-3 whitespace-normal p-4 text-left hover:bg-white/4 focus-visible:outline-2 focus-visible:outline-ring"
+                  className="flex h-auto w-full items-center justify-start gap-3 whitespace-normal p-4 text-left hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring"
                 >
                   <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">

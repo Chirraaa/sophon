@@ -103,14 +103,14 @@ export function ChatView({
     window.api.send(text, attachments)
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-[68px] shrink-0 items-center justify-between border-b border-white/5 px-7">
+      <header className="flex h-[68px] shrink-0 items-center justify-between border-b border-border px-7">
         <div className="flex items-center gap-2.5">
           <h1 className="max-w-72 truncate text-[13px] font-medium">
             {chats.find((chat) => chat.id === chatId)?.title || 'Assistant'}
           </h1>
           <Badge
             variant="outline"
-            className="rounded-md border-white/7 px-1.5 py-0.5 text-[9px] font-normal text-muted-foreground"
+            className="rounded-md border-border px-1.5 py-0.5 text-[9px] font-normal text-muted-foreground"
           >
             Personal workspace
           </Badge>
@@ -130,7 +130,7 @@ export function ChatView({
       {runningChatId && runningChatId !== chatId && (
         <div
           role="status"
-          className="flex items-center justify-between gap-3 border-b border-white/5 px-7 py-2 text-xs text-muted-foreground"
+          className="flex items-center justify-between gap-3 border-b border-border px-7 py-2 text-xs text-muted-foreground"
         >
           <span>
             Working in {chats.find((chat) => chat.id === runningChatId)?.title ?? 'another chat'}.
