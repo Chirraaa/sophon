@@ -115,9 +115,11 @@ const session = load('src/main/chat/session.ts', {
   '../security/run-manager': {
     startRun: () => {
       if (startFailure) throw new Error('Synthetic run creation failure')
-      return (run = { id: crypto.randomUUID(), sources: [], signal: new AbortController().signal })
+      const controller = new AbortController()
+      return (run = { id: crypto.randomUUID(), sources: [], signal: controller.signal, controller })
     },
-    finishRun: () => {},
+    // Like the real run manager, finishing a run aborts its signal.
+    finishRun: (finished) => finished.controller.abort(),
     assertRun: () => {
       if (run.signal.aborted) throw new Error('Stopped')
     }
