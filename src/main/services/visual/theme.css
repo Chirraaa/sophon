@@ -8,23 +8,24 @@
     'Segoe UI',
     sans-serif;
   color: #e4e4e7;
-  background: #151516;
+  background: transparent;
   --text: #e4e4e7;
   --muted: #96969f;
   --border: #ffffff14;
-  --surface: #1c1c1f;
+  --surface: transparent;
+  --raised: #ffffff0a;
   --blue: #7aacf5;
   --purple: #b39aeb;
   --green: #76c6ac;
   --orange: #e9af78;
-  --radius: 16px;
+  --radius: 14px;
 }
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
-  padding: 24px;
+  padding: 1px;
   overflow-wrap: break-word;
 }
 svg,
@@ -61,14 +62,14 @@ button {
   color: inherit;
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 9px 14px;
-  border-radius: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
   transition:
     background 0.15s,
     border-color 0.15s;
 }
 button:hover {
-  background: #27272b;
+  background: var(--raised);
   border-color: #ffffff30;
 }
 button:focus-visible,
@@ -84,8 +85,8 @@ select {
   color: inherit;
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
 }
 input[type='range'] {
   display: block;
@@ -131,7 +132,7 @@ th {
   gap: 16px;
 }
 .sophon-card {
-  padding: 18px;
+  padding: 20px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -158,7 +159,7 @@ th {
 }
 .sophon-select select {
   width: 100%;
-  border-radius: 12px;
+  border-radius: 999px;
 }
 .sophon-segments {
   display: flex;
@@ -166,7 +167,7 @@ th {
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 999px;
   background: var(--surface);
 }
 .sophon-segments button {
@@ -177,7 +178,7 @@ th {
 }
 .sophon-segments button[aria-pressed='true'] {
   color: var(--text);
-  background: #ffffff0e;
+  background: var(--raised);
   border-color: #ffffff18;
 }
 button:disabled {
@@ -261,11 +262,11 @@ button:disabled {
   padding: 18px 10px;
   text-align: left;
   border-color: color-mix(in srgb, var(--node-color) 28%, transparent);
-  background: color-mix(in srgb, var(--node-color) 8%, #151516);
+  background: color-mix(in srgb, var(--node-color) 8%, transparent);
 }
 .sophon-flow button:hover,
 .sophon-flow button[aria-pressed='true'] {
-  background: color-mix(in srgb, var(--node-color) 18%, #151516);
+  background: color-mix(in srgb, var(--node-color) 18%, transparent);
   border-color: var(--node-color);
 }
 .sophon-flow strong {
@@ -285,9 +286,6 @@ button:disabled {
   color: #62626c;
 }
 @media (max-width: 460px) {
-  body {
-    padding: 18px;
-  }
   .sophon-flow {
     flex-direction: column;
     gap: 6px;
