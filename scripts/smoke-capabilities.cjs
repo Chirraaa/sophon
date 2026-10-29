@@ -102,19 +102,23 @@ async function review() {
         tools: [],
         workspaceSelected: false,
         inlineVisual: true,
-        interaction: { surface, input },
-        interfacePresence: { fullAppVisible: true, shortcutVisible: false, focused: 'full-app' }
+        interaction: { surface, input }
       })
       assert(summary.includes(`"origin":{"surface":"${surface}","input":"${input}"}`))
       assert.match(summary, /cannot see your own UI or the desktop unless/)
       assert.match(summary, /Never operate your own approval controls/)
-      assert(
-        summary.includes(
-          '"hostUI":{"fullAppVisible":true,"shortcutVisible":false,"focused":"full-app"}'
-        )
-      )
     }
   }
+  assert(
+    environment
+      .runStatePrompt({
+        remainingCalls: 4,
+        remainingActions: 9,
+        hostUI: { fullAppVisible: true, shortcutVisible: false, focused: 'full-app' }
+      })
+      .includes('"hostUI":{"fullAppVisible":true,"shortcutVisible":false,"focused":"full-app"}'),
+    'Window visibility is refreshed every call in the run state'
+  )
   const registry = load('src/main/tools/registry.ts').TOOL_INFO
   const localTools = new Set([
     'discover_tools',

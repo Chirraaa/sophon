@@ -7,7 +7,6 @@ type Environment = {
   inlineVisual: boolean
   codingMode?: 'auto' | 'ask-before-edit'
   interaction?: InteractionContext
-  interfacePresence?: InterfacePresence
   availableTools?: string[]
   unavailableTools?: Record<string, string>
   workspace?: string

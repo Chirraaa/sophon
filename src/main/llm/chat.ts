@@ -358,7 +358,6 @@ export async function chat(
           codingMode: settings.coding?.mode,
           workspaceSelected: !!run.workspace,
           interaction: run.interaction,
-          interfacePresence: run.interfacePresence,
           inlineVisual,
           availableTools: catalog.map((tool) => tool.function.name),
           // Only settings the user can change are worth explaining; internal
