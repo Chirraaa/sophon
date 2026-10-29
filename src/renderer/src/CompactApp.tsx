@@ -373,19 +373,9 @@ export default function CompactApp(): React.JSX.Element {
                 const target = event.currentTarget
                 target.setPointerCapture(event.pointerId)
                 window.api.compact.drag()
-                let frame = 0
-                let last = from
-                const move = (e: PointerEvent): void => {
-                  last = { x: e.screenX, y: e.screenY }
-                  if (frame) return
-                  frame = requestAnimationFrame(() => {
-                    frame = 0
-                    window.api.compact.drag(last.x - from.x, last.y - from.y)
-                  })
-                }
+                const move = (e: PointerEvent): void =>
+                  window.api.compact.drag(e.screenX - from.x, e.screenY - from.y)
                 const end = (): void => {
-                  cancelAnimationFrame(frame)
-                  window.api.compact.drag(last.x - from.x, last.y - from.y)
                   target.removeEventListener('pointermove', move)
                   target.removeEventListener('pointerup', end)
                   target.removeEventListener('pointercancel', end)
