@@ -237,7 +237,7 @@ export function Composer({
               <CodingMode value={settings.coding?.mode ?? 'ask-before-edit'} disabled={disabled} />
             )}
             {draft.loading && <Spinner className="ml-1 size-3 text-muted-foreground" />}
-            {settings && ['openai', 'chatgpt'].includes(settings.model.provider) && (
+            {settings && ['openai', 'chatgpt', 'anthropic', 'claude'].includes(settings.model.provider) && (
               <ReasoningEffort
                 value={settings.model.reasoningEffort}
                 model={modelInfo}

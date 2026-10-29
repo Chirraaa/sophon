@@ -27,9 +27,11 @@ function validateEndpoint(v: string, provider: ModelProvider): string | null {
         !u.search &&
         !u.hash &&
         (!['openai', 'chatgpt'].includes(provider) ||
-          u.toString().replace(/\/$/, '') === 'https://api.openai.com/v1')
+          u.toString().replace(/\/$/, '') === 'https://api.openai.com/v1') &&
+        (!['anthropic', 'claude'].includes(provider) ||
+          u.toString().replace(/\/$/, '') === 'https://api.anthropic.com/v1')
         ? null
-        : 'Use an HTTPS API base address. OpenAI uses https://api.openai.com/v1.'
+        : 'Use an HTTPS API base address. OpenAI uses https://api.openai.com/v1; Anthropic uses https://api.anthropic.com/v1.'
     return ['http:', 'https:'].includes(u.protocol) &&
       ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname) &&
       u.pathname === '/v1' &&
@@ -54,7 +56,10 @@ function isLocal(endpoint: string): boolean {
 export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Element {
   const m = settings.model
   const provider = m.provider ?? 'local'
-  const category = provider === 'chatgpt' ? 'openai' : provider
+  const category =
+    provider === 'chatgpt' ? 'openai' : provider === 'claude' ? 'anthropic' : provider
+  const hosted = ['openai', 'chatgpt', 'anthropic', 'claude'].includes(provider)
+  const claude = provider === 'anthropic' || provider === 'claude'
   const chooseProvider = (next: ModelProvider): void => {
     if (next === provider) return
     void save({
@@ -63,11 +68,13 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
         endpoint:
           next === 'openai' || next === 'chatgpt'
             ? 'https://api.openai.com/v1'
-            : next === 'local'
-              ? 'http://127.0.0.1:1234/v1'
-              : 'https://api.example.com/v1',
+            : next === 'anthropic' || next === 'claude'
+              ? 'https://api.anthropic.com/v1'
+              : next === 'local'
+                ? 'http://127.0.0.1:1234/v1'
+                : 'https://api.example.com/v1',
         modelId: '',
-        ...(next === 'openai' || next === 'chatgpt'
+        ...(['openai', 'chatgpt', 'anthropic', 'claude'].includes(next)
           ? { maxTokens: Math.max(m.maxTokens, 4096) }
           : {})
       }
@@ -150,6 +157,7 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
               options={[
                 { value: 'local', label: 'Local LLM' },
                 { value: 'openai', label: 'OpenAI' },
+                { value: 'anthropic', label: 'Anthropic' },
                 { value: 'compatible', label: 'Other API provider' }
               ]}
               onChange={(value) => {
@@ -170,7 +178,19 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
               />
             </Row>
           )}
-          {category !== 'openai' && (
+          {category === 'anthropic' && (
+            <Row label="Connect with">
+              <SelectField
+                value={provider}
+                options={[
+                  { value: 'anthropic', label: 'API key' },
+                  { value: 'claude', label: 'Claude Code token (subscription)' }
+                ]}
+                onChange={(value) => chooseProvider(value as ModelProvider)}
+              />
+            </Row>
+          )}
+          {category !== 'openai' && category !== 'anthropic' && (
             <Row
               label="Server address"
               hint={
@@ -196,14 +216,25 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
                 included in a request are sent to this provider.{' '}
                 {provider === 'chatgpt'
                   ? 'Usage counts toward your ChatGPT plan or credits.'
-                  : 'API usage may incur charges.'}
+                  : provider === 'claude'
+                    ? 'Usage counts toward your Claude subscription limits.'
+                    : 'API usage may incur charges.'}
+              </Notice>
+            </div>
+          )}
+          {provider === 'claude' && (
+            <div className="pb-3">
+              <Notice tone="warn">
+                Anthropic&apos;s terms limit Free, Pro and Max subscription tokens to Claude Code
+                and Claude.ai, and they may reject or restrict this connection. Use an API key for
+                dependable access. Create a token by running <code>claude setup-token</code>.
               </Notice>
             </div>
           )}
           {provider === 'chatgpt' && (
             <ChatgptConnection onChanged={() => setCredentialRevision((n) => n + 1)} />
           )}
-          {(provider === 'openai' || provider === 'compatible') && (
+          {(provider === 'openai' || provider === 'compatible' || claude) && (
             <ModelKeyField
               key={provider + ':' + m.endpoint}
               provider={provider}
@@ -371,7 +402,7 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
               }
             />
           </Row>
-          {(provider === 'openai' || provider === 'chatgpt') && (
+          {hosted && provider !== 'compatible' && (
             <Row
               label="Reasoning effort"
               hint="Shows levels supported by the selected model. Auto uses its default. Higher effort allows more reasoning and can use more tokens and time."
@@ -397,7 +428,7 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
               onChange={(specialists) => void save({ model: { specialists } })}
             />
           </Row>
-          {provider !== 'chatgpt' && (
+          {provider !== 'chatgpt' && !claude && (
             <Row
               label="Context window"
               hint="Match the context size configured in your model server. Sophon reserves reply space and a 20% estimation margin, and automatically summarizes older context as it fills."
@@ -411,7 +442,7 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
               />
             </Row>
           )}
-          {provider !== 'openai' && provider !== 'chatgpt' && (
+          {provider !== 'openai' && provider !== 'chatgpt' && !claude && (
             <Row
               label="Temperature"
               hint="Controls sampling variation. Lower values produce more consistent responses; higher values add variety. Choose a value suited to your model and task."

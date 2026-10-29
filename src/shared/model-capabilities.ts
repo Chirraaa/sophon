@@ -21,6 +21,16 @@ export const EFFORT_LABELS: Record<ReasoningEffort | 'auto', string> = {
 }
 
 export function documentedCapabilities(id: string, provider: ModelProvider): ModelCapabilities {
+  if (provider === 'anthropic' || provider === 'claude') {
+    // Current Claude models take adaptive thinking with an effort level; older ones do not.
+    if (!/^claude-(?:fable|opus|sonnet|haiku)-5/.test(id) && !/^claude-opus-4-[678]/.test(id))
+      return {}
+    return {
+      reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      defaultReasoningEffort: /^claude-(?:opus|haiku)-5-5/.test(id) ? 'medium' : 'high',
+      reasoningSource: 'documented'
+    }
+  }
   if (!['openai', 'chatgpt'].includes(provider)) return {}
   const model = id.replace(/-\d{4}-\d{2}-\d{2}$/, '')
   let reasoningEfforts: ReasoningEffort[]
@@ -64,6 +74,15 @@ export function modelCapabilities(
     ]
     result.reasoningSource = 'provider'
     delete result.defaultReasoningEffort
+  }
+  if (
+    typeof data.max_input_tokens === 'number' &&
+    Number.isSafeInteger(data.max_input_tokens) &&
+    data.max_input_tokens > 0 &&
+    data.max_input_tokens <= 100000000
+  ) {
+    result.contextWindow = data.max_input_tokens
+    result.contextSource = 'provider'
   }
   const defaultEffort = data.default_reasoning_level ?? data.default_reasoning_effort
   if (result.reasoningEfforts?.includes(defaultEffort as ReasoningEffort))

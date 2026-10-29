@@ -6,7 +6,7 @@ import { modelEndpoint } from '../network/endpoint'
 import { revokePolicy } from './run-manager'
 
 function location(provider: ModelProvider, endpoint: string): string {
-  if (provider !== 'openai' && provider !== 'compatible')
+  if (!['openai', 'compatible', 'anthropic', 'claude'].includes(provider))
     throw new Error('This provider does not use an API key.')
   const base = modelEndpoint(endpoint, provider)
   const scope = createHash('sha256').update(`${provider}:${base}`).digest('hex')
@@ -32,6 +32,10 @@ export function hasModelKey(provider: ModelProvider, endpoint: string): boolean 
 export function setModelKey(provider: ModelProvider, endpoint: string, key: string): void {
   const file = location(provider, endpoint)
   if (key && !/^[\x21-\x7e]{8,4096}$/.test(key)) throw new Error('Invalid model API key.')
+  if (provider === 'anthropic' && key && !key.startsWith('sk-ant-'))
+    throw new Error('Anthropic API keys start with sk-ant-.')
+  if (provider === 'claude' && key && !key.startsWith('sk-ant-oat'))
+    throw new Error('Claude Code tokens start with sk-ant-oat. Create one with: claude setup-token')
   revokePolicy()
   if (!key) {
     rmSync(file, { force: true })

@@ -108,7 +108,7 @@ export async function consultSpecialist(options: {
   )
 
   const outputTokens =
-    settings.model.provider === 'openai' || settings.model.provider === 'chatgpt'
+    ['openai', 'chatgpt', 'anthropic', 'claude'].includes(settings.model.provider)
       ? Math.max(localOutputTokens, settings.model.maxTokens)
       : localOutputTokens
   const messages: ModelMessage[] = [

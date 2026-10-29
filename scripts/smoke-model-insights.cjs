@@ -187,6 +187,7 @@ async function review() {
     './context': context,
     './stream': streams,
     './providers': providers,
+    './anthropic': load('src/main/llm/anthropic.ts'),
     '../security/model-credentials': {
       modelKey: () => {
         throw new Error('No key needed')
