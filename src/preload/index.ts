@@ -68,6 +68,16 @@ const api: Api = {
   removeWorkspace: () => ipcRenderer.invoke('files:revoke'),
   clearSecurityEvents: () => ipcRenderer.invoke('privacy:clear-security-events'),
   stop: () => ipcRenderer.invoke('agent:stop'),
+  llama: {
+    get: () => ipcRenderer.invoke('llama:get'),
+    setEnabled: (enabled) => ipcRenderer.invoke('llama:set-enabled', enabled),
+    pickExecutable: () => ipcRenderer.invoke('llama:pick-executable'),
+    pickModel: () => ipcRenderer.invoke('llama:pick-model'),
+    setOptions: (patch) => ipcRenderer.invoke('llama:options', patch),
+    start: () => ipcRenderer.invoke('llama:start'),
+    stop: () => ipcRenderer.invoke('llama:stop'),
+    onStatus: (cb) => listen('llama:status', cb)
+  },
   research: {
     hasKey: () => ipcRenderer.invoke('research:has-key'),
     setKey: (key) => ipcRenderer.invoke('research:set-key', key)

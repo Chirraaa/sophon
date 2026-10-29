@@ -3,6 +3,26 @@ import type { UpdatesApi } from './updates'
 export {}
 declare global {
   type ModelProvider = 'local' | 'openai' | 'compatible' | 'chatgpt'
+  type LlamaOptions = import('./llama-server').LlamaOptions
+  type LlamaCapabilities = import('./llama-server').LlamaCapabilities
+  interface LlamaStatus {
+    state: 'stopped' | 'starting' | 'running' | 'error'
+    port?: number
+    pid?: number
+    error?: string
+    log: string
+  }
+  interface LlamaView {
+    config: {
+      enabled: boolean
+      executable: string
+      modelPath: string
+      caps: LlamaCapabilities | null
+      options: LlamaOptions
+    }
+    status: LlamaStatus
+    applied: LlamaOptions | null
+  }
   type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
   interface ModelCapabilities {
     reasoningEfforts?: ReasoningEffort[]
@@ -425,6 +445,17 @@ declare global {
     removeWorkspace: () => Promise<void>
     clearSecurityEvents: () => Promise<number>
     stop: () => Promise<void>
+    llama: {
+      get: () => Promise<LlamaView>
+      setEnabled: (enabled: boolean) => Promise<LlamaView>
+      // Both pickers resolve to null when the user cancels.
+      pickExecutable: () => Promise<LlamaView | null>
+      pickModel: () => Promise<LlamaView | null>
+      setOptions: (patch: Partial<LlamaOptions>) => Promise<LlamaView>
+      start: () => Promise<LlamaView>
+      stop: () => Promise<LlamaView>
+      onStatus: (cb: (status: LlamaStatus) => void) => () => void
+    }
     research: {
       hasKey: () => Promise<boolean>
       setKey: (key: string) => Promise<void>

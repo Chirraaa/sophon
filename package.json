@@ -48,6 +48,8 @@
     "smoke:providers": "node scripts/smoke-providers.cjs",
     "smoke:model-insights": "node scripts/smoke-model-insights.cjs",
     "smoke:model-insights:ui": "electron scripts/smoke-model-insights-ui.cjs --hidden",
+    "smoke:llama": "node scripts/smoke-llama-server.cjs",
+    "smoke:llama:ui": "electron scripts/smoke-llama-ui.cjs --hidden",
     "smoke:chatgpt": "node scripts/smoke-chatgpt.cjs",
     "smoke:capabilities": "node scripts/smoke-capabilities.cjs",
     "smoke:awareness": "node scripts/smoke-awareness.cjs",

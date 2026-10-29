@@ -15,6 +15,8 @@ import {
 import { save } from './save'
 import { ModelKeyField } from './ModelKeyField'
 import { ChatgptConnection } from './ChatgptConnection'
+import { LlamaServerPanel } from './LlamaServerPanel'
+import { useLlama } from '@/hooks/useLlama'
 import { ReasoningEffort } from '../ReasoningEffort'
 import { documentedCapabilities } from '../../../../shared/model-capabilities'
 function validateEndpoint(v: string, provider: ModelProvider): string | null {
@@ -73,6 +75,8 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
       }
     })
   }
+  const llama = useLlama()
+  const managed = provider === 'local' && Boolean(llama.view?.config.enabled)
   const [credentialRevision, setCredentialRevision] = useState(0)
   const source = JSON.stringify([m.endpoint, provider, credentialRevision])
   const [modelResult, setModelResult] = useState<{ source: string; models: ModelChoice[] } | null>(
@@ -170,7 +174,25 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
               />
             </Row>
           )}
-          {category !== 'openai' && (
+          {provider === 'local' && (
+            <Row
+              label="Runtime"
+              hint="Use a server you already run, like LM Studio, or let Sophon run llama.cpp for you."
+            >
+              <SelectField
+                value={managed ? 'llama' : 'external'}
+                options={[
+                  { value: 'external', label: 'Another app (LM Studio, etc.)' },
+                  { value: 'llama', label: 'llama.cpp, run by Sophon' }
+                ]}
+                onChange={(value) =>
+                  void llama.run(() => window.api.llama.setEnabled(value === 'llama'))
+                }
+                width="w-64"
+              />
+            </Row>
+          )}
+          {category !== 'openai' && !managed && (
             <Row
               label="Server address"
               hint={
@@ -254,6 +276,7 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
             </Row>
           )}
         </Section>
+        {managed && <LlamaServerPanel llama={llama} />}
       </TabsContent>
       <TabsContent value="web" className="space-y-4">
         <Section
@@ -397,7 +420,7 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
               onChange={(specialists) => void save({ model: { specialists } })}
             />
           </Row>
-          {provider !== 'chatgpt' && (
+          {provider !== 'chatgpt' && !managed && (
             <Row
               label="Context window"
               hint="Match the context size configured in your model server. Sophon reserves reply space and a 20% estimation margin, and automatically summarizes older context as it fills."
@@ -466,7 +489,18 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
               onCommit={(maxSteps) => void save({ model: { maxSteps } })}
             />
           </Row>
-          {provider === 'local' && (
+          {managed && (
+            <Row
+              label="Context and thinking"
+              hint="Set with the llama.cpp options on the Connection tab, because Sophon starts the model with them."
+            >
+              <span className="text-xs text-muted-foreground">
+                {llama.view?.config.options.contextSize.toLocaleString()} tokens,{' '}
+                {llama.view?.config.options.thinking ? 'thinking on' : 'thinking off'}
+              </span>
+            </Row>
+          )}
+          {provider === 'local' && !managed && (
             <Row
               label="Let the model think first"
               hint="Slower, and long thinking can use up the reply length above. Leave off for quick commands."
