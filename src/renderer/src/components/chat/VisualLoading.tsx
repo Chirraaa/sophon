@@ -4,13 +4,7 @@ import { Skeleton } from '../ui/skeleton'
 
 export function VisualLoading(): React.JSX.Element {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-busy="true"
-      data-visual-loading
-      className="my-4 overflow-hidden rounded-2xl border border-border bg-card p-5"
-    >
+    <div role="status" aria-live="polite" aria-busy="true" data-visual-loading className="my-4">
       <div className="flex items-center gap-3">
         <span className="flex size-9 items-center justify-center rounded-xl bg-muted">
           <PanelsTopLeft className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -25,7 +19,7 @@ export function VisualLoading(): React.JSX.Element {
       </div>
       <div className="mt-5 grid grid-cols-3 gap-3" aria-hidden="true">
         {[0, 1, 2].map((index) => (
-          <Skeleton key={index} className="h-14 rounded-xl bg-muted/50" />
+          <Skeleton key={index} className="h-14 rounded-xl bg-muted/40" />
         ))}
       </div>
     </div>
