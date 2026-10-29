@@ -39,16 +39,18 @@ export async function runTool(
     onEvent?.({ type: 'tool_preview', id: actionId, preview: bound.preview })
 
     const fingerprint = JSON.stringify(parameters)
-    const oneUse = [
-      'run_npm',
-      'run_command',
-      'delete_file',
-      'delete_directory',
-      'mcp_call',
-      'mcp_read',
-      'notes_delete',
-      'clear_chat'
-    ].includes(name)
+    const oneUse =
+      [
+        'run_npm',
+        'run_command',
+        'delete_file',
+        'delete_directory',
+        'mcp_call',
+        'mcp_read',
+        'notes_delete',
+        'calendar_delete',
+        'clear_chat'
+      ].includes(name) || bound.scope?.oneUse === true
     const codingEdit = ['write_file', 'edit_file', 'create_directory'].includes(name)
     const codingMode = codingEdit ? (getSettings().coding?.mode ?? 'ask-before-edit') : undefined
     const needsApproval = codingEdit

@@ -224,7 +224,11 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
       endpoint: endpoint(
         model.endpoint,
         base.model.endpoint,
-        oneOf(model.provider, ['local', 'openai', 'compatible', 'chatgpt', 'anthropic', 'claude'], base.model.provider)
+        oneOf(
+          model.provider,
+          ['local', 'openai', 'compatible', 'chatgpt', 'anthropic', 'claude'],
+          base.model.provider
+        )
       ),
       modelId: str(model.modelId, 200, base.model.modelId).trim(),
       temperature: num(model.temperature, 0, 2, base.model.temperature),
@@ -264,6 +268,7 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
             'delete_file',
             'delete_directory',
             'notes_delete',
+            'calendar_delete',
             'clear_chat'
           ].includes(t.name) && permission === 'allow'
             ? 'ask'
@@ -441,7 +446,9 @@ export function allowApprovedTool(name: string, run: RunContext): void {
 export function draftSettings(patch: SettingsPatch): AppSettings {
   if (
     patch.model?.provider !== undefined &&
-    !['local', 'openai', 'compatible', 'chatgpt', 'anthropic', 'claude'].includes(patch.model.provider)
+    !['local', 'openai', 'compatible', 'chatgpt', 'anthropic', 'claude'].includes(
+      patch.model.provider
+    )
   )
     throw new Error('Unknown model provider.')
   modelEndpoint(

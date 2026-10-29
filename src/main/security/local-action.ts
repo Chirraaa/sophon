@@ -18,6 +18,7 @@ import { searchProviderLabel } from '../network/search-provider'
 import { captureCoordinates } from '../tools/screen'
 import { resolveApp, type AppLaunch } from '../tools/openApp'
 import type { DeviceTarget } from '../tools/system-control'
+import type { CalendarBinding } from '../tools/calendar'
 export interface ExecutionScope {
   approvedProposal?: string
   device?: DeviceTarget
@@ -27,6 +28,9 @@ export interface ExecutionScope {
   pid?: number
   file?: FileIdentity
   deletion?: WorkspaceDeletion
+  calendar?: CalendarBinding
+  /** The action reaches other people or cannot be undone, so it is approved each time. */
+  oneUse?: boolean
   guard?: () => void
 }
 
@@ -50,6 +54,14 @@ export async function bindLocalAction(
     const binding = await bindBrowserAction(name, args, run)
     details.browser = binding.preview
     revalidate = binding.revalidate
+  }
+  if (name.startsWith('calendar_')) {
+    const { bindCalendarAction } = await import('../tools/calendar')
+    const plan = await bindCalendarAction(name, args, run)
+    scope.calendar = plan.binding
+    scope.oneUse = plan.oneUse
+    details.event = plan.preview
+    revalidate = plan.revalidate
   }
   if (name.startsWith('notes_')) {
     const { bindNotesAction } = await import('../tools/notes')

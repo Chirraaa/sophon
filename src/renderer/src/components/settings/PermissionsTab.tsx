@@ -22,6 +22,7 @@ const ONE_USE = [
   'mcp_call',
   'mcp_read',
   'notes_delete',
+  'calendar_delete',
   'clear_chat'
 ]
 const GROUPS = [
@@ -86,6 +87,12 @@ const GROUPS = [
     title: 'Plugins & connections',
     description: 'Discover skills and use connected MCP services.',
     names: ['plugins_list', 'plugin_read', 'mcp_catalog', 'mcp_call', 'mcp_read']
+  },
+  {
+    title: 'Calendar',
+    description:
+      'Read and change events in a connected Outlook or Microsoft 365 calendar. Connect accounts in Plugins.',
+    names: ['calendar_list', 'calendar_create', 'calendar_update', 'calendar_delete']
   },
   {
     title: 'Notes',

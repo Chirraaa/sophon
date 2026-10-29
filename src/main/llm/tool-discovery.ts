@@ -18,6 +18,9 @@ const RELATED: Record<string, string[]> = {
   browser_inspect: ['browser_act', 'browser_tabs', 'browser_open'],
   browser_act: ['browser_inspect', 'browser_tabs'],
   plugins_list: ['mcp_catalog', 'mcp_call', 'plugin_read', 'list_windows', 'inspect_app'],
+  calendar_list: ['calendar_create', 'calendar_update', 'calendar_delete'],
+  calendar_update: ['calendar_list'],
+  calendar_delete: ['calendar_list'],
   notes_list: ['notes_read', 'notes_create'],
   notes_read: ['notes_edit', 'notes_delete', 'notes_list'],
   notes_edit: ['notes_read'],
@@ -78,6 +81,10 @@ export class ToolDiscovery {
         ['web_search', 'web_fetch']
       ],
       [/\b(calculate|csv|sum|average)\b|\d\s*[+*/=]\s*\d/i, ['python_calculate']],
+      [
+        /\b(calendar|schedule|meeting|appointment|agenda|event|events|outlook|invite|reschedule)\b/i,
+        ['calendar_list', 'calendar_create', 'calendar_update', 'calendar_delete']
+      ],
       [
         /\b(notes?|jot|memo)\b/i,
         ['notes_list', 'notes_read', 'notes_create', 'notes_edit', 'notes_delete']

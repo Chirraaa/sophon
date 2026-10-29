@@ -41,14 +41,15 @@ switch the active one.
 - **Remove** forgets an account on this computer. Microsoft offers no token
   revocation for public clients, so to cut off access completely remove the app
   under Microsoft account > Privacy > Apps and services (or your organization's
-  *My Apps* page).
+  _My Apps_ page).
 - An expired or revoked sign-in marks the account **Signed out** and asks you to
   reconnect it. A refresh failure for one account never affects the others.
 
 ## Limits
 
-Sign-in is verified (signature, issuer, tenant, audience, nonce) and uses PKCE,
-but the calendar tools that use these accounts are separate and arrive later.
+Sign-in is verified (signature, issuer, tenant, audience, nonce) and uses PKCE.
+The calendar tools that use these accounts are described in
+[Calendar](CALENDAR.md).
 Admin consent policies, conditional access and multi-factor requirements are
 Microsoft's and can block sign-in.
 

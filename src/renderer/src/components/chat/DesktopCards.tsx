@@ -1,8 +1,10 @@
 import { CalendarClock, CalendarX, MapPin, StickyNote, Users, Video } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
+  dayKey,
   formatDay,
   formatTimeRange,
   groupByDay,
@@ -11,7 +13,8 @@ import {
   type ChangeOperation,
   type DesktopCard,
   type NoteSummary,
-  type NoteView
+  type NoteView,
+  calendarEvent
 } from '../../../../shared/desktop-cards'
 
 const when = (value: number): string =>
@@ -85,11 +88,15 @@ export function EventRow({ event }: { event: CalendarEvent }): React.JSX.Element
 export function AgendaCard({
   events,
   total,
-  heading = 'Calendar'
+  heading = 'Calendar',
+  account,
+  truncated = false
 }: {
   events: CalendarEvent[]
   total: number
   heading?: string
+  account?: string
+  truncated?: boolean
 }): React.JSX.Element {
   const groups = groupByDay(events)
   return (
@@ -102,6 +109,8 @@ export function AgendaCard({
         <CardDescription>
           {events.length ? plural(total, 'event') : 'No events in this range'}
           {total > events.length && ` · showing ${events.length}`}
+          {truncated && ' · more events exist than were read'}
+          {account && ` · ${account}`}
         </CardDescription>
       </CardHeader>
       {groups.length > 0 && (
@@ -140,11 +149,14 @@ function EventChangeCard({
           Event
           <Confirmation operation={card.operation} verified={card.verified} />
         </CardTitle>
-        {!card.verified && (
+        {!card.verified ? (
           <CardDescription>
             The calendar did not confirm the request to {verb} this event. Check it before trying
             again.
+            {card.account && ` · ${card.account}`}
           </CardDescription>
+        ) : (
+          card.account && <CardDescription>{card.account}</CardDescription>
         )}
       </CardHeader>
       {card.event && (
@@ -152,9 +164,7 @@ function EventChangeCard({
           <ul>
             <EventRow event={card.event} />
           </ul>
-          <p className="text-xs text-muted-foreground">
-            {formatDay(card.event.allDay ? card.event.start : card.event.start.slice(0, 10))}
-          </p>
+          <p className="text-xs text-muted-foreground">{formatDay(dayKey(card.event))}</p>
         </CardContent>
       )}
     </Card>
@@ -257,7 +267,15 @@ function NoteChangeCard({
 }
 
 export function DesktopCardView({ card }: { card: DesktopCard }): React.JSX.Element | null {
-  if (card.kind === 'events') return <AgendaCard events={card.events} total={card.total} />
+  if (card.kind === 'events')
+    return (
+      <AgendaCard
+        events={card.events}
+        total={card.total}
+        account={card.account}
+        truncated={card.truncated}
+      />
+    )
   if (card.kind === 'event-change') return <EventChangeCard card={card} />
   if (card.kind === 'notes') return <NotesList notes={card.notes} total={card.total} />
   if (card.kind === 'note') return <NoteCard note={card.note} />
@@ -312,6 +330,71 @@ export function NotePreview({ note }: { note: Record<string, unknown> }): React.
         {before && column(operation === 'delete' ? 'Note' : 'Before', before)}
         {after && column(operation === 'create' ? 'New note' : 'After', after)}
       </div>
+    </div>
+  )
+}
+
+/** Exact event, or before/after, for a calendar change awaiting approval. */
+export function EventPreview({ event }: { event: Record<string, unknown> }): React.JSX.Element {
+  const text = (value: unknown): string => (typeof value === 'string' ? value : '')
+  const read = (value: unknown): CalendarEvent | undefined => calendarEvent(value)
+  const operation = text(event.operation)
+  const before = read(event.before)
+  const after = read(event.after)
+  const notify = event.notify
+  const side = (label: string, value: CalendarEvent): React.JSX.Element => (
+    <div className="min-w-0 flex-1 space-y-1">
+      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{formatDay(dayKey(value))}</p>
+      <ul className="rounded-md bg-muted px-2.5">
+        <EventRow event={value} />
+      </ul>
+    </div>
+  )
+  const summary =
+    operation === 'delete'
+      ? 'Delete this event from the calendar.'
+      : operation === 'update'
+        ? 'Change this event to the version on the right.'
+        : operation === 'create'
+          ? 'Add this event to the calendar.'
+          : 'Read events from the calendar.'
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        {summary}
+        {text(event.account) && ` Account: ${text(event.account)}.`}
+      </p>
+      {operation === 'read' && (
+        <p className="text-xs">
+          {text(event.start)} – {text(event.end)}
+        </p>
+      )}
+      <div className="flex flex-col gap-3 sm:flex-row">
+        {before && side(operation === 'delete' ? 'Event' : 'Before', before)}
+        {after && side(operation === 'create' ? 'New event' : 'After', after)}
+      </div>
+      {text(event.notes) && <Body text={text(event.notes)} />}
+      {Boolean(notify) && (
+        <Alert>
+          <Users aria-hidden="true" />
+          <AlertDescription>
+            {Array.isArray(notify) ? (
+              <>
+                {text(event.warning)}{' '}
+                <span className="selectable [overflow-wrap:anywhere]">
+                  {notify.filter((entry) => typeof entry === 'string').join(', ')}
+                </span>
+              </>
+            ) : (
+              text(notify)
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      {!notify && text(event.warning) && (
+        <p className="text-xs text-muted-foreground">{text(event.warning)}</p>
+      )}
     </div>
   )
 }

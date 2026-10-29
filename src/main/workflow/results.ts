@@ -7,6 +7,9 @@ export const MUTATIONS = new Set([
   'notes_create',
   'notes_edit',
   'notes_delete',
+  'calendar_create',
+  'calendar_update',
+  'calendar_delete',
   'act_on_control',
   'open_app',
   'move_window',
@@ -88,6 +91,20 @@ export function assessResult(
         summary: confirmed
           ? 'Read the note store back after the change.'
           : 'The note store did not confirm the change. Read the note again before retrying.'
+      }
+    } catch {
+      return { status: 'uncertain', summary: text.slice(0, 240) }
+    }
+  }
+  if (tool === 'calendar_create' || tool === 'calendar_update' || tool === 'calendar_delete') {
+    try {
+      const change = JSON.parse(text)
+      const confirmed = change.kind === 'event-change' && change.verified === true
+      return {
+        status: confirmed ? 'verified' : 'uncertain',
+        summary: confirmed
+          ? 'Read the event back from the calendar after the change.'
+          : 'The calendar did not confirm the change. List the calendar again before retrying.'
       }
     } catch {
       return { status: 'uncertain', summary: text.slice(0, 240) }

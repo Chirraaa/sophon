@@ -42,13 +42,20 @@ export type DesktopCard =
       note?: NoteView
       id?: string
     }
-  | { kind: 'events'; total: number; events: CalendarEvent[] }
+  | {
+      kind: 'events'
+      total: number
+      events: CalendarEvent[]
+      account?: string
+      truncated?: boolean
+    }
   | {
       kind: 'event-change'
       operation: ChangeOperation
       verified: boolean
       event?: CalendarEvent
       id?: string
+      account?: string
     }
 
 type Rec = Record<string, unknown>
@@ -140,7 +147,15 @@ export function parseDesktopCard(detail: string | undefined): DesktopCard | unde
   }
   if (kind === 'events') {
     const events = list(data?.events, calendarEvent)
-    return events ? { kind, total: num(data?.total) ?? events.length, events } : undefined
+    return events
+      ? {
+          kind,
+          total: num(data?.total) ?? events.length,
+          events,
+          account: str(data?.account, 254),
+          truncated: data?.truncated === true
+        }
+      : undefined
   }
   if (kind === 'note-change' || kind === 'event-change') {
     const operation = OPERATIONS.find((entry) => entry === data?.operation)
@@ -152,7 +167,8 @@ export function parseDesktopCard(detail: string | undefined): DesktopCard | unde
       return value || id ? { kind, operation, verified, note: value, id } : undefined
     }
     const event = calendarEvent(data?.event)
-    return event || id ? { kind, operation, verified, event, id } : undefined
+    const account = str(data?.account, 254)
+    return event || id ? { kind, operation, verified, event, id, account } : undefined
   }
   return undefined
 }

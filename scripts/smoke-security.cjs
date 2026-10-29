@@ -148,6 +148,7 @@ async function review() {
   let executed = 0
   let executionError
   let bindingError
+  let boundScope
   const runner = load('src/main/llm/run-tool.ts', {
     '../harness/store': {},
     '../settings': settingsModule,
@@ -167,7 +168,7 @@ async function review() {
     '../security/local-action': {
       bindLocalAction: async () => {
         if (bindingError) throw bindingError
-        return { preview: 'exact action', revalidate: async () => {} }
+        return { preview: 'exact action', revalidate: async () => {}, scope: boundScope }
       }
     }
   })
@@ -205,7 +206,37 @@ async function review() {
       }
     }
   }
+  // A calendar change that reaches other people is approved each time, even under Always allow
   settings.coding.mode = 'auto'
+  for (const [tool, args, scope, expected] of [
+    ['calendar_create', { title: 'x', start: '2026-11-03T14:30:00Z' }, { oneUse: true }, 1],
+    ['calendar_create', { title: 'x', start: '2026-11-03T14:30:00Z' }, { oneUse: false }, 0],
+    ['calendar_create', { title: 'x', start: '2026-11-03T14:30:00Z' }, undefined, 0],
+    ['calendar_update', { id: 'AAMk1', revision: 'r', title: 'x' }, { oneUse: true }, 1],
+    ['calendar_update', { id: 'AAMk1', revision: 'r', title: 'x' }, { oneUse: false }, 0],
+    ['calendar_delete', { id: 'AAMk1', revision: 'r' }, { oneUse: false }, 1]
+  ]) {
+    settings.tools[tool] = 'allow'
+    boundScope = scope
+    const run = start('assistant')
+    const id = crypto.randomUUID()
+    let waits = 0
+    const before = executed
+    await runner.runTool(tool, args, id, (event) => {
+      if (event.type !== 'tool_wait') return
+      waits++
+      assert.equal(
+        event.canAlwaysAllow,
+        false,
+        tool + ' cannot be permanently allowed once approval is forced'
+      )
+      queueMicrotask(() => permissions.resolveApproval(id, 'once'))
+    })
+    assert.equal(waits, expected, tool + JSON.stringify(scope))
+    assert.equal(executed - before, 1)
+    runManager.finishRun(run)
+  }
+  boundScope = undefined
   settings.tools = registry.defaultToolPermissions()
   executed = 0
   for (const action of ['deny', 'stop', 'revoke', 'block', 'once']) {
