@@ -33,6 +33,7 @@ let received
 let deferred
 let run
 let startFailure = false
+const clearRequest = load('src/main/chat/clear-request.ts')
 let chatBehavior
 let attachmentFailure = false
 let attachmentGate
@@ -122,6 +123,7 @@ const session = load('src/main/chat/session.ts', {
     }
   },
   '../security/audit': { securityEvent: () => {} },
+  './clear-request': clearRequest,
   '../memory/store': { pruneChatMemories: () => {}, clearChatMemories: () => {} },
   '../workflow/results': { resultFailure: () => false },
   '../network/search-provider': { searchProviderLabel: () => 'fixture' },
@@ -231,6 +233,17 @@ async function main() {
     original.items.length,
     0,
     'Do not restore a prompt cleared while loading attachments'
+  )
+  chatBehavior = () => {
+    clearRequest.requestChatClear()
+    return 'Done'
+  }
+  await session.send('Clear this chat')
+  chatBehavior = undefined
+  assert.equal(
+    original.items.length,
+    0,
+    'A clear_chat request empties the chat once the reply ends'
   )
   await session.send('Repeated prompt')
   await session.rerun(original.id, original.items[0].id, 'Repeated prompt')

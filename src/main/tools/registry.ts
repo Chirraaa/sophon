@@ -195,6 +195,13 @@ export const TOOL_INFO: ToolInfo[] = [
     default: 'ask'
   },
   {
+    name: 'clear_chat',
+    label: 'Clear chat',
+    description:
+      'Erase every message in the current chat and its memories. Always asks for approval, and the chat is cleared once the reply ends.',
+    default: 'ask'
+  },
+  {
     name: 'wait',
     label: 'Wait',
     description: 'Pause an active task for up to 60 seconds, then continue. Stop cancels the wait.',

@@ -1,6 +1,7 @@
 import { toolSchemas } from './schemas'
 import { getSettings } from '../settings'
 import { wait } from './wait'
+import { requestChatClear } from '../chat/clear-request'
 import {
   manageHarness,
   readHarness,
@@ -144,6 +145,7 @@ export async function executeTool(
     assertRun(run)
     return await executePluginTool(name, parameters, run)
   }
+  if (name === 'clear_chat') return requestChatClear()
   if (name === 'wait') return await wait(Number(parameters.seconds), run)
   if (name === 'harness_manage') {
     if (!getSettings().memory.enabled)

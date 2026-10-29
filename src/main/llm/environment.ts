@@ -57,6 +57,8 @@ const ACTIONS: Record<string, string> = {
     'change a note you have just read, passing its revision; use append to add text and body only to replace everything; the user sees before and after',
   notes_delete:
     'permanently delete one note you have just read, passing its revision; always asks the user',
+  clear_chat:
+    'erase the whole current chat when the user asks to clear or reset it; always asks the user first and clears after your reply, so answer in one short sentence and call alone',
   list_audio:
     'read system output volume and mute state and discover exact app audio session targets',
   set_volume:

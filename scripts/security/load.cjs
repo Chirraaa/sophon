@@ -102,6 +102,11 @@ function load(file, dependencies = {}) {
         return load('src/main/plugins/schemas.ts')
       if (!Object.hasOwn(dependencies, name) && name === './browser/schemas')
         return load('src/main/tools/browser/schemas.ts')
+      if (
+        !Object.hasOwn(dependencies, name) &&
+        ['../chat/clear-request', './clear-request'].includes(name)
+      )
+        return load('src/main/chat/clear-request.ts')
       if (!Object.hasOwn(dependencies, name) && name === './notes-schemas')
         return load('src/main/tools/notes-schemas.ts')
       if (!Object.hasOwn(dependencies, name) && name === './calendar-schemas')
