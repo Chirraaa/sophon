@@ -154,6 +154,21 @@ export function GeneralTab({ settings }: { settings: AppSettings }): React.JSX.E
             />
           </Row>
           <Row
+            label="Alert me from the dock"
+            hint="When the full app is closed or in the background, the shortcut dock slides in at the top of the screen as soon as a task finishes or needs your approval."
+          >
+            <Toggle checked={settings.dockNotify} onChange={(v) => void save({ dockNotify: v })} />
+          </Row>
+          <Row
+            label="Keep a minimized dock on screen"
+            hint="A slim bar stays at the top of the screen while the full app is hidden. Hover it to open the shortcut window."
+          >
+            <Toggle
+              checked={settings.dockAlwaysVisible}
+              onChange={(v) => void save({ dockAlwaysVisible: v })}
+            />
+          </Row>
+          <Row
             label="Start with Windows"
             hint="Starts hidden in the tray. This only takes effect in the installed app, not while developing."
           >

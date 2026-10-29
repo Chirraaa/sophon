@@ -276,6 +276,8 @@ declare global {
   interface CompactPresentation {
     mode: 'command' | 'voice'
     token: number
+    docked?: boolean
+    notice?: 'finished'
   }
   interface HardwareInfo {
     os: string
@@ -310,6 +312,8 @@ declare global {
     showResponseDiagnostics: boolean
     screenGlow: { enabled: boolean; color: string }
     closeToTray: boolean
+    dockNotify: boolean
+    dockAlwaysVisible: boolean
     launchAtStartup: boolean
     hotkeys: {
       summon: string

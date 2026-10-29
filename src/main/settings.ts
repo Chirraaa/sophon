@@ -38,6 +38,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showResponseDiagnostics: false,
   screenGlow: { enabled: true, color: '#a78bfa' },
   closeToTray: true,
+  dockNotify: true,
+  dockAlwaysVisible: false,
   launchAtStartup: false,
   hotkeys: {
     summon: 'Control+Alt+Space',
@@ -209,6 +211,8 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
           : base.screenGlow.color
     },
     closeToTray: bool(r.closeToTray, base.closeToTray),
+    dockNotify: bool(r.dockNotify, base.dockNotify),
+    dockAlwaysVisible: bool(r.dockAlwaysVisible, base.dockAlwaysVisible),
     launchAtStartup: bool(r.launchAtStartup, base.launchAtStartup),
     hotkeys: {
       summon: accelerator(hot.summon, base.hotkeys.summon),

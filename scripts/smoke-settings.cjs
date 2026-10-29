@@ -36,6 +36,11 @@ async function main() {
   assert.equal(settings.getSettings().showResponseDiagnostics, false)
   assert.equal(settings.draftSettings({ accent: '#12ABef' }).accent, '#12abef')
   assert.equal(settings.draftSettings({ accent: 'invalid' }).accent, 'violet')
+  assert.equal(settings.getSettings().dockNotify, true)
+  assert.equal(settings.getSettings().dockAlwaysVisible, false)
+  assert.equal(settings.draftSettings({ dockAlwaysVisible: true }).dockAlwaysVisible, true)
+  assert.equal(settings.draftSettings({ dockAlwaysVisible: 'yes' }).dockAlwaysVisible, false)
+  assert.equal(settings.draftSettings({ dockNotify: false }).dockNotify, false)
   assert.equal(settings.getSettings().model.codingResources, 'auto')
   for (const effort of [
     'auto',
