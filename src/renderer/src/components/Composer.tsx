@@ -123,7 +123,7 @@ export function Composer({
       {recovery?.required && (
         <div
           role="alert"
-          className="mb-3 rounded border border-amber-300/30 p-3 text-xs text-amber-100"
+          className="mb-3 rounded border border-warning/30 p-3 text-xs text-warning"
         >
           Security settings could not be loaded. Custom protections may be missing. Tools and screen
           capture are blocked until you review them. Original backup:{' '}

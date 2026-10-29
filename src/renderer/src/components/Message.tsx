@@ -102,7 +102,7 @@ export function Message({
                 {agent.status === 'running' ? (
                   <Spinner className="size-3" aria-hidden="true" />
                 ) : agent.status === 'done' ? (
-                  <Check className="size-3 text-emerald-400" aria-hidden="true" />
+                  <Check className="size-3 text-success" aria-hidden="true" />
                 ) : null}
                 <span className="font-medium text-foreground">
                   {

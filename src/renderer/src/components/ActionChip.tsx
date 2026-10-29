@@ -9,9 +9,9 @@ import { actionError, actionHint, actionLabel } from '@/lib/action-presentation'
 import { StoredActionDetails } from './chat/StoredActionDetails'
 const STYLES: Record<ToolActionStatus, string> = {
   running: 'border-white/8 bg-white/3 text-muted-foreground',
-  waiting: 'border-amber-300/20 bg-amber-300/5 text-amber-100',
-  done: 'border-white/8 bg-white/3 text-foreground/75 [&_svg]:text-emerald-400/80',
-  failed: 'border-red-400/20 bg-red-400/5 text-red-200'
+  waiting: 'border-warning/20 bg-warning/5 text-warning',
+  done: 'border-white/8 bg-white/3 text-foreground/75 [&_svg]:text-success/80',
+  failed: 'border-destructive/20 bg-destructive/5 text-destructive'
 }
 export function ActionChip({ action }: { action: ToolAction }): React.JSX.Element {
   return (

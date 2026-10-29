@@ -16,10 +16,10 @@ export function PatchPreview({ args }: { args: Record<string, unknown> }): React
         <span className="selectable min-w-0 flex-1 break-all font-mono">
           {String(args.path ?? 'File patch')}
         </span>
-        <span className="text-emerald-400" aria-label={`${added} added lines`}>
+        <span className="text-success" aria-label={`${added} added lines`}>
           +{added}
         </span>
-        <span className="text-rose-400" aria-label={`${removed} removed lines`}>
+        <span className="text-destructive" aria-label={`${removed} removed lines`}>
           −{removed}
         </span>
       </div>
@@ -39,8 +39,8 @@ export function PatchPreview({ args }: { args: Record<string, unknown> }): React
                   key={number}
                   className={cn(
                     'flex px-3',
-                    line.kind === 'add' && 'bg-emerald-400/8 text-emerald-200',
-                    line.kind === 'remove' && 'bg-rose-400/8 text-rose-200'
+                    line.kind === 'add' && 'bg-success/8 text-success',
+                    line.kind === 'remove' && 'bg-destructive/8 text-destructive'
                   )}
                 >
                   <span aria-hidden="true" className="w-5 shrink-0 opacity-60">

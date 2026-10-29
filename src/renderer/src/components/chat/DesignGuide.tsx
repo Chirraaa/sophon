@@ -490,7 +490,7 @@ export function DesignGuide({
                   className={cn(
                     'mt-3 rounded-lg border px-3 py-2 text-[11px]',
                     contrast < 4.5
-                      ? 'border-amber-500/40 text-amber-600 dark:text-amber-300'
+                      ? 'border-warning/40 text-warning dark:text-warning'
                       : 'border-border text-muted-foreground'
                   )}
                 >
