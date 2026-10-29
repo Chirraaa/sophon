@@ -35,6 +35,7 @@ const suites = [
   'icons',
   'licenses',
   'live-comparison',
+  'llama-server',
   'long-task-memory',
   'memory',
   'microsoft',

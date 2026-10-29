@@ -4,6 +4,7 @@ import { getSettings } from '../settings'
 import { plainObject } from './tool-contracts'
 import { validMemoryDraft } from '../memory/records'
 import { validGithubContext } from '../../shared/github-context'
+import { DEFAULT_LLAMA_OPTIONS } from '../../shared/llama-server'
 
 type Validator = (value: unknown) => boolean
 const text =
@@ -44,6 +45,16 @@ function settingsPatch(value: unknown, template: unknown = getSettings(), depth 
     return typeof item === typeof expected
   })
 }
+// Only known option names with plain values; the main process then clamps each one.
+const llamaOptionsPatch: Validator = (v) =>
+  plainObject(v) &&
+  Object.entries(v).every(
+    ([name, value]) =>
+      Object.hasOwn(DEFAULT_LLAMA_OPTIONS, name) &&
+      (typeof value === 'boolean' ||
+        (typeof value === 'number' && Number.isFinite(value)) ||
+        (typeof value === 'string' && value.length <= 12))
+  )
 const contracts: Record<string, { required?: Validator[]; optional?: Validator[] }> = {
   'updates:get': {},
   'updates:check': {},
@@ -170,7 +181,14 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'microsoft:select': { required: [id] },
   'microsoft:remove': { required: [id] },
   'model:set-key': { required: [oneOf('openai', 'compatible', 'anthropic', 'claude'), text(1000), text(4096)] },
-  'research:set-key': { required: [text(512)] }
+  'research:set-key': { required: [text(512)] },
+  'llama:get': {},
+  'llama:set-enabled': { required: [(v) => typeof v === 'boolean'] },
+  'llama:pick-executable': {},
+  'llama:pick-model': {},
+  'llama:options': { required: [llamaOptionsPatch] },
+  'llama:start': {},
+  'llama:stop': {}
 }
 export interface SecureIpc {
   handle: typeof ipcMain.handle
