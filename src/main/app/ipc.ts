@@ -58,6 +58,7 @@ import { hardwareInfo } from '../services/hardware'
 import { broadcast, type Desktop } from './desktop'
 import type { Shortcuts } from './shortcuts'
 import { registerSettingsIpc } from './settings-ipc'
+import { autoStartLlama, registerLlamaIpc } from './llama-ipc'
 import { registerPluginsIpc } from '../plugins/ipc'
 import { githubCheckoutAction, githubCheckoutStatus } from '../plugins/github-checkout'
 import type { GithubCheckoutAction } from '../../shared/github-history'
@@ -368,4 +369,6 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
     desktop.resizeCompact(height, width, mainOffset)
   )
   registerSettingsIpc(shortcuts, ipcMain)
+  registerLlamaIpc(ipcMain, desktop)
+  autoStartLlama()
 }

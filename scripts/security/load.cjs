@@ -129,6 +129,8 @@ function load(file, dependencies = {}) {
         return load('src/shared/coding-quality.ts')
       if (!Object.hasOwn(dependencies, name) && name === '../../shared/github-context')
         return load('src/shared/github-context.ts')
+      if (!Object.hasOwn(dependencies, name) && name === '../../shared/llama-server')
+        return load('src/shared/llama-server.ts')
       if (!Object.hasOwn(dependencies, name) && name === '../../shared/github-history')
         return load('src/shared/github-history.ts')
       if (!Object.hasOwn(dependencies, name) && name === './github-history')

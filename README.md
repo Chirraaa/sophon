@@ -20,7 +20,7 @@ Sophon is built to help small local models deliver stronger, more consistent res
 
 ## Features
 
-- **Local-first models**: LM Studio / loopback `/v1` servers by default; OpenAI Responses, ChatGPT plan sign-in, or any HTTPS Chat Completions provider are opt-in.
+- **Local-first models**: LM Studio or another loopback `/v1` server by default, or let Sophon run your own `llama-server` (llama.cpp) with the context size, GPU, memory, thinking and other options you choose; OpenAI Responses, ChatGPT plan sign-in, or any HTTPS Chat Completions provider are opt-in.
 - **App interaction**: connected MCP tools, managed Edge/Chrome browser DOM, Windows UI Automation (`inspect_app` / `act_on_control`), then screenshots and coordinates. The model chooses an available route and verifies effects. See [routes and setup](docs/APP_INTERACTION.md).
 - **Desktop control**: window management, screenshots, clicks, typing, audio and Wi-Fi/Bluetooth toggles.
 - **Agentic coding**: inspect → patch (`edit_file`) → check → repair loop, host-owned verification, patch previews, `run_command` / `run_npm` with exact-command approval.
@@ -104,7 +104,7 @@ flowchart TB
 
 ## Getting started
 
-**Requirements:** Windows 10/11, Node.js 20+, and a model server (e.g. [LM Studio](https://lmstudio.ai) with a model loaded, serving at `http://127.0.0.1:1234/v1`). Python 3 on PATH is needed for `python_calculate`; Git for the GitHub checkout and coding tools.
+**Requirements:** Windows 10/11, Node.js 20+, and a model server (e.g. [LM Studio](https://lmstudio.ai) with a model loaded, serving at `http://127.0.0.1:1234/v1`, or a `llama-server.exe` you choose in Settings → Model → Runtime). Python 3 on PATH is needed for `python_calculate`; Git for the GitHub checkout and coding tools.
 
 ```bash
 git clone https://github.com/Chirraaa/sophon.git

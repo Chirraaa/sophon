@@ -71,8 +71,8 @@ async function request(
   return data as Record<string, unknown>
 }
 function modelChoicesFrom(data: Record<string, unknown>): ModelChoice[] {
-  if (Array.isArray(data.models))
-    return data.models.slice(0, 100).flatMap((m) => {
+  if (Array.isArray(data.models)) {
+    const listed = data.models.slice(0, 100).flatMap((m) => {
       if (m?.visibility !== 'list' || typeof m.slug !== 'string' || m.slug.length > 200) return []
       return [
         {
@@ -82,13 +82,23 @@ function modelChoicesFrom(data: Record<string, unknown>): ModelChoice[] {
         }
       ]
     })
+    // llama.cpp also sends an Ollama-style `models` array next to the OpenAI-style `data`,
+    // so an empty result here must not hide the models listed under `data`.
+    if (listed.length || !Array.isArray(data.data)) return listed
+  }
   if (Array.isArray(data.data))
     return data.data.slice(0, 100).flatMap((m) =>
       typeof m?.id === 'string' && m.id.length <= 200
         ? [
             {
               id: m.id,
-              label: typeof m.display_name === 'string' ? m.display_name.slice(0, 200) : m.id,
+              label:
+                typeof m.display_name === 'string'
+                  ? m.display_name.slice(0, 200)
+                  : // llama.cpp names the model by its file path; show the file name.
+                    /^[A-Za-z]:[\\/]/.test(m.id)
+                    ? m.id.replace(/^.*[\\/]/, '')
+                    : m.id,
               ...modelCapabilities(m.id, getSettings().model.provider ?? 'local', m)
             }
           ]
