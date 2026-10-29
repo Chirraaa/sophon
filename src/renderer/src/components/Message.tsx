@@ -20,7 +20,6 @@ import { useStreamingText } from '@/hooks/useStreamingText'
 import { PageLink } from './chat/PageLink'
 import { replyActivity } from '@/lib/activity'
 import { ResearchActivity } from './chat/ResearchActivity'
-import { Bot, Check } from 'lucide-react'
 import { questionsFromReply } from '../../../shared/questions'
 import { CodingRun } from './chat/CodingRun'
 import { Hint } from './ui/tooltip'
@@ -28,6 +27,7 @@ import { ContextDetails } from './chat/ContextDetails'
 import { contextSummary } from '@/lib/context'
 import { UsageDetails } from './chat/UsageDetails'
 import { CompactionNotice } from './chat/CompactionNotice'
+import { SubagentPanel } from './chat/SubagentPanel'
 export function Message({
   item,
   dockQuestions = false,
@@ -90,64 +90,7 @@ export function Message({
       {!you && <DesktopResults actions={item.actions} />}
       {!you && <ResearchActivity item={item} />}
       {!you && item.compaction && <CompactionNotice notice={item.compaction} />}
-      {!!item.specialists?.length && (
-        <div className="flex w-full flex-col gap-2" aria-label="Subagents" aria-live="polite">
-          {item.specialists.map((agent) => (
-            <Collapsible
-              key={agent.id}
-              className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
-            >
-              <CollapsibleTrigger className="flex cursor-pointer items-center gap-2">
-                <Bot className="size-4 text-primary" aria-hidden="true" />
-                {agent.status === 'running' ? (
-                  <Spinner className="size-3" aria-hidden="true" />
-                ) : agent.status === 'done' ? (
-                  <Check className="size-3 text-success" aria-hidden="true" />
-                ) : null}
-                <span className="font-medium text-foreground">
-                  {
-                    {
-                      simple: 'Agent',
-                      researcher: 'Researcher',
-                      visual_explainer: 'Visual Explainer',
-                      tutor: 'Tutor',
-                      reviewer: 'Reviewer'
-                    }[agent.profile]
-                  }{' '}
-                  subagent
-                </span>{' '}
-                ·{' '}
-                {agent.status === 'running'
-                  ? 'Working…'
-                  : agent.status === 'done'
-                    ? 'Returned findings'
-                    : 'Stopped'}{' '}
-                · {agent.modelCalls} model {agent.modelCalls === 1 ? 'call' : 'calls'}
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="mt-3 border-t border-border pt-3">
-                  <p className="mb-1 font-medium text-foreground">Assignment</p>
-                  <p className="whitespace-pre-wrap">{agent.task}</p>
-                </div>
-                {agent.summary ? (
-                  <div className="selectable mt-3">
-                    <p className="mb-1 font-medium text-foreground">
-                      Findings for the main assistant
-                    </p>
-                    <AssistantText text={agent.summary} />
-                  </div>
-                ) : (
-                  <p className="mt-3">Findings will appear here when the subagent returns.</p>
-                )}
-                <p className="mt-2">
-                  Peak input: about {agent.estimatedInputTokens.toLocaleString()} tokens. Findings
-                  use the same model and may need verification.
-                </p>
-              </CollapsibleContent>
-            </Collapsible>
-          ))}
-        </div>
-      )}
+      {!!item.specialists?.length && <SubagentPanel agents={item.specialists} />}
       {you && !!item.attachments?.length && (
         <div className="flex max-w-[90%] flex-wrap gap-2">
           {item.attachments.map((attachment) => (
