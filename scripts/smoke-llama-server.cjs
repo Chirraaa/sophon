@@ -2,7 +2,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { load } = require('./security/load.cjs')
+const { load, root } = require('./security/load.cjs')
 
 const shared = load('src/shared/llama-server.ts')
 const main = load('src/main/llm/llama-server.ts', {
@@ -195,6 +195,10 @@ assert.deepEqual(Object.keys(env).sort(), ['CUDA_PATH', 'PATH'])
 
 // llama-server lists its model twice, as an Ollama-style `models` array and an OpenAI-style `data`
 // array. Sophon must still see it, or a model it started itself would show as offline.
+// Only branches that include the Anthropic provider have this module for the client to import.
+const anthropic = fs.existsSync(path.join(root, 'src/main/llm/anthropic.ts'))
+  ? { './anthropic': load('src/main/llm/anthropic.ts') }
+  : {}
 async function listing() {
   const id = 'C:\\models\\Qwen.gguf'
   const body = {
@@ -210,6 +214,7 @@ async function listing() {
     './time': load('src/main/llm/time.ts', { 'node:perf_hooks': require('node:perf_hooks') }),
     './stream': load('src/main/llm/stream.ts'),
     './providers': load('src/main/llm/providers.ts'),
+    ...anthropic,
     '../security/chatgpt-auth': { chatgptAccessToken: async () => '' },
     '../security/model-credentials': { modelKey: () => '' },
     '../settings': { getSettings: () => settings },
