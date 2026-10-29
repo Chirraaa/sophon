@@ -200,6 +200,13 @@ declare global {
     updatedAt: number
     method: 'model' | 'excerpts'
   }
+  // A user-facing notice that earlier context was compacted during a reply:
+  // older conversation summarized, or a coding task trimmed to its checkpoint.
+  interface ContextCompactionNotice {
+    status: 'running' | 'done'
+    scope: 'conversation' | 'task'
+    info?: ContextCompaction
+  }
   interface ContextReport extends ContextMeasurements {
     compaction?: ContextCompaction
     droppedTurns: number
@@ -387,6 +394,7 @@ declare global {
     modelProgress?: ModelProgress
     quality?: 'checking' | 'reviewed'
     specialists?: SpecialistRun[]
+    compaction?: ContextCompactionNotice
     workflow?: WorkflowState
     context?: ContextReport
     usage?: RequestUsage

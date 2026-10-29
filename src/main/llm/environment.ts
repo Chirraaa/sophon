@@ -14,9 +14,37 @@ type Environment = {
   workspace?: string
   provider?: string
   model?: string
-  remainingCalls?: number
-  remainingActions?: number
+}
+
+// Values that change between model calls in one run. They go last so the
+// instructions before them stay a stable prefix for provider and llama.cpp
+// prompt caches.
+export type RunState = {
+  remainingCalls: number
+  remainingActions: number
   remainingSeconds?: number
+  consultations?: number
+  hostUI?: InterfacePresence
+  context?: { usedTokens: number; budgetTokens: number | null; compactions: number }
+}
+
+export function runStatePrompt(state: RunState): string {
+  return (
+    'RUN STATE (refreshed every model call): ' +
+    JSON.stringify({
+      remaining: {
+        modelCalls: state.remainingCalls,
+        actions: state.remainingActions,
+        seconds: state.remainingSeconds ?? RUN_SECONDS,
+        ...(state.consultations !== undefined ? { subagents: state.consultations } : {})
+      },
+      ...(state.context ? { context: state.context } : {}),
+      ...(state.hostUI ? { hostUI: state.hostUI } : {})
+    }) +
+    (state.context?.budgetTokens && state.context.usedTokens > state.context.budgetTokens * 0.6
+      ? ' Context is filling: prefer targeted reads and narrow inspections, and unload schemas you no longer need with discover_tools.'
+      : '')
+  )
 }
 
 const ACTIONS: Record<string, string> = {
@@ -197,13 +225,8 @@ function compactEnvironment(state: Environment): string {
         workspace: state.workspace || null,
         paths: 'relative to selected workspace, not process cwd',
         origin: state.interaction,
-        hostUI: state.interfacePresence,
         codingMode: state.codingMode,
-        remaining: {
-          modelCalls: state.remainingCalls,
-          actions: state.remainingActions ?? ACTION_LIMIT,
-          seconds: state.remainingSeconds ?? RUN_SECONDS
-        }
+        limits: { actions: ACTION_LIMIT, seconds: RUN_SECONDS }
       }),
     `Available tools for THIS request: ${state.tools.join(', ') || 'none'} (schemas loaded).`,
     `CAPABILITY INDEX (permitted names): ${names.join(', ') || 'none'}.`,
@@ -223,7 +246,10 @@ function compactEnvironment(state: Environment): string {
       ? 'UNAVAILABLE: ' + JSON.stringify(state.unavailableTools)
       : '',
     has('discover_tools')
-      ? 'Index tools without a loaded schema are still usable: call discover_tools with their exact names first ([] lists descriptions). Skip discovery for conversation and questions you can answer directly. Discovery never changes permissions.'
+      ? 'Index tools without a loaded schema are still usable: call discover_tools with their exact names first ([] lists descriptions). Pass unload to drop loaded schemas you no longer need and keep context lean. Skip discovery for conversation and questions you can answer directly. Discovery never changes permissions.'
+      : '',
+    names.includes('consult_specialist') && !state.tools.includes('consult_specialist')
+      ? 'SUBAGENTS: consult_specialist starts a focused same-model subagent (researcher with web access, tutor, visual_explainer, reviewer) in its own context window, so its work does not fill yours. The user sees each subagent in chat. Load it with discover_tools for difficult research, teaching, figures or draft review; answer simple requests yourself.'
       : '',
     'Tool availability is policy, not proof that dependencies or vision work; report specific errors.',
     `${state.workspaceSelected ? 'A working folder is selected.' : 'No working folder is selected; file tools require Settings > Files.'} You cannot see your own UI or the desktop unless an image or inspection result is supplied. Never operate your own approval controls. Stop cancels the run. There is no mode to switch.`,

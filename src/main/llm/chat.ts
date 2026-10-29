@@ -42,7 +42,12 @@ import { pluginSkillId } from '../plugins/skills'
 import { listMemories } from '../memory/store'
 import { rankMemories } from '../memory/records'
 import { activeToolSchemas } from '../tools'
-import { environmentPrompt, requestedDesktopTool } from './environment'
+import {
+  environmentPrompt,
+  requestedDesktopTool,
+  runStatePrompt,
+  type RunState
+} from './environment'
 import { correctDesktopReply } from './desktop-reply'
 import { WORKFLOW_INSTRUCTIONS } from '../workflow/controller'
 import { TaskRuntime } from '../workflow/runtime'
@@ -68,6 +73,14 @@ const ARGUMENT_HINTS: Record<string, string> = {
     'harness_manage: list uses {"action":"list"}; other actions need the exact category and lowercase name from the catalog, without a path or .md extension.',
   ask_questions:
     'ask_questions: a questions array of one to three objects, each with title and two to four distinct short string options; no nested JSON strings.'
+}
+// Host-confirmed results that fully answer a plain single-intent desktop
+// command. Returning them directly saves the confirmation model call.
+const DIRECT_REPLIES: Record<string, (status: string, text: string) => string | undefined> = {
+  open_app: (_status, text) => text.match(/^(Opened .+?)\. Window: /)?.[1]?.concat('.'),
+  focus_window: (status, text) => (status === 'verified' ? text : undefined),
+  move_window: (status, text) =>
+    status === 'verified' ? text.replace(/ Verified window state\.$/, '') : undefined
 }
 const argumentHints = (names: (string | undefined)[]): string =>
   [...new Set(names)]
@@ -193,6 +206,7 @@ export async function chat(
     let reviewDraft = ''
     let harnessPhase = 'before_task'
     let compacted = false
+    let contextUsage: RunState['context']
     const budgets = workflow.budgets
     let verifyBoundary = false
     let verificationSetup = ''
@@ -370,12 +384,7 @@ export async function chat(
           ),
           workspace: run.workspace,
           provider: settings.model.provider ?? 'local',
-          model,
-          remainingCalls,
-          remainingActions: Math.max(0, ACTION_LIMIT - (run.tools ?? 0)),
-          remainingSeconds: Number.isFinite(run.startedAt)
-            ? Math.max(0, Math.ceil(RUN_SECONDS - (performance.now() - run.startedAt) / 1000))
-            : undefined
+          model
         }) +
         (exclusiveTools
           ? '\nThe user explicitly forbids alternative tools. Requested tool scope: ' +
@@ -406,6 +415,21 @@ export async function chat(
           : '') +
         (session.active ? '\n' + session.feedback() : '') +
         (verificationSetup ? '\nVerification setup needs repair: ' + verificationSetup : '')
+      const runState =
+        '\n' +
+        runStatePrompt({
+          remainingCalls,
+          remainingActions: Math.max(0, ACTION_LIMIT - (run.tools ?? 0)),
+          remainingSeconds: Number.isFinite(run.startedAt)
+            ? Math.max(0, Math.ceil(RUN_SECONDS - (performance.now() - run.startedAt) / 1000))
+            : undefined,
+          consultations: specialists ? Math.max(0, specialistLimit - consulted) : undefined,
+          hostUI: run.interfacePresence,
+          context: contextUsage
+        })
+      // Coding capacity and run state change between calls; keep them last.
+      const systemText = (): string =>
+        instructions + (session.active ? resources.context() : '') + runState
 
       const observations = latestDesktopObservations(turn)
       for (let index = 0; index < turn.length; index++) turn[index] = observations[index]
@@ -425,16 +449,14 @@ export async function chat(
         session.active &&
         session.canCompact &&
         turn.length > 1 &&
-        estimateMessages([
-          { role: 'system', content: instructions + resources.context() },
-          ...current()
-        ]) >
+        estimateMessages([{ role: 'system', content: systemText() }, ...current()]) >
           compactBudget * 0.75
       ) {
         session.compact()
         persistSession(true)
         releaseCheckpointedMessages(turn, session.data())
         compacted = true
+        onEvent({ type: 'compaction', status: 'done', scope: 'task' })
       }
       const summaryBudget = contextBudget(
         { ...settings.model, maxTokens: 1600 },
@@ -442,11 +464,12 @@ export async function chat(
         false,
         modelInfo
       ).inputBudget
+      let compacting = false
       const compact = await compactContext({
         history,
         current: turn,
         required: [
-          { role: 'system', content: instructions + (session.active ? resources.context() : '') },
+          { role: 'system', content: systemText() },
           ...checkpoint(),
           ...(session.active ? [{ role: 'user' as const, content: session.data() }] : [])
         ],
@@ -461,11 +484,22 @@ export async function chat(
                 return callLLM(model, messages, { allowTools: false, outputTokens })
               }
             : undefined,
-        assertActive: () => assertRun(run)
+        assertActive: () => assertRun(run),
+        onStart: () => {
+          compacting = true
+          onEvent({ type: 'compaction', status: 'running', scope: 'conversation' })
+        }
       })
+      if (compacting)
+        onEvent({
+          type: 'compaction',
+          status: compact ? 'done' : 'skipped',
+          scope: 'conversation',
+          info: compact
+        })
       if (compact && settings.model.historyTurns > 0) turns.splice(0, turns.length, ...history)
       const packed = assembleContext({
-        system: instructions + (session.active ? resources.context() : ''),
+        system: systemText(),
         history: history.filter((item) => !isSummaryTurn(item)),
         summaries: history.filter(isSummaryTurn).flat(),
         info: modelInfo,
@@ -489,12 +523,14 @@ export async function chat(
           usedTokens: packed.report.estimatedInputTokens + 256,
           outputTokens: packed.report.reservedOutputTokens
         })
-        packed.messages[0] = {
-          role: 'system',
-          content: instructions + resources.context()
-        }
+        packed.messages[0] = { role: 'system', content: systemText() }
         packed.report.estimatedInputTokens = estimateMessages(packed.messages)
         packed.report.codingResources = resources.snapshot()
+      }
+      contextUsage = {
+        usedTokens: packed.report.estimatedInputTokens,
+        budgetTokens: packed.report.inputBudget,
+        compactions: packed.report.compaction?.count ?? 0
       }
       onEvent({ type: 'context', report: packed.report })
       return packed.messages
@@ -1004,6 +1040,7 @@ export async function chat(
       }
 
       persistSession()
+      const firstBatch = !turn.some((message) => message.role === 'tool')
       turn.push({
         role: 'assistant',
         content: msg.content ?? '',
@@ -1011,6 +1048,7 @@ export async function chat(
         responseState: msg.responseState
       })
       if (session.active) resources.consume(estimateMessages([turn[turn.length - 1]]))
+      let directReply: string | undefined
       const images: {
         text: string
         image: string
@@ -1020,7 +1058,11 @@ export async function chat(
         const args = call.args
         if (call.function.name === 'discover_tools') {
           onEvent({ type: 'tool_start', id: call.id, name: call.function.name, args })
-          const text = discovery.load(args.names as string[], stepTools())
+          const text = discovery.load(
+            args.names as string[],
+            stepTools(),
+            (args.unload as string[] | undefined) ?? []
+          )
           onEvent({ type: 'tool_end', id: call.id, result: text })
           turn.push({ role: 'tool', tool_call_id: call.id, content: text })
           continue
@@ -1238,6 +1280,13 @@ export async function chat(
         turn.push({ role: 'tool', tool_call_id: call.id, content: resultText })
         if (result.image) images.push({ text: result.text, image: result.image })
         if (
+          firstBatch &&
+          calls.length === 1 &&
+          call.function.name === directTool &&
+          !session.active
+        )
+          directReply = DIRECT_REPLIES[directTool]?.(status, resultText)
+        if (
           call.function.name === 'act_on_control' &&
           status === 'uncertain' &&
           workflow.canRecover(actionId)
@@ -1392,6 +1441,13 @@ export async function chat(
           saveTurn(turns, turn)
           return reply
         }
+      }
+      if (directReply) {
+        workflow.finish()
+        turn.push({ role: 'assistant', content: directReply })
+        onEvent({ type: 'text', text: directReply })
+        saveTurn(turns, turn)
+        return directReply
       }
       for (const captured of images) {
         turn.push({

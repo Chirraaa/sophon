@@ -123,6 +123,8 @@ export async function compactContext(options: {
   compactCurrent?: boolean
   summarize?: (messages: ModelMessage[], outputTokens: number) => Promise<ModelReply | null>
   assertActive: () => void
+  // Called once compaction will be attempted, before any summary model call.
+  onStart?: () => void
 }): Promise<ContextCompaction | undefined> {
   const { history, current, required, inputBudget } = options
   if (!Number.isFinite(inputBudget) || inputBudget < 512) return
@@ -176,6 +178,7 @@ export async function compactContext(options: {
     )
   )
   if (summaryTokens < 128) return
+  options.onStart?.()
 
   let text = ''
   let method: ContextCompaction['method'] = 'excerpts'

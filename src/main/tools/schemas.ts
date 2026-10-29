@@ -34,7 +34,7 @@ export const toolSchemas = [
     function: {
       name: 'discover_tools',
       description:
-        'Load up to eight tool schemas from the current capability index. Use exact names. Recent tools and related follow-ups stay loaded within an eight-tool working set. Use loaded tools directly; discover only missing tools. Executes no actions and grants no permissions. Call alone. With names: [] return descriptions of the current catalog. Answer simple conversation directly without discovery.',
+        'Load up to eight tool schemas from the current capability index. Use exact names. Recent tools and related follow-ups stay loaded within an eight-tool working set. Use loaded tools directly; discover only missing tools. Optional unload drops loaded schemas you no longer need, freeing context. Executes no actions and grants no permissions. Call alone. With names: [] and no unload, return descriptions of the current catalog. Answer simple conversation directly without discovery.',
       parameters: {
         type: 'object',
         properties: {
@@ -42,6 +42,12 @@ export const toolSchemas = [
             type: 'array',
             items: { type: 'string', maxLength: 80 },
             maxItems: 8,
+            uniqueItems: true
+          },
+          unload: {
+            type: 'array',
+            items: { type: 'string', maxLength: 80 },
+            maxItems: 16,
             uniqueItems: true
           }
         },

@@ -36,16 +36,20 @@ const defaults = () => ({
 })
 
 async function unit() {
-  const small = { ...defaults(), history: [exchange('small', 2)] }
+  let started = 0
+  const small = { ...defaults(), history: [exchange('small', 2)], onStart: () => started++ }
   const original = structuredClone(small.history)
   assert.equal(await compact.compactContext(small), undefined)
   assert.deepEqual(small.history, original)
+  assert.equal(started, 0, 'No compaction notice without compaction')
 
   let requests = 0
   const options = {
     ...defaults(),
     history: [exchange('FIRST_CONSTRAINT'), exchange('Second'), exchange('recent', 10)],
+    onStart: () => started++,
     summarize: async (messages, outputTokens) => {
+      assert.equal(started, 1, 'The user is told before the summary call starts')
       requests++
       assert(context.estimateMessages(messages) <= options.summaryInputBudget - 256)
       assert(outputTokens <= 1600)

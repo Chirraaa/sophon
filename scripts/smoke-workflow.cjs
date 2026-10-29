@@ -343,6 +343,29 @@ async function review() {
   reset([answer('Done.'), answer('Done.')])
   assert.match(await chat('Open Notepad', event, []), /could not verify/)
 
+  // A plain single-intent command finishes from the host-confirmed result
+  // without a second, confirmation-only model call.
+  reset([tool('open_app', { name: 'notepad' })])
+  toolResult = 'Opened Notepad. Window: win-00000000-0000-0000-0000-000000000000 "Untitled".'
+  assert.equal(await chat('Open Notepad', event, []), 'Opened Notepad.')
+  assert.equal(captured.length, 1)
+  assert.deepEqual(executions, ['open_app'])
+  const system = captured[0][0].content
+  assert.match(system, /\nRUN STATE \(refreshed every model call\): \{"remaining":/)
+  assert(!/RUNTIME: [^\n]*"remaining"/.test(system), 'Per-call budgets stay out of the prefix')
+  assert(
+    system.lastIndexOf('RUN STATE') > system.lastIndexOf('RUNTIME:'),
+    'Volatile run state follows the stable instructions'
+  )
+  reset([tool('focus_window', { window: 'win-1' }), answer('Focused it.')])
+  toolResult = 'Focus request sent but not confirmed.'
+  await chat('Focus Notepad', event, [])
+  assert.equal(captured.length, 2, 'Unconfirmed results still go back to the model')
+  reset([tool('open_app', { name: 'notepad' }), answer('Opened Notepad and checked it.')])
+  toolResult = 'Opened Notepad. Window: win-00000000-0000-0000-0000-000000000000 "Untitled".'
+  await chat('Open Notepad then tell me its title', event, [])
+  assert.equal(captured.length, 2, 'Multi-step requests keep the model in the loop')
+
   const args = { path: 'notes.txt', content: 'abc' }
   toolResult = 'Saved notes.txt (3 bytes). Verified by reading back identical bytes.'
   reset([tool('write_file', args), answer('Saved notes.txt.')])
