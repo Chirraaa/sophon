@@ -103,7 +103,6 @@ ipcMain.handle = (channel, listener) =>
     if (channel === 'llm:status') return { online: true, model: info.id }
     if (channel === 'llm:modelInfo') return info
     if (channel === 'llm:model-choices') return [info]
-    if (channel === 'llm:models') return [info.id]
     if (channel === 'chatgpt:status')
       return {
         activeId: 'fixture',

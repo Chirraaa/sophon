@@ -541,7 +541,6 @@ declare global {
     resetSettings: () => Promise<AppSettings>
     onSettings: (cb: (s: AppSettings) => void) => () => void
     llmStatus: () => Promise<LlmStatus>
-    llmModels: () => Promise<string[]>
     llmModelChoices: () => Promise<ModelChoice[]>
     llmModelInfo: () => Promise<ModelChoice>
     defaultPrompt: () => Promise<string>

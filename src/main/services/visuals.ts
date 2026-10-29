@@ -6,12 +6,6 @@ import { parseDiagram } from './isolated-parser'
 
 const documents = new Map<string, { owner: number; html: string; svg?: string; inert?: boolean }>()
 
-export function registerVisualScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    { scheme: 'sophon-visual', privileges: { standard: true, secure: true } }
-  ])
-}
-
 export function registerVisualProtocol(): void {
   protocol.handle('sophon-visual', (request) => {
     const url = new URL(request.url)

@@ -102,23 +102,23 @@ async function review() {
         tools: [],
         workspaceSelected: false,
         inlineVisual: true,
-        interaction: { surface, input },
-        interfacePresence: { fullAppVisible: true, shortcutVisible: false, focused: 'full-app' }
+        interaction: { surface, input }
       })
-      assert(
-        summary.includes(
-          surface === 'shortcut' ? 'shortcut quick-command overlay' : 'full app chat window'
-        )
-      )
-      assert(summary.includes(input === 'voice' ? 'voice transcription' : 'typed text'))
+      assert(summary.includes(`"origin":{"surface":"${surface}","input":"${input}"}`))
       assert.match(summary, /cannot see your own UI or the desktop unless/)
-      assert.match(summary, /do not approve your own requests/)
-      assert.match(
-        summary,
-        /Full app visible; shortcut overlay hidden; focused Sophon interface: full-app/
-      )
+      assert.match(summary, /Never operate your own approval controls/)
     }
   }
+  assert(
+    environment
+      .runStatePrompt({
+        remainingCalls: 4,
+        remainingActions: 9,
+        hostUI: { fullAppVisible: true, shortcutVisible: false, focused: 'full-app' }
+      })
+      .includes('"hostUI":{"fullAppVisible":true,"shortcutVisible":false,"focused":"full-app"}'),
+    'Window visibility is refreshed every call in the run state'
+  )
   const registry = load('src/main/tools/registry.ts').TOOL_INFO
   const localTools = new Set([
     'discover_tools',
@@ -142,11 +142,15 @@ async function review() {
       workspaceSelected: true,
       inlineVisual: false
     })
-    assert(summary.includes(`\n${name}: `), `${name} needs live usage guidance`)
-    assert.match(summary, /Read each result before choosing dependent calls/)
-    assert.match(summary, /A tool being listed is not a reason to use it/)
-    for (const other of names.filter((other) => other !== name))
-      assert(!summary.includes(`\n${other}: `), `Unavailable ${other} must not be advertised`)
+    assert(
+      summary.includes(`Available tools for THIS request: ${name} (schemas loaded).`),
+      `${name} is advertised when permitted`
+    )
+    assert(
+      summary.includes(`CAPABILITY INDEX (permitted names): ${name}.`),
+      `Only ${name} is indexed; unavailable tools must not be advertised`
+    )
+    assert.match(summary, /Tool availability is policy, not proof/)
   }
   const visualSummary = environment.environmentPrompt({
     mode: 'assistant',
@@ -154,16 +158,17 @@ async function review() {
     workspaceSelected: false,
     inlineVisual: true
   })
-  assert.match(visualSummary, /consult_specialist: /, 'Inline visuals retain specialist guidance')
-  assert(!visualSummary.includes('\nclick: '))
+  assert.match(visualSummary, /Available tools for THIS request: consult_specialist /)
+  assert.match(visualSummary, /Inline visual task: desktop\/file tools are intentionally omitted/)
+  assert.doesNotMatch(visualSummary, /Desktop limits/)
   const researchSummary = environment.environmentPrompt({
     mode: 'assistant',
     tools: ['web_search', 'web_fetch'],
     workspaceSelected: false,
     inlineVisual: false
   })
-  assert.match(researchSummary, /web_search: /)
-  assert(!researchSummary.includes('\nread_file: '))
+  assert.match(researchSummary, /Available tools for THIS request: web_search, web_fetch /)
+  assert.doesNotMatch(researchSummary, /read_file|File creation\/edits/)
   const desktop = environment.environmentPrompt({
     mode: 'assistant',
     tools: available,
@@ -172,8 +177,8 @@ async function review() {
   })
   assert.match(desktop, /Windows desktop application/)
   assert.match(desktop, /Available tools for THIS request: open_app, list_windows, look_at_screen/)
-  assert.match(desktop, /installed Windows Start menu apps/)
-  assert.match(desktop, /Shell execution/)
+  assert.match(desktop, /Desktop limits: window win- references last only this request/)
+  assert.match(desktop, /no general shell/)
   assert.match(desktop, /There is no mode to switch/)
   const offline = environment.environmentPrompt({
     mode: 'assistant',

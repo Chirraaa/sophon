@@ -60,6 +60,8 @@ import {
   SPECIALIST_INSTRUCTIONS
 } from './specialists'
 const MAX_SAVED_RESULT = 300
+// Outcomes that stop dependent work until the model or user resolves them.
+const UNRESOLVED = ['denied', 'failed', 'uncertain']
 const clean = (s: string): string => s.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
 
 // Repair hints for the tools in a rejected batch only; a small model handles
@@ -330,7 +332,7 @@ export async function chat(
           (harnessPhase !== 'before_task' ? '\n' + harnessContext(taskText, harnessPhase) : '')
         : ''
       const system =
-        buildSystemPrompt(visual, inlineVisual, true) +
+        buildSystemPrompt(visual, inlineVisual) +
         (tools.some((tool) => tool.function.name === 'ask_questions')
           ? '\nWhen clarification is needed before proceeding, call ask_questions through the structured tool API instead of ending with a prose questionnaire or a numbered menu of possible tasks. For an open-ended new project, ask one focused question about the desired outcome with concrete choices. Reuse details already provided. If a reasonable assumption allows useful progress, state it and begin the work instead of asking. Do not call unrelated tools just to show activity.'
           : '')
@@ -368,9 +370,7 @@ export async function chat(
           codingMode: settings.coding?.mode,
           workspaceSelected: !!run.workspace,
           interaction: run.interaction,
-          interfacePresence: run.interfacePresence,
           inlineVisual,
-          compact: true,
           availableTools: catalog.map((tool) => tool.function.name),
           // Only settings the user can change are worth explaining; internal
           // phase tools stay out of the prompt.
@@ -547,6 +547,36 @@ export async function chat(
       onEvent({ type: 'context', report: packed.report })
       return packed.messages
     }
+    const skipRemaining = (
+      calls: ReturnType<typeof parseToolCalls>,
+      index: number,
+      reason: string
+    ): void => {
+      for (const pending of calls.slice(index + 1))
+        turn.push({ role: 'tool', tool_call_id: pending.id, content: 'Not executed: ' + reason })
+    }
+    // A tool call the host issues itself (verification, inspection, read-back):
+    // same gate, ledger and transcript as a model-issued call.
+    const runHostAction = async (
+      name: string,
+      args: Record<string, unknown>
+    ): Promise<{ result: Awaited<ReturnType<typeof runTool>>; status: string }> => {
+      const id = randomUUID()
+      workflow.beforeAction(id, name, args)
+      turn.push({
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }]
+      })
+      onEvent({ type: 'tool_start', id, name, args })
+      const result = await runTool(name, args, id, onEvent)
+      assertRun(run)
+      const status = runtime.record(id, result).outcome.status
+      persistSession()
+      onEvent({ type: 'tool_end', id, result: result.text, outcome: result.status })
+      turn.push({ role: 'tool', tool_call_id: id, content: result.text })
+      return { result, status }
+    }
     const verifyProject = async (): Promise<{ repair: boolean; blocked: string }> => {
       verificationSetup = ''
       let repair = false
@@ -580,29 +610,9 @@ export async function chat(
           blocked = `The task reached its ${ACTION_LIMIT}-action limit before verification completed.`
           break
         }
-        const id = randomUUID()
-        workflow.beforeAction(id, next.tool, next.args)
-        turn.push({
-          role: 'assistant',
-          content: '',
-          tool_calls: [
-            {
-              id,
-              type: 'function',
-              function: { name: next.tool, arguments: JSON.stringify(next.args) }
-            }
-          ]
-        })
-        onEvent({ type: 'tool_start', id, name: next.tool, args: next.args })
-        const result = await runTool(next.tool, next.args, id, onEvent)
-        assertRun(run)
-        const text = result.text
-        const status = runtime.record(id, result).outcome.status
-        persistSession()
-        onEvent({ type: 'tool_end', id, result: text, outcome: result.status })
-        turn.push({ role: 'tool', tool_call_id: id, content: text })
-        if (['denied', 'failed', 'uncertain'].includes(status)) {
-          blocked = text
+        const { result, status } = await runHostAction(next.tool, next.args)
+        if (UNRESOLVED.includes(status)) {
+          blocked = result.text
           break
         }
         if (['run_npm', 'run_command'].includes(next.tool) && status !== 'verified') {
@@ -620,31 +630,10 @@ export async function chat(
         throw new Error(
           'Project inspection requires list_files under the current tool permissions and requested scope.'
         )
-      const id = randomUUID()
-      const args = {}
-      workflow.beforeAction(id, 'list_files', args)
-      turn.push({
-        role: 'assistant',
-        content: '',
-        tool_calls: [
-          {
-            id,
-            type: 'function',
-            function: { name: 'list_files', arguments: '{}' }
-          }
-        ]
-      })
-      onEvent({ type: 'tool_start', id, name: 'list_files', args })
-      const result = await runTool('list_files', args, id, onEvent)
-      assertRun(run)
-      const text = result.text
-      const status = runtime.record(id, result).outcome.status
-      persistSession()
-      onEvent({ type: 'tool_end', id, result: text, outcome: result.status })
-      turn.push({ role: 'tool', tool_call_id: id, content: text })
-      if (['denied', 'failed', 'uncertain'].includes(status) || session.needsInspection)
-        throw new Error('Project inspection stopped: ' + text)
-      results.push(text)
+      const { result, status } = await runHostAction('list_files', {})
+      if (UNRESOLVED.includes(status) || session.needsInspection)
+        throw new Error('Project inspection stopped: ' + result.text)
+      results.push(result.text)
     }
     let stopReason = 'model-step'
     while (run.modelCalls < maxSteps) {
@@ -1209,12 +1198,7 @@ export async function chat(
           turn.push({ role: 'tool', tool_call_id: call.id, content: findings.text })
           if (session.active) resources.consume(estimateMessages([turn[turn.length - 1]]))
           if (findings.failed) {
-            for (const pending of calls.slice(index + 1))
-              turn.push({
-                role: 'tool',
-                tool_call_id: pending.id,
-                content: 'Not executed: specialist stopped.'
-              })
+            skipRemaining(calls, index, 'specialist stopped.')
             const reply = 'Specialist consultation stopped: ' + findings.text
             workflow.finish(true)
             turn.push({ role: 'assistant', content: reply })
@@ -1245,22 +1229,16 @@ export async function chat(
         const neededInspection = session.needsInspection
         const action = runtime.record(actionId, result)
         const status = result.status
-        if (!['failed', 'denied', 'uncertain'].includes(status)) discovery.used(call.function.name)
+        const succeeded = !UNRESOLVED.includes(status)
+        if (succeeded) discovery.used(call.function.name)
         const readbackWindow = action.readbackWindow
-        if (
-          call.function.name === 'harness_manage' &&
-          args.action === 'read' &&
-          !['failed', 'denied', 'uncertain'].includes(status)
-        ) {
+        if (call.function.name === 'harness_manage' && args.action === 'read' && succeeded) {
           const key = `${args.category}/${args.name}`
           readSkills.add(key)
           const version = resultText.match(/^\[Procedural state: [a-z]+, version (\d+)/)?.[1]
           if (version !== undefined) readVersions.set(key, Number(version))
         }
-        if (
-          call.function.name === 'plugin_read' &&
-          !['failed', 'denied', 'uncertain'].includes(status)
-        )
+        if (call.function.name === 'plugin_read' && succeeded)
           readSkills.add(pluginSkillId(String(args.plugin), String(args.path)))
 
         if (
@@ -1271,10 +1249,7 @@ export async function chat(
             ))
         )
           budgets.progress('mutation')
-        if (
-          ['list_files', 'read_file'].includes(call.function.name) &&
-          !['failed', 'denied', 'uncertain'].includes(status)
-        )
+        if (['list_files', 'read_file'].includes(call.function.name) && succeeded)
           budgets.progress('file-read')
         if (status === 'verified' && ['edit_file', 'write_file'].includes(call.function.name))
           resources.observeEdit(args)
@@ -1303,12 +1278,7 @@ export async function chat(
           status === 'uncertain' &&
           workflow.canRecover(actionId)
         ) {
-          for (const pending of calls.slice(index + 1))
-            turn.push({
-              role: 'tool',
-              tool_call_id: pending.id,
-              content: 'Not executed: read back the uncertain control action first.'
-            })
+          skipRemaining(calls, index, 'read back the uncertain control action first.')
           let readbackFailure =
             'The original app could not be inspected under the current scope or action budget.'
           if (
@@ -1316,28 +1286,11 @@ export async function chat(
             run.tools < ACTION_LIMIT &&
             stepTools().some((tool) => tool.function.name === 'inspect_app')
           ) {
-            const id = randomUUID()
-            const inspectArgs = { window: readbackWindow }
-            workflow.beforeAction(id, 'inspect_app', inspectArgs)
-            turn.push({
-              role: 'assistant',
-              content: '',
-              tool_calls: [
-                {
-                  id,
-                  type: 'function',
-                  function: { name: 'inspect_app', arguments: JSON.stringify(inspectArgs) }
-                }
-              ]
-            })
-            onEvent({ type: 'tool_start', id, name: 'inspect_app', args: inspectArgs })
-            const readback = await runTool('inspect_app', inspectArgs, id, onEvent)
-            assertRun(run)
-            const text = readback.text
-            const readbackStatus = runtime.record(id, readback).outcome.status
-            onEvent({ type: 'tool_end', id, result: text, outcome: readback.status })
-            turn.push({ role: 'tool', tool_call_id: id, content: text })
-            results.push(text)
+            const { result: readback, status: readbackStatus } = await runHostAction(
+              'inspect_app',
+              { window: readbackWindow }
+            )
+            results.push(readback.text)
             const snapshot = readback.observation
             if (
               readbackStatus === 'observed' &&
@@ -1352,7 +1305,7 @@ export async function chat(
               })
               break
             }
-            readbackFailure = text
+            readbackFailure = readback.text
           }
           const reply =
             'The control action outcome is uncertain and read-back could not establish usable state. ' +
@@ -1369,12 +1322,7 @@ export async function chat(
             (call.function.name === 'edit_file' && result.code === 'patch-not-applied')) &&
           workflow.canRecover(actionId)
         ) {
-          for (const pending of calls.slice(index + 1))
-            turn.push({
-              role: 'tool',
-              tool_call_id: pending.id,
-              content: 'Not executed: refresh the workspace evidence before continuing.'
-            })
+          skipRemaining(calls, index, 'refresh the workspace evidence before continuing.')
           turn.push({
             role: 'system',
             content:
@@ -1389,12 +1337,7 @@ export async function chat(
           result.code === 'screenshot-required' &&
           workflow.canRecover(actionId)
         ) {
-          for (const pending of calls.slice(index + 1))
-            turn.push({
-              role: 'tool',
-              tool_call_id: pending.id,
-              content: 'Not executed: capture the intended window again before continuing.'
-            })
+          skipRemaining(calls, index, 'capture the intended window again before continuing.')
           turn.push({
             role: 'system',
             content:
@@ -1403,12 +1346,7 @@ export async function chat(
           break
         }
         if (result.code === 'target-missing' && workflow.canRecover(actionId)) {
-          for (const pending of calls.slice(index + 1))
-            turn.push({
-              role: 'tool',
-              tool_call_id: pending.id,
-              content: 'Not executed: refresh the target window before continuing.'
-            })
+          skipRemaining(calls, index, 'refresh the target window before continuing.')
           turn.push({
             role: 'system',
             content:
@@ -1420,13 +1358,11 @@ export async function chat(
           ['web_search', 'web_fetch'].includes(call.function.name) &&
           result.code === 'web-unavailable'
         ) {
-          for (const pending of calls.slice(index + 1))
-            turn.push({
-              role: 'tool',
-              tool_call_id: pending.id,
-              content:
-                'Not executed: the web service was unavailable. Reconsider the original question before taking any further action.'
-            })
+          skipRemaining(
+            calls,
+            index,
+            'the web service was unavailable. Reconsider the original question before taking any further action.'
+          )
           turn.push({
             role: 'system',
             content:
@@ -1434,13 +1370,8 @@ export async function chat(
           })
           break
         }
-        if (['denied', 'failed', 'uncertain'].includes(status) || coding.limitIssue()) {
-          for (const pending of calls.slice(index + 1))
-            turn.push({
-              role: 'tool',
-              tool_call_id: pending.id,
-              content: 'Not executed: the task stopped after a denied or failed action.'
-            })
+        if (UNRESOLVED.includes(status) || coding.limitIssue()) {
+          skipRemaining(calls, index, 'the task stopped after a denied or failed action.')
           const reply =
             coding.limitIssue() ??
             (status === 'denied'

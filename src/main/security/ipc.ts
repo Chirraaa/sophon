@@ -126,7 +126,6 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'chats:delete-category': { required: [id] },
   'approval:resolve': { required: [id, oneOf('once', 'always', 'deny')] },
   'llm:status': {},
-  'llm:models': {},
   'llm:model-choices': {},
   'llm:modelInfo': {},
   'llm:default-prompt': {},

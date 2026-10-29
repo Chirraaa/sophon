@@ -194,8 +194,7 @@ async function main() {
     tools: ['discover_tools'],
     availableTools: ['discover_tools', 'consult_specialist'],
     workspaceSelected: false,
-    inlineVisual: false,
-    compact: true
+    inlineVisual: false
   })
   assert.match(subagents, /SUBAGENTS: you can spawn subagents/, 'The model knows it can spawn them')
   assert(

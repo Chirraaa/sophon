@@ -144,7 +144,6 @@ const api: Api = {
   resetSettings: () => ipcRenderer.invoke('settings:reset'),
   onSettings: (cb) => listen('settings:changed', cb),
   llmStatus: () => ipcRenderer.invoke('llm:status'),
-  llmModels: () => ipcRenderer.invoke('llm:models'),
   llmModelInfo: () => ipcRenderer.invoke('llm:modelInfo'),
   llmModelChoices: () => ipcRenderer.invoke('llm:model-choices'),
   defaultPrompt: () => ipcRenderer.invoke('llm:default-prompt'),

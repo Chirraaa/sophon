@@ -27,16 +27,14 @@ assert(
     .select(catalog.filter((t) => t.function.name !== 'mcp_call'))
     .some((t) => t.function.name === 'mcp_call')
 )
-for (const compact of [true, false]) {
-  const prompt = environmentPrompt({
+assert(
+  environmentPrompt({
     mode: 'assistant',
-    compact,
     tools: names,
     workspaceSelected: false,
     inlineVisual: false
-  })
-  assert(prompt.includes(APP_ROUTING))
-}
+  }).includes(APP_ROUTING)
+)
 assert.match(APP_ROUTING, /denied operation is a stop/)
 const visual = new ToolDiscovery('Inspect the custom app')
 visual.used('look_at_screen')
@@ -55,5 +53,5 @@ assert(
   'A visual fallback keeps coordinate actions immediately available'
 )
 console.log(
-  'PASS app routing: direct service discovery, related schemas, blocked tool exclusion, full and compact guidance'
+  'PASS app routing: direct service discovery, related schemas, blocked tool exclusion and routing guidance'
 )

@@ -9,8 +9,6 @@ import {
   readNote
 } from '../services/notes'
 
-export const NOTE_TOOLS = ['notes_list', 'notes_read', 'notes_create', 'notes_edit', 'notes_delete']
-
 /** Describes the exact change for the approval card, and rejects stale targets before asking. */
 export function bindNotesAction(
   name: string,
