@@ -102,6 +102,18 @@ function repairToolHistory(turn: Msg[]): Msg[] {
   }
   return repaired
 }
+// A short follow-up ("yes", "go ahead") continues the previous request, so its
+// tools are loaded too; otherwise the model can only claim to act.
+function discoveryText(taskText: string, history: ChatHistory): string {
+  if (taskText.trim().length > 80) return taskText
+  const previous = history.findLast((saved) => !isSummaryTurn(saved))?.[0]
+  if (previous?.role !== 'user') return taskText
+  const text =
+    typeof previous.content === 'string'
+      ? previous.content
+      : previous.content.map((part) => (part.type === 'text' ? part.text : '')).join('\n')
+  return taskText + '\n' + text.slice(0, 2000)
+}
 function saveTurn(turns: ChatHistory, turn: Msg[]): void {
   turns.push(
     turn
@@ -167,11 +179,11 @@ export async function chat(
   let partialDraft = ''
   try {
     const taskText = workflow.resumed ? workflow.snapshot().goal : userText
-    const discovery = new ToolDiscovery(taskText)
     const history =
       settings.model.historyTurns === 0
         ? []
         : turns.map((saved) => historicalDesktopReferences(repairToolHistory(saved)))
+    const discovery = new ToolDiscovery(discoveryText(taskText, history))
     const books = selectPlaybooks(taskText)
     const memories = settings.memory?.enabled
       ? rankMemories(listMemories(), taskText, run.workspace, chatId)
