@@ -134,7 +134,7 @@ export const toolSchemas = [
     function: {
       name: 'clear_chat',
       description:
-        'Erase all messages in the current chat when the user asks to clear, wipe or reset this conversation. Always asks the user first; the chat is cleared after your reply ends, so reply with one short sentence and call alone. Does not delete other chats.',
+        'Erase all messages in the current chat when the user asks to clear, wipe or reset this conversation. Call it directly: the app shows its own confirmation, so never ask for confirmation in prose first. The chat is cleared after your reply ends, so reply with one short sentence and call alone. Does not delete other chats.',
       parameters: { type: 'object', properties: {} }
     }
   },

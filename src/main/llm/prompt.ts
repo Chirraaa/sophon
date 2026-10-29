@@ -1,4 +1,4 @@
-﻿import { getSettings } from '../settings'
+import { getSettings } from '../settings'
 import { VISUAL_CAPABILITIES, VISUAL_PROMPT } from './visuals'
 import { INLINE_VISUAL_TASK } from './visual-routing'
 const STYLE_LINES: Record<ReplyStyle, string> = {

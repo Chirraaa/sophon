@@ -13,9 +13,15 @@ export const ANSWER_REVIEW =
 export function announcesNextStep(text: string): boolean {
   const reply = text.trim()
   if (!reply || reply.length > 600 || /```|~~~/.test(reply) || reply.endsWith('?')) return false
-  const last = reply.split(/\n+|(?<=[.!])\s+(?=\S)/).pop() ?? ''
-  return /^(?:(?:ok(?:ay)?|sure|first|next|now|then),?\s+)?(?:let me(?! know)|let's|i(?:'ll| will| am going to| need to| should))\s+[^.!?\n]{0,140}\b(?:check|read|open|look|search|inspect|run|list|call|use|fetch|edit|update|create|write|find|examine|start|launch|click|type)\b[^?\n]*$/i.test(
-    last
+  const last = (reply.split(/\n+|(?<=[.!])\s+(?=\S)/).pop() ?? '').replace(/[’]/g, "'")
+  return (
+    /^(?:(?:ok(?:ay)?|sure|first|next|now|then),?\s+)?(?:let me(?! know)|let's|i(?:'ll| will| am going to| need to| should))\s+[^.!?\n]{0,140}\b(?:check|read|open|look|search|inspect|run|list|call|use|fetch|edit|update|create|write|find|examine|start|launch|click|type|clear|delete|remove|erase|reset|close|save|send|set|move|play|stop)\b[^?\n]*$/i.test(
+      last
+    ) ||
+    // "Clearing the chat now." describes an action in progress that no tool took.
+    /^(?:(?:ok(?:ay)?|sure|done),?\s+)?(?:clearing|deleting|removing|erasing|resetting|opening|closing|saving|sending|launching|starting|running|searching|moving|playing|stopping)\b[^?\n]{0,140}\bnow[.!]?$/i.test(
+      last
+    )
   )
 }
 

@@ -191,6 +191,14 @@ async function review() {
   assert.match(offline, /No working folder/)
   assert(environment.deniesDesktopCapability(refusal.content))
   assert(environment.deniesDesktopCapability('As an AI, I cannot access your screen.'))
+  assert(
+    environment.deniesDesktopCapability('I can’t control your computer.'),
+    'A curly apostrophe is normalised before matching'
+  )
+  assert(
+    !environment.deniesDesktopCapability('Example: “I cannot control your computer.”'),
+    'Curly-quoted examples are not capability denials'
+  )
   for (const text of [
     'The app blocked this action.',
     'I cannot access the screen in offline mode.',
