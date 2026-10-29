@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input'
 import { DeleteChatPopover } from './DeleteChatPopover'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/hooks/useSession'
+import { Label } from '@/components/ui/label'
 export function ConversationList({ onSelect }: { onSelect: () => void }): React.JSX.Element {
   const { chats, chatId, runningChatId, categories = [] } = useSession()
   const [editing, setEditing] = useState<string | null>(null)
@@ -317,7 +318,7 @@ export function ConversationList({ onSelect }: { onSelect: () => void }): React.
                     </div>
                     {moving === chat.id && (
                       <div className="mx-1 mb-2 rounded-lg border border-border bg-card p-2">
-                        <label className="block text-[10px] text-muted-foreground">
+                        <Label className="block text-[10px] text-muted-foreground">
                           Move to category
                           <Select
                             value={chat.categoryId ?? ''}
@@ -349,7 +350,7 @@ export function ConversationList({ onSelect }: { onSelect: () => void }): React.
                               ))}
                             </SelectContent>
                           </Select>
-                        </label>
+                        </Label>
                         <div className="mt-2 flex items-center gap-1">
                           <Button
                             variant="ghost"

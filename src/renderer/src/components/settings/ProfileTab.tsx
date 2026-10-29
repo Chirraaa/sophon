@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select'
 import { Section } from './controls'
 import { MicrophoneSetup } from './MicrophoneSetup'
+import { Label } from '@/components/ui/label'
 
 const USES = [
   ['coding', 'Coding'],
@@ -85,9 +86,9 @@ export function ProfileEditor({
         {onboarding && step === 3 && <MicrophoneSetup settings={settings} />}
         {(!onboarding || step === 0) && (
           <div className="space-y-2">
-            <label htmlFor="profile-name" className="text-sm font-medium">
+            <Label htmlFor="profile-name" className="text-sm font-medium">
               What should Sophon call you?
-            </label>
+            </Label>
             <Input
               id="profile-name"
               autoComplete="nickname"
@@ -133,9 +134,9 @@ export function ProfileEditor({
         {(!onboarding || step === 2) && (
           <>
             <div className="space-y-2">
-              <label id="profile-guidance" className="text-sm font-medium">
+              <Label id="profile-guidance" className="text-sm font-medium">
                 How do you like to work?
-              </label>
+              </Label>
               <Select
                 value={profile.guidance}
                 onValueChange={(value) =>
@@ -153,9 +154,9 @@ export function ProfileEditor({
               </Select>
             </div>
             <div className="space-y-2">
-              <label htmlFor="profile-context" className="text-sm font-medium">
+              <Label htmlFor="profile-context" className="text-sm font-medium">
                 Anything else Sophon should know?
-              </label>
+              </Label>
               <Textarea
                 id="profile-context"
                 rows={3}

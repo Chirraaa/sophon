@@ -4,6 +4,7 @@ import { Plug, FolderPlus, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { CONNECTOR_PRESETS, type PluginState } from '../../../../shared/plugins'
 import { MicrosoftConnection } from './MicrosoftConnection'
 
@@ -19,6 +20,7 @@ export function PluginsTab(): React.JSX.Element {
   const [authorization, setAuthorization] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; configuration?: string }>({})
   const editor = useRef<HTMLFormElement>(null)
   useEffect(() => {
     if (showAdd) editor.current?.scrollIntoView({ block: 'start' })
@@ -57,9 +59,31 @@ export function PluginsTab(): React.JSX.Element {
       setBusy(false)
     }
   }
+  function validate(): Record<string, unknown> | null {
+    const next: { name?: string; configuration?: string } = {}
+    if (!name.trim()) next.name = 'Enter a name for this connection.'
+    let config: unknown = null
+    if (!configuration.trim()) next.configuration = 'Enter the MCP configuration as JSON.'
+    else {
+      try {
+        config = JSON.parse(configuration)
+        if (!config || typeof config !== 'object' || Array.isArray(config))
+          next.configuration = 'The configuration must be a JSON object, such as { "url": "…" }.'
+      } catch (e) {
+        next.configuration = `The configuration is not valid JSON: ${(e as Error).message}`
+      }
+    }
+    setFieldErrors(next)
+    if (next.name || next.configuration) {
+      document.getElementById(next.name ? 'mcp-name' : 'mcp-configuration')?.focus()
+      return null
+    }
+    return config as Record<string, unknown>
+  }
   async function add(): Promise<void> {
+    const config = validate() as { type?: string; command?: string; headers?: object } | null
+    if (!config) return
     await perform(async () => {
-      const config = JSON.parse(configuration)
       if (authorization.trim()) {
         if (config.type === 'stdio' || config.command)
           throw new Error('Local MCP credentials belong in the env object.')
@@ -94,6 +118,7 @@ export function PluginsTab(): React.JSX.Element {
           onClick={() => {
             setEditing(null)
             setAuthorization('')
+            setFieldErrors({})
             setShowAdd(!showAdd)
           }}
         >
@@ -121,6 +146,7 @@ export function PluginsTab(): React.JSX.Element {
       {showAdd && (
         <form
           ref={editor}
+          noValidate
           className="space-y-4 rounded-2xl border border-border p-5"
           onSubmit={(e) => {
             e.preventDefault()
@@ -146,37 +172,65 @@ export function PluginsTab(): React.JSX.Element {
                   setName(p.name)
                   setConfiguration(JSON.stringify(p.config, null, 2))
                   setAuthorization('')
+                  setFieldErrors({})
                 }}
               >
                 {p.name}
               </Button>
             ))}
           </div>
-          <label className="block space-y-2 text-xs">
-            <span>Connection name</span>
+          <div className="space-y-2">
+            <Label htmlFor="mcp-name" className="text-xs">
+              Connection name
+            </Label>
             <Input
+              id="mcp-name"
               value={name}
               maxLength={100}
-              onChange={(e) => setName(e.target.value)}
-              required
+              onChange={(e) => {
+                setName(e.target.value)
+                setFieldErrors((previous) => ({ ...previous, name: undefined }))
+              }}
+              aria-invalid={fieldErrors.name ? true : undefined}
+              aria-describedby={fieldErrors.name ? 'mcp-name-error' : undefined}
               disabled={busy}
             />
-          </label>
-          <label className="block space-y-2 text-xs">
-            <span>MCP configuration (JSON)</span>
+            {fieldErrors.name && (
+              <p id="mcp-name-error" role="alert" className="text-xs text-destructive">
+                {fieldErrors.name}
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mcp-configuration" className="text-xs">
+              MCP configuration (JSON)
+            </Label>
             <Textarea
+              id="mcp-configuration"
               className="min-h-36 font-mono text-xs"
               value={configuration}
-              onChange={(e) => setConfiguration(e.target.value)}
+              onChange={(e) => {
+                setConfiguration(e.target.value)
+                setFieldErrors((previous) => ({ ...previous, configuration: undefined }))
+              }}
               maxLength={32000}
-              required
+              aria-invalid={fieldErrors.configuration ? true : undefined}
+              aria-describedby={fieldErrors.configuration ? 'mcp-configuration-error' : undefined}
               disabled={busy}
               spellCheck={false}
             />
-          </label>
-          <label className="block space-y-2 text-xs">
-            <span>Authorization header (optional, HTTP only)</span>
+            {fieldErrors.configuration && (
+              <p id="mcp-configuration-error" role="alert" className="text-xs text-destructive">
+                {fieldErrors.configuration}
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mcp-authorization" className="text-xs">
+              Authorization header (optional, HTTP only)
+            </Label>
             <Input
+              id="mcp-authorization"
               type="password"
               autoComplete="off"
               placeholder="Bearer your-token or Basic encoded-credentials"
@@ -185,7 +239,7 @@ export function PluginsTab(): React.JSX.Element {
               maxLength={4096}
               disabled={busy}
             />
-          </label>
+          </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
             GitHub accepts a personal access token as Bearer authorization. Jira / Confluence
             supports API token authentication when enabled by your organization. Other headers and
@@ -347,6 +401,7 @@ export function PluginsTab(): React.JSX.Element {
                   size="sm"
                   disabled={busy}
                   onClick={() => {
+                    setFieldErrors({})
                     setEditing(server.id)
                     setName(server.name)
                     setConfiguration(JSON.stringify(server.configuration, null, 2))
