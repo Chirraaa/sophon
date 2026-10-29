@@ -2,7 +2,10 @@ import type { ModelReply, ToolCall } from './types'
 import { CodingOutputLimitError } from '../../shared/coding-resources'
 import { tokenUsage } from '../../shared/model-usage'
 
-export function completionStream(onText: (text: string) => void): {
+export function completionStream(
+  onText: (text: string) => void,
+  onProgress?: (progress: ModelProgress) => void
+): {
   accept: (data: string) => void
   reply: () => ModelReply
   usage: () => TokenUsage | undefined
@@ -12,6 +15,7 @@ export function completionStream(onText: (text: string) => void): {
   let done = false
   let usage: TokenUsage | undefined
   const calls = new Map<number, ToolCall>()
+  let generatedChars = 0
   return {
     usage: () => usage,
     accept(data) {
@@ -59,6 +63,8 @@ export function completionStream(onText: (text: string) => void): {
           call.function.name += part.function?.name ?? ''
           call.function.arguments += part.function?.arguments ?? ''
           calls.set(part.index, call)
+          generatedChars += (part.function?.arguments ?? '').length
+          onProgress?.({ toolName: call.function.name, generatedChars })
         }
       }
       if (choice.finish_reason !== undefined && choice.finish_reason !== null) {

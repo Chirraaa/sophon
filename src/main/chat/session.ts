@@ -338,8 +338,24 @@ async function respond(
   const images: Promise<void>[] = []
   let textTimer: ReturnType<typeof setTimeout> | undefined
   let compactionBefore: ContextCompactionNotice | undefined
+  let progressTimer: ReturnType<typeof setTimeout> | undefined
   const onEvent = (event: ChatEvent): void => {
     reply.sources = run.sources.map((source) => ({ ...source }))
+    if (event.type === 'model_progress') {
+      const first = !reply.modelProgress
+      reply.modelProgress = event.progress
+      if (!event.progress || first) {
+        clearTimeout(progressTimer)
+        progressTimer = undefined
+        emit(false)
+      } else {
+        progressTimer ??= setTimeout(() => {
+          progressTimer = undefined
+          emit(false)
+        }, 250)
+      }
+      return
+    }
     if (event.type === 'tool_output') {
       const action = reply.actions.find((value) => value.id === event.id)
       if (action) action.detail = event.output
@@ -485,6 +501,8 @@ async function respond(
     reply.text = reply.text ? reply.text + '\n\n' + detail : detail
   } finally {
     clearTimeout(textTimer)
+    clearTimeout(progressTimer)
+    delete reply.modelProgress
 
     await Promise.all(images)
     reply.sources = run.sources.map((source) => ({ ...source }))

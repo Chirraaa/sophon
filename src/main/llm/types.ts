@@ -34,6 +34,7 @@ export type ModelReply = {
   tool_calls?: ToolCall[]
 }
 export type ChatEvent =
+  | { type: 'model_progress'; progress?: ModelProgress }
   | { type: 'tool_output'; id: string; output: string }
   | { type: 'text'; text: string }
   | { type: 'quality'; status: 'checking' | 'reviewed' }

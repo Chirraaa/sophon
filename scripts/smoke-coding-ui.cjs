@@ -265,6 +265,29 @@ async function review() {
           bounds.y + bounds.height <= area.y + area.height
       )
     }
+    const generating = fixture()
+    generating.items.at(-1).actions = []
+    generating.items.at(-1).modelProgress = { toolName: 'write_file', generatedChars: 12000 }
+    await publish(generating)
+    await wait(
+      () =>
+        evaluate(
+          'document.body.textContent.includes("Generating file contents") && document.body.textContent.includes("12,000 characters received")'
+        ),
+      'Streamed file generation progress'
+    )
+    await capture(name + '-generating')
+    generating.items.at(-1).modelProgress.generatedChars = 18000
+    await publish(generating)
+    await wait(
+      () => evaluate('document.body.textContent.includes("18,000 characters received")'),
+      'File generation progress grows'
+    )
+    await publish(fixture())
+    await wait(
+      () => evaluate('!document.body.textContent.includes("characters received")'),
+      'Generation progress clears before execution'
+    )
     await capture(name + '-progress')
     await click('[aria-label="Stop response"]')
     await wait(() => stops === (name === 'chat' ? 1 : 2), 'Stop remains reachable')

@@ -193,7 +193,8 @@ export async function callLLM(
     tools: selectedTools,
     outputTokens,
     timeoutMs = 120000,
-    onText
+    onText,
+    onProgress
   }: {
     visual?: boolean
     allowTools?: boolean
@@ -201,6 +202,7 @@ export async function callLLM(
     outputTokens?: number
     timeoutMs?: number
     onText?: (text: string) => void
+    onProgress?: (progress: ModelProgress) => void
   } = {}
 ): Promise<ModelReply | null> {
   const s = { ...getSettings().model, ...(outputTokens ? { maxTokens: outputTokens } : {}) }
@@ -269,12 +271,18 @@ export async function callLLM(
     run.onModelContext?.(measureContext(normalized, tools, s, visual, info))
   }
   const stream =
-    onText || plan || (claude && budget.reservedOutputTokens > 16000)
+    onText || onProgress || plan || (claude && budget.reservedOutputTokens > 16000)
       ? claude
         ? anthropicStream(onText ?? (() => {}), model)
         : responses
-          ? responsesStream(onText ?? (() => {}), model, plan ? 'sophon' : undefined, scope)
-          : completionStream(onText ?? (() => {}))
+          ? responsesStream(
+              onText ?? (() => {}),
+              model,
+              plan ? 'sophon' : undefined,
+              scope,
+              onProgress
+            )
+          : completionStream(onText ?? (() => {}), onProgress)
       : undefined
   let measured: TokenUsage | undefined
   try {

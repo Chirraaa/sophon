@@ -41,7 +41,12 @@ const client = {
     contextSource: 'provider'
   }),
   callLLM: async (_model, messages, options) => {
-    requests.push(structuredClone({ messages, options: { ...options, onText: undefined } }))
+    requests.push(
+      structuredClone({
+        messages,
+        options: { ...options, onText: undefined, onProgress: undefined }
+      })
+    )
     run.modelCalls++
     const next = replies.shift()
     if (!next) throw new Error('Unexpected model call')

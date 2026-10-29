@@ -332,6 +332,54 @@ async function main() {
   await session.send('Streaming retention')
   offSnapshot()
   offText()
+  const progressSnapshots = []
+  const offProgress = session.onSession((state) => {
+    progressSnapshots.push(structuredClone(state.items.at(-1)))
+  })
+  const activity = load('src/renderer/src/lib/activity.ts', {
+    '../../../shared/visuals': load('src/shared/visuals.ts')
+  })
+  const coding = load('src/renderer/src/lib/coding.ts', { './activity': activity })
+  chatBehavior = async (emit) => {
+    emit({ type: 'text', text: 'I will build the sandbox.' })
+    emit({ type: 'model_progress', progress: { toolName: 'write_file', generatedChars: 0 } })
+    const before = progressSnapshots.length
+    for (let n = 1; n <= 100; n++)
+      emit({ type: 'model_progress', progress: { toolName: 'write_file', generatedChars: n } })
+    assert.equal(progressSnapshots.length, before, 'Coalesce tool argument progress')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    assert.equal(progressSnapshots.length, before + 1)
+    const generating = progressSnapshots.at(-1)
+    assert.match(
+      activity.replyActivity(generating),
+      /Generating file contents.*100 characters received/
+    )
+    assert.match(coding.codingView(generating).current, /100 characters received/)
+    assert.equal(coding.codingView(generating).stage, 1)
+    assert.equal(
+      generating.actions.length,
+      0,
+      'Streaming progress must not create executable actions'
+    )
+    assert.equal(generating.text, 'I will build the sandbox.')
+    emit({ type: 'model_progress' })
+    assert.equal(progressSnapshots.at(-1).modelProgress, undefined)
+    // Simulate interruption before a pending progress update can be sent.
+    emit({ type: 'model_progress', progress: { toolName: 'edit_file', generatedChars: 1 } })
+    emit({ type: 'model_progress', progress: { toolName: 'edit_file', generatedChars: 2 } })
+    throw new Error('Interrupted tool generation')
+  }
+  await session.send('Generate a sandbox')
+  const finishedSnapshots = progressSnapshots.length
+  assert.equal(session.snapshot().items.at(-1).modelProgress, undefined)
+  assert.equal(session.snapshot().items.at(-1).pending, false)
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  assert.equal(
+    progressSnapshots.length,
+    finishedSnapshots,
+    'No progress callbacks after interruption'
+  )
+  offProgress()
   chatBehavior = undefined
   session.clear()
   for (let turn = 0; turn < 7; turn++) await session.send('Turn ' + turn)
