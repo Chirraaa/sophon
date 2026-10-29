@@ -123,6 +123,7 @@ if (!app.requestSingleInstanceLock()) {
       onSessionText((update) => broadcast('session:text', update))
       windows.createMain()
       windows.createCompact()
+      if (process.argv.includes('--hidden')) windows.syncRest()
       const tray = createTray(windows)
       let voiceConfig = JSON.stringify(getSettings().voice)
       onSettingsChange((settings) => {
