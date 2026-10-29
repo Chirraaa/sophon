@@ -143,6 +143,7 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'compact:presentation': {},
   'compact:work-area': {},
   'compact:task-visible': { required: [oneOf(true, false)] },
+  'compact:dock': { required: [oneOf(true, false)] },
   'compact:hide': {},
   'compact:open-main': {},
   'compact:resize': {
