@@ -1,4 +1,4 @@
-﻿import { ACTION_LIMIT, RUN_SECONDS } from '../../shared/loop-limits'
+import { ACTION_LIMIT, RUN_SECONDS } from '../../shared/loop-limits'
 import { APP_ROUTING } from './app-routing'
 type Environment = {
   mode: TaskMode
@@ -154,9 +154,9 @@ export function requestedDesktopTool(query: string): string | undefined {
 }
 
 export function deniesDesktopCapability(content: string): boolean {
-  if (/```|~~~|^\s*>|["â€œâ€]/m.test(content)) return false
+  if (/```|~~~|^\s*>|["“”]/m.test(content)) return false
   return content
-    .replace(/â€™/g, "'")
+    .replace(/’/g, "'")
     .split(/\n|[.!?](?=\s)/)
     .some((line) => {
       if (
