@@ -36,6 +36,7 @@ export class Desktop {
   private compactMainOffset = 0
   private compactDocked = false
   private undockedY: number | null = null
+  private dragOrigin: { x: number; y: number } | null = null
   private hideTimer: NodeJS.Timeout | null = null
   readonly voice = new VoiceSession({
     publish: (state) => broadcast('voice:state', state),
@@ -205,10 +206,6 @@ export class Desktop {
     win.on('move', reportArea)
     screen.on('display-metrics-changed', fitWorkArea)
     screen.on('display-removed', fitWorkArea)
-    win.on('will-move', (event, bounds) => {
-      if (this.compactDocked) return event.preventDefault()
-      this.commandPosition = { x: bounds.x, y: bounds.y }
-    })
     win.on('closed', () => {
       this.compact = null
       this.compactTaskVisible = false
@@ -338,6 +335,22 @@ export class Desktop {
     )
     this.undockedY = null
     win.setBounds({ ...bounds, y })
+  }
+  // Dragging is driven from the renderer: a native drag region makes Windows
+  // outline the full (transparent, wider than the card) window while moving.
+  dragCompact(dx?: number, dy?: number): void {
+    const win = this.compact
+    if (!win || win.isDestroyed() || this.compactDocked) return
+    if (dx === undefined || dy === undefined) {
+      const [x, y] = win.getPosition()
+      this.dragOrigin = { x, y }
+      return
+    }
+    if (!this.dragOrigin) return
+    const x = Math.round(this.dragOrigin.x + dx)
+    const y = Math.round(this.dragOrigin.y + dy)
+    win.setPosition(x, y)
+    this.commandPosition = { x, y }
   }
   setCompactTaskVisible(visible: boolean): void {
     this.compactTaskVisible = visible

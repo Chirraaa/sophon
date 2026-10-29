@@ -155,6 +155,7 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'compact:work-area': {},
   'compact:task-visible': { required: [oneOf(true, false)] },
   'compact:dock': { required: [oneOf(true, false)] },
+  'compact:drag': { optional: [number, number] },
   'compact:hide': {},
   'compact:open-main': {},
   'compact:resize': {

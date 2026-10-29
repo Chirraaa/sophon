@@ -357,7 +357,34 @@ export default function CompactApp(): React.JSX.Element {
             }}
             data-compact-size={roomy ? 'expanded' : 'small'}
           >
-            <header className="drag flex h-9 shrink-0 items-center justify-between px-3">
+            <header
+              className={
+                'flex h-9 shrink-0 items-center justify-between px-3 ' +
+                (docked ? '' : 'cursor-grab active:cursor-grabbing')
+              }
+              onPointerDown={(event) => {
+                if (
+                  docked ||
+                  event.button !== 0 ||
+                  (event.target as HTMLElement).closest('.no-drag')
+                )
+                  return
+                const from = { x: event.screenX, y: event.screenY }
+                const target = event.currentTarget
+                target.setPointerCapture(event.pointerId)
+                window.api.compact.drag()
+                const move = (e: PointerEvent): void =>
+                  window.api.compact.drag(e.screenX - from.x, e.screenY - from.y)
+                const end = (): void => {
+                  target.removeEventListener('pointermove', move)
+                  target.removeEventListener('pointerup', end)
+                  target.removeEventListener('pointercancel', end)
+                }
+                target.addEventListener('pointermove', move)
+                target.addEventListener('pointerup', end)
+                target.addEventListener('pointercancel', end)
+              }}
+            >
               <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
                 <BrandIcon className="size-4" />
                 sophon{coding ? ' / coding' : ''}
