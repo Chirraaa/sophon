@@ -234,7 +234,9 @@ export function secureIpc(owns: (sender: WebContents | null) => boolean): Secure
       bucket.at = now
       bucket.count = 0
     }
-    const limit = ['voice:level', 'compact:resize', 'session:get'].includes(channel) ? 120 : 20
+    const limit = ['voice:level', 'compact:resize', 'session:get', 'compact:drag'].includes(channel)
+      ? 240
+      : 20
     if (++bucket.count > limit) throw new Error('IPC rate limit exceeded.')
     senderRates.set(channel, bucket)
   }

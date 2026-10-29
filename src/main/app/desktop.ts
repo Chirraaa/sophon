@@ -194,8 +194,14 @@ export class Desktop {
       this.hideCompact()
     })
     win.on('focus', () => this.cancelHide())
+    let reported = ''
     const reportArea = (): void => {
-      if (!win.isDestroyed()) win.webContents.send('compact:work-area', this.compactWorkArea())
+      if (win.isDestroyed()) return
+      const area = this.compactWorkArea()
+      const key = area.width + 'x' + area.height
+      if (key === reported) return
+      reported = key
+      win.webContents.send('compact:work-area', area)
     }
     const fitWorkArea = (): void => {
       if (win.isDestroyed()) return
