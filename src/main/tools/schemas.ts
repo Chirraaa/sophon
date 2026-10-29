@@ -365,15 +365,10 @@ export const toolSchemas = [
     function: {
       name: 'look_at_screen',
       description:
-        'Visual fallback: see one app window when structured tools cannot supply the needed evidence, or for explicit visual questions. Defaults to the last active app; specify a win- reference or unique title. Use region for a higher-detail close-up in full overview pixels. Click using returned image dimensions. if_changed avoids resending identical images when the preceding image is still available. Model-directed monitor capture is unavailable.',
+        'Visual fallback: see one app window when structured tools cannot supply the needed evidence, or for explicit visual questions. Defaults to the last active app; specify a win- reference or unique title. Use region for a higher-detail close-up in full overview pixels. Click using returned image dimensions. if_changed avoids resending identical images when the preceding image is still available.',
       parameters: {
         type: 'object',
         properties: {
-          monitor: {
-            type: 'string',
-            description:
-              'Reserved legacy parameter. Do not supply: model-directed monitor capture is blocked. Use window instead.'
-          },
           window: {
             type: 'string',
             description: 'Window title or app to inspect. Omit for active window.'

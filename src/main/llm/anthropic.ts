@@ -4,7 +4,6 @@ import { CodingOutputLimitError } from '../../shared/coding-resources'
 type Block = Record<string, unknown>
 type WireMessage = { role: 'user' | 'assistant'; content: Block[] }
 
-export const ANTHROPIC_API = 'https://api.anthropic.com/v1'
 const VERSION = '2023-06-01'
 
 /** API keys use `x-api-key`; Claude Code tokens (`claude setup-token`) are OAuth bearer tokens. */

@@ -36,7 +36,7 @@ const run = (name, args) => {
   return typeof out === 'string' ? JSON.parse(out) : out
 }
 
-for (const name of tools.NOTE_TOOLS) {
+for (const name of ['notes_list', 'notes_read', 'notes_create', 'notes_edit', 'notes_delete']) {
   assert(registry.isKnownTool(name), name)
   assert.equal(registry.defaultToolPermissions()[name], 'ask')
 }

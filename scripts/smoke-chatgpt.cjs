@@ -532,7 +532,10 @@ async function main() {
       }
     }
   })
-  assert.deepEqual(await client.listModels(), ['fixture-plan-model'])
+  assert.deepEqual(
+    (await client.listModelChoices()).map((choice) => choice.id),
+    ['fixture-plan-model']
+  )
   assert.deepEqual(await client.listModelChoices(), [
     {
       id: 'fixture-plan-model',

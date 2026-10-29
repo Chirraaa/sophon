@@ -190,13 +190,11 @@ async function main() {
     './visuals': { VISUAL_CAPABILITIES: '', VISUAL_PROMPT: '' },
     './visual-routing': { INLINE_VISUAL_TASK: '' }
   })
-  for (const compact of [true, false]) {
-    const prompt = prompts.buildSystemPrompt(false, false, compact)
-    assert(
-      prompt.includes('Learning TypeScript') && prompt.includes('step-by-step'),
-      'Both prompt formats include saved personalization'
-    )
-  }
+  const personalized = prompts.buildSystemPrompt()
+  assert(
+    personalized.includes('Learning TypeScript') && personalized.includes('step-by-step'),
+    'The system prompt includes saved personalization'
+  )
   assert.equal(
     settings.draftSettings({ profile: { name: 'a'.repeat(100), context: 'b'.repeat(2000) } })
       .profile.name.length,

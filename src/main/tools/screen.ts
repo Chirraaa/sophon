@@ -7,15 +7,7 @@ const checkRun = (): void => {
   const run = currentRun()
   if (run) assertRun(run)
 }
-import {
-  activeWindow,
-  findWindow,
-  listWindows,
-  monitorOf,
-  monitors,
-  resolveMonitor,
-  type WinInfo
-} from './windows'
+import { activeWindow, findWindow, listWindows, monitorOf, monitors, type WinInfo } from './windows'
 type Rect = {
   x: number
   y: number
@@ -23,7 +15,6 @@ type Rect = {
   height: number
 }
 export type CaptureArgs = {
-  monitor?: string | number
   window?: string
   region?: Rect
   if_changed?: boolean
@@ -97,14 +88,7 @@ function target(
       captureWindow: boolean
     }
   | string {
-  if (args.window && args.monitor !== undefined) return 'Choose a window or a monitor, not both.'
-  const win =
-    bound ??
-    (args.window
-      ? findWindow(String(args.window))
-      : args.monitor === undefined
-        ? activeWindow()
-        : null)
+  const win = bound ?? (args.window ? findWindow(String(args.window)) : activeWindow())
   if (args.window && !win) return `No window matching "${args.window}".`
   if (win) {
     if (win.state === 'minimized')
@@ -112,13 +96,8 @@ function target(
     const rule = protectedWindowRule(win.title, win.exe)
     if (rule) return `Blocked: "${win.title}" is protected by your rule "${rule}".`
   }
-  const display =
-    args.monitor !== undefined
-      ? resolveMonitor(String(args.monitor))
-      : win
-        ? monitorOf(win)
-        : monitors().find((m) => m.primary)
-  if (!display) return `Unknown monitor "${args.monitor}".`
+  const display = win ? monitorOf(win) : monitors().find((m) => m.primary)
+  if (!display) return 'No monitor is available to capture.'
   return { window: win, display, captureWindow: Boolean(win) }
 }
 export async function captureScreen(
