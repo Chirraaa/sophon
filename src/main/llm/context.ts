@@ -62,7 +62,7 @@ export function measureContext(
 ): ContextMeasurements {
   const budget = contextBudget(model, tools, visual, info)
   const provider = model.provider ?? 'local'
-  const hosted = provider === 'chatgpt'
+  const hosted = provider === 'chatgpt' || provider === 'anthropic' || provider === 'claude'
   const window = hosted ? (info?.contextWindow ?? null) : model.contextWindow
   const breakdown = contextBreakdown(messages, tools)
   return {
@@ -255,8 +255,13 @@ export function contextBudget(
 } {
   if (model.provider === 'chatgpt' && !info?.contextWindow)
     return { inputBudget: Infinity, reservedOutputTokens: 0 }
+  const claude = model.provider === 'anthropic' || model.provider === 'claude'
   const window =
-    model.provider === 'chatgpt' ? info!.contextWindow! : (model.contextWindow ?? 16384)
+    model.provider === 'chatgpt'
+      ? info!.contextWindow!
+      : claude
+        ? (info?.contextWindow ?? 200000)
+        : (model.contextWindow ?? 16384)
 
   const requested = visual ? Math.floor(window / 3) : model.maxTokens
   const reservedOutputTokens = Math.min(requested, Math.floor(window / 3))

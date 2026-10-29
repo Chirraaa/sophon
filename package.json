@@ -46,6 +46,7 @@
     "smoke:long-task-memory": "node scripts/smoke-long-task-memory.cjs",
     "smoke:streaming": "node scripts/smoke-streaming.cjs",
     "smoke:providers": "node scripts/smoke-providers.cjs",
+    "smoke:anthropic": "node scripts/smoke-anthropic.cjs",
     "smoke:model-insights": "node scripts/smoke-model-insights.cjs",
     "smoke:model-insights:ui": "electron scripts/smoke-model-insights-ui.cjs --hidden",
     "smoke:chatgpt": "node scripts/smoke-chatgpt.cjs",

@@ -155,7 +155,7 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'settings:update': { required: [(v) => settingsPatch(v)] },
   'settings:reset': {},
   'research:has-key': {},
-  'model:has-key': { required: [oneOf('openai', 'compatible'), text(1000)] },
+  'model:has-key': { required: [oneOf('openai', 'compatible', 'anthropic', 'claude'), text(1000)] },
   'chatgpt:status': {},
   'chatgpt:sign-in': { optional: [id] },
   'chatgpt:cancel': {},
@@ -169,7 +169,7 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'microsoft:cancel': {},
   'microsoft:select': { required: [id] },
   'microsoft:remove': { required: [id] },
-  'model:set-key': { required: [oneOf('openai', 'compatible'), text(1000), text(4096)] },
+  'model:set-key': { required: [oneOf('openai', 'compatible', 'anthropic', 'claude'), text(1000), text(4096)] },
   'research:set-key': { required: [text(512)] }
 }
 export interface SecureIpc {

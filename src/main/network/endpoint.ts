@@ -1,6 +1,6 @@
 export function modelEndpoint(input: string, provider: ModelProvider = 'local'): string {
   const url = new URL(input)
-  if (!['local', 'openai', 'compatible', 'chatgpt'].includes(provider))
+  if (!['local', 'openai', 'compatible', 'chatgpt', 'anthropic', 'claude'].includes(provider))
     throw new Error('Unknown model provider.')
   if (provider !== 'local') {
     if (
@@ -10,9 +10,13 @@ export function modelEndpoint(input: string, provider: ModelProvider = 'local'):
       url.search ||
       url.hash ||
       ((provider === 'openai' || provider === 'chatgpt') &&
-        url.toString().replace(/\/$/, '') !== 'https://api.openai.com/v1')
+        url.toString().replace(/\/$/, '') !== 'https://api.openai.com/v1') ||
+      ((provider === 'anthropic' || provider === 'claude') &&
+        url.toString().replace(/\/$/, '') !== 'https://api.anthropic.com/v1')
     )
-      throw new Error('Use an HTTPS API base address. OpenAI requires https://api.openai.com/v1.')
+      throw new Error(
+        'Use an HTTPS API base address. OpenAI requires https://api.openai.com/v1 and Anthropic requires https://api.anthropic.com/v1.'
+      )
     return url.toString().replace(/\/$/, '')
   }
   if (

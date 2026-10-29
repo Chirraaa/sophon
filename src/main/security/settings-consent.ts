@@ -119,7 +119,7 @@ export async function confirmSettings(
       (after.model.provider !== 'local' &&
       (before.model.provider !== after.model.provider ||
         before.model.endpoint !== after.model.endpoint)
-        ? `Hosted inference sends conversation context, selected memories, attachments, screenshots and tool results included in a request to the selected model provider. ${after.model.provider === 'chatgpt' ? 'Usage counts toward your ChatGPT plan or credits.' : 'API usage may incur charges.'} Tool permissions still apply.\n\n`
+        ? `Hosted inference sends conversation context, selected memories, attachments, screenshots and tool results included in a request to the selected model provider. ${after.model.provider === 'chatgpt' ? 'Usage counts toward your ChatGPT plan or credits.' : after.model.provider === 'claude' ? 'Usage counts toward your Claude subscription limits; Anthropic’s terms for subscription tokens in third-party apps apply.' : 'API usage may incur charges.'} Tool permissions still apply.\n\n`
         : '') +
       JSON.stringify({ before: controls(before), after: controls(after) }, null, 2),
     undefined,

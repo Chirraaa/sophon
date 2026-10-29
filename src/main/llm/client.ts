@@ -10,6 +10,13 @@ import { modelCapabilities, supportedEffort } from '../../shared/model-capabilit
 import { addUsage, tokenUsage } from '../../shared/model-usage'
 import { completionStream } from './stream'
 import { responsesInput, responsesReply, responsesStream, chatgptFailure } from './providers'
+import {
+  anthropicHeaders,
+  anthropicInput,
+  anthropicReply,
+  anthropicStream,
+  anthropicTools
+} from './anthropic'
 import { modelKey } from '../security/model-credentials'
 import { chatgptAccessToken, chatgptAccountScope, chatgptStatus } from '../security/chatgpt-auth'
 import { performance } from 'node:perf_hooks'
@@ -34,15 +41,27 @@ async function request(
         ? modelKey(provider, base)
         : undefined
   if (run) assertRun(run)
-  const data = await requestJson(new URL(`${base}${path}`), {
-    body,
-    signal: run?.signal,
-    timeout,
-    modelErrors: provider !== 'chatgpt',
-    errorDetails: provider === 'chatgpt',
-    ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
-    onEvent
-  }).catch((error) => {
+  const data = await requestJson(
+    new URL(
+      `${base}${path}${path === '/models' && (provider === 'anthropic' || provider === 'claude') ? '?limit=100' : ''}`
+    ),
+    {
+      body,
+      signal: run?.signal,
+      timeout,
+      modelErrors: provider !== 'chatgpt',
+      errorDetails: provider === 'chatgpt',
+      ...(token
+        ? {
+            headers:
+              provider === 'anthropic' || provider === 'claude'
+                ? anthropicHeaders(provider, token)
+                : { Authorization: `Bearer ${token}` }
+          }
+        : {}),
+      onEvent
+    }
+  ).catch((error) => {
     throw provider === 'chatgpt' ? chatgptFailure(error) : error
   })
   if (run) assertRun(run)
@@ -69,7 +88,7 @@ function modelChoicesFrom(data: Record<string, unknown>): ModelChoice[] {
         ? [
             {
               id: m.id,
-              label: m.id,
+              label: typeof m.display_name === 'string' ? m.display_name.slice(0, 200) : m.id,
               ...modelCapabilities(m.id, getSettings().model.provider ?? 'local', m)
             }
           ]
@@ -183,7 +202,8 @@ export async function callLLM(
   const scope = plan ? chatgptAccountScope() : undefined
   const responses = plan || provider === 'openai'
   const tools = allowTools ? (selectedTools ?? activeToolSchemas()) : []
-  const info = ['openai', 'chatgpt'].includes(provider)
+  const claude = provider === 'anthropic' || provider === 'claude'
+  const info = ['openai', 'chatgpt', 'anthropic', 'claude'].includes(provider)
     ? await getModelInfo(model)
     : { id: model, label: model }
   const budget = contextBudget(s, tools, visual, info)
@@ -218,7 +238,7 @@ export async function callLLM(
       .map((message) => {
         if (
           !message.responseState ||
-          (responses &&
+          ((responses || claude) &&
             message.responseState.model === model &&
             message.responseState.scope === scope)
         )
@@ -242,72 +262,84 @@ export async function callLLM(
     run.onModelContext?.(measureContext(normalized, tools, s, visual, info))
   }
   const stream =
-    onText || plan
-      ? responses
-        ? responsesStream(onText ?? (() => {}), model, plan ? 'sophon' : undefined, scope)
-        : completionStream(onText ?? (() => {}))
+    onText || plan || (claude && budget.reservedOutputTokens > 16000)
+      ? claude
+        ? anthropicStream(onText ?? (() => {}), model)
+        : responses
+          ? responsesStream(onText ?? (() => {}), model, plan ? 'sophon' : undefined, scope)
+          : completionStream(onText ?? (() => {}))
       : undefined
   let measured: TokenUsage | undefined
   try {
     const data = await request(
-      responses ? '/responses' : '/chat/completions',
+      claude ? '/messages' : responses ? '/responses' : '/chat/completions',
       JSON.stringify(
-        responses
+        claude
           ? {
               model,
-              store: false,
-              ...(effort ? { reasoning: { effort } } : {}),
-              include: ['reasoning.encrypted_content'],
+              max_tokens: Math.max(1, budget.reservedOutputTokens),
+              ...anthropicInput(normalized, model),
               ...(stream ? { stream: true } : {}),
-              input: responsesInput(normalized, model, plan ? 'sophon' : undefined, scope).map(
-                (item) => (plan && item.role === 'system' ? { ...item, role: 'developer' } : item)
-              ),
-              ...(tools.length
-                ? {
-                    tools: plan
-                      ? [
-                          {
-                            type: 'namespace',
-                            name: 'sophon',
-                            description:
-                              'Sophon application tools. Application permissions apply to every call.',
-                            tools: tools.map((tool) => ({
-                              type: 'function',
-                              ...tool.function,
-                              strict: false
-                            }))
-                          }
-                        ]
-                      : tools.map((tool) => ({
-                          type: 'function',
-                          ...tool.function,
-                          strict: false
-                        }))
-                  }
-                : {}),
-              ...(!allowTools ? { tool_choice: 'none' } : {}),
-              ...(!plan && !visual ? { max_output_tokens: budget.reservedOutputTokens } : {})
+              ...(tools.length ? { tools: anthropicTools(tools) } : {}),
+              ...(effort ? { thinking: { type: 'adaptive' }, output_config: { effort } } : {}),
+              cache_control: { type: 'ephemeral' }
             }
-          : {
-              model,
-              ...(stream ? { stream: true } : {}),
-              messages: normalized.map((message) => {
-                const wire = { ...message }
-                delete wire.responseState
-                delete wire.contextGroup
-                return wire
-              }),
-              ...(tools.length ? { tools } : {}),
-              ...(!allowTools ? { tool_choice: 'none' } : {}),
-              temperature: s.temperature,
-              ...(provider === 'local' && /qwen3[.\-_]?5/i.test(model)
-                ? qwenSampling(s.thinking)
-                : {}),
-              ...(!visual ? { max_tokens: budget.reservedOutputTokens } : {}),
-              ...(provider === 'local'
-                ? { chat_template_kwargs: { enable_thinking: s.thinking } }
-                : {})
-            }
+          : responses
+            ? {
+                model,
+                store: false,
+                ...(effort ? { reasoning: { effort } } : {}),
+                include: ['reasoning.encrypted_content'],
+                ...(stream ? { stream: true } : {}),
+                input: responsesInput(normalized, model, plan ? 'sophon' : undefined, scope).map(
+                  (item) => (plan && item.role === 'system' ? { ...item, role: 'developer' } : item)
+                ),
+                ...(tools.length
+                  ? {
+                      tools: plan
+                        ? [
+                            {
+                              type: 'namespace',
+                              name: 'sophon',
+                              description:
+                                'Sophon application tools. Application permissions apply to every call.',
+                              tools: tools.map((tool) => ({
+                                type: 'function',
+                                ...tool.function,
+                                strict: false
+                              }))
+                            }
+                          ]
+                        : tools.map((tool) => ({
+                            type: 'function',
+                            ...tool.function,
+                            strict: false
+                          }))
+                    }
+                  : {}),
+                ...(!allowTools ? { tool_choice: 'none' } : {}),
+                ...(!plan && !visual ? { max_output_tokens: budget.reservedOutputTokens } : {})
+              }
+            : {
+                model,
+                ...(stream ? { stream: true } : {}),
+                messages: normalized.map((message) => {
+                  const wire = { ...message }
+                  delete wire.responseState
+                  delete wire.contextGroup
+                  return wire
+                }),
+                ...(tools.length ? { tools } : {}),
+                ...(!allowTools ? { tool_choice: 'none' } : {}),
+                temperature: s.temperature,
+                ...(provider === 'local' && /qwen3[.\-_]?5/i.test(model)
+                  ? qwenSampling(s.thinking)
+                  : {}),
+                ...(!visual ? { max_tokens: budget.reservedOutputTokens } : {}),
+                ...(provider === 'local'
+                  ? { chat_template_kwargs: { enable_thinking: s.thinking } }
+                  : {})
+              }
       ),
       timeoutMs,
       stream?.accept
@@ -318,6 +350,7 @@ export async function callLLM(
       return reply
     }
     measured = tokenUsage(data.usage)
+    if (claude) return anthropicReply(data, model)
     if (responses) return responsesReply(data, model, plan ? 'sophon' : undefined, scope)
     const choice = Array.isArray(data.choices) ? data.choices[0] : undefined
     if (

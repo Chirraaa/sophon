@@ -439,6 +439,7 @@ async function main() {
     './time': load('src/main/llm/time.ts', { 'node:perf_hooks': require('node:perf_hooks') }),
     './stream': load('src/main/llm/stream.ts'),
     './providers': load('src/main/llm/providers.ts'),
+    './anthropic': load('src/main/llm/anthropic.ts'),
     '../security/chatgpt-auth': {
       chatgptAccessToken: async () => {
         throw new Error('ChatGPT login forbidden in this offline fixture')
@@ -491,6 +492,7 @@ async function main() {
       './time': load('src/main/llm/time.ts', { 'node:perf_hooks': require('node:perf_hooks') }),
       './stream': load('src/main/llm/stream.ts'),
       './providers': load('src/main/llm/providers.ts'),
+      './anthropic': load('src/main/llm/anthropic.ts'),
       '../security/chatgpt-auth': {
         chatgptAccessToken: async () => {
           throw new Error('ChatGPT login forbidden in this offline fixture')
