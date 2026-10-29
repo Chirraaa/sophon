@@ -89,7 +89,11 @@ const chat = load('src/main/llm/chat.ts', {
   '../memory/store': {},
   '../memory/records': {},
   '../tools': { activeToolSchemas },
-  './environment': { environmentPrompt: () => '', requestedDesktopTool: () => undefined },
+  './environment': {
+    environmentPrompt: () => '',
+    requestedDesktopTool: () => undefined,
+    runStatePrompt: () => ''
+  },
   './desktop-reply': { correctDesktopReply: async (_model, _messages, reply) => reply },
   '../workflow/controller': workflow
 })

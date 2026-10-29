@@ -38,6 +38,12 @@ export type ChatEvent =
   | { type: 'text'; text: string }
   | { type: 'quality'; status: 'checking' | 'reviewed' }
   | { type: 'specialist'; run: SpecialistRun }
+  | {
+      type: 'compaction'
+      status: 'running' | 'done' | 'skipped'
+      scope: ContextCompactionNotice['scope']
+      info?: ContextCompaction
+    }
   | { type: 'workflow'; state: WorkflowState }
   | { type: 'context'; report: ContextReport }
   | { type: 'tool_preview'; id: string; preview: string }

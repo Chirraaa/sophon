@@ -40,6 +40,7 @@ export function actionActivity(actions: ToolAction[]): string | undefined {
 export function replyActivity(item: ChatItem): string {
   const action = actionActivity(item.actions)
   if (action) return action
+  if (item.compaction?.status === 'running') return 'Compacting context…'
   if (item.quality === 'checking') return 'Checking answer…'
   const specialist = item.specialists?.findLast((agent) => agent.status === 'running')
   if (specialist) {

@@ -60,6 +60,7 @@ function loadLegacyConversations(): ConversationStore {
             }
           item.pending = false
           item.text ||= 'This request was interrupted when Sophon closed.'
+          if (item.compaction?.status === 'running') delete item.compaction
           item.actions = item.actions.map((action) =>
             action.status === 'running' || action.status === 'waiting'
               ? { ...action, status: 'failed', detail: 'Interrupted when Sophon closed.' }
@@ -168,6 +169,7 @@ function attach(chat: Conversation): void {
         if (item.pending) {
           item.pending = false
           item.text ||= 'This request was interrupted when Sophon closed.'
+          if (item.compaction?.status === 'running') delete item.compaction
           for (const action of item.actions)
             if (['running', 'waiting'].includes(action.status)) {
               action.status = 'failed'
