@@ -54,7 +54,7 @@ function ActiveVisual({
               style={{ height: height }}
             />
           ) : (
-            <p role="status" className="p-4 text-xs text-muted-foreground">
+            <p role="status" className="py-4 text-xs text-muted-foreground">
               {error ? 'Use the source view to inspect the response.' : 'Visual paused.'}
             </p>
           )
@@ -62,13 +62,13 @@ function ActiveVisual({
         footer={
           resource && (
             <>
-              <div className="border-t border-white/8 px-3 py-2">
+              <div className="pt-2">
                 <Button variant="ghost" size="sm" onClick={() => setStopped((value) => !value)}>
                   {stopped ? 'Resume visual' : 'Stop visual'}
                 </Button>
               </div>
               {question && onAsk && (
-                <div className="flex items-center gap-2 border-t border-white/8 px-3 py-2">
+                <div className="mt-2 flex items-center gap-2 rounded-lg border border-border px-3 py-2">
                   <p className="min-w-0 flex-1 text-xs text-muted-foreground">{question}</p>
                   <DialogClose
                     render={<Button size="sm" />}
@@ -133,7 +133,7 @@ export function InteractiveVisual(props: {
       }
       onAsk={props.onAsk}
       preview={
-        <p role="status" className="p-4 text-xs text-muted-foreground">
+        <p role="status" className="py-4 text-xs text-muted-foreground">
           {incomplete || error
             ? 'Use the source view to inspect the response.'
             : 'Preparing visual…'}
