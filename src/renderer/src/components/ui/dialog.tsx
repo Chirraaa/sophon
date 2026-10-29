@@ -22,7 +22,7 @@ export function DialogContent({
         {...props}
         data-slot="dialog-content"
         className={cn(
-          'popup-surface fixed top-1/2 left-[var(--popup-center-x,50%)] z-50 flex max-h-[var(--popup-max-height,calc(100dvh-3rem))] w-[calc(100%-3rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl p-5 outline-none motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
+          'popup-surface fixed top-1/2 left-[var(--popup-center-x,50%)] z-50 flex max-h-[min(var(--popup-max-height,100dvh),calc(100dvh-3rem))] w-[calc(100%-3rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl p-5 outline-none motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
           className
         )}
       >

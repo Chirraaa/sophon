@@ -82,6 +82,7 @@ ipcMain.handle = (channel, listener) =>
     if (channel === 'settings:get') {
       settings ??= {
         ...(await listener(...args)),
+        profile: { ...(await listener(...args)).profile, onboardingComplete: true },
         model: {
           ...(await listener(...args)).model,
           provider: 'chatgpt',
@@ -287,6 +288,10 @@ async function review() {
   await evaluate(
     main,
     'Array.from(document.querySelectorAll("[role=tab]")).find(el=>el.textContent==="Model").click()'
+  )
+  await evaluate(
+    main,
+    'Array.from(document.querySelectorAll("[role=tab]")).find(el=>el.textContent==="Generation").click()'
   )
   await wait(
     () =>

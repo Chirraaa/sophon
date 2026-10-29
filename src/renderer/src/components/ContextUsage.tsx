@@ -46,7 +46,7 @@ export function ContextUsage({ provider }: { provider?: ModelProvider }): React.
       <DialogContent
         initialFocus={heading}
         closeLabel="Close context and usage"
-        className="h-[min(560px,var(--popup-max-height,calc(100dvh-3rem)))] max-w-xl"
+        className="h-[min(560px,var(--popup-max-height,100dvh),calc(100dvh-3rem))] max-w-xl"
       >
         <DialogTitle
           ref={heading}
