@@ -216,7 +216,7 @@ declare global {
     availableTools?: string[]
     codingResources?: CodingResourceState
   }
-  type SpecialistId = 'researcher' | 'visual_explainer' | 'tutor' | 'reviewer'
+  type SpecialistId = 'simple' | 'researcher' | 'visual_explainer' | 'tutor' | 'reviewer'
   interface SpecialistRun {
     id: string
     profile: SpecialistId
