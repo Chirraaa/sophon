@@ -112,6 +112,7 @@ export function environmentPrompt(state: Environment): string {
       'act_on_control',
       'look_at_screen',
       'click',
+      'input_batch',
       'type_text',
       'press_keys',
       'open_app',

@@ -67,6 +67,7 @@ const GROUPS = [
       'inspect_app',
       'act_on_control',
       'click',
+      'input_batch',
       'scroll',
       'press_keys',
       'type_text',

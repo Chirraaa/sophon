@@ -493,6 +493,58 @@ export const toolSchemas = [
   {
     type: 'function',
     function: {
+      name: 'input_batch',
+      description:
+        'Run several click, press_keys, type_text and scroll steps in one call, in order, in the window of the latest look_at_screen image. Use it whenever the whole sequence is already known and each step does not change what the next one targets, for example setting a counter by pressing + three times, filling several fields, or ticking several boxes. Every click mark or x,y refers to that one image, so do not batch steps that open a dialog, move the layout, or reveal the next target; look first for those. The batch stops at the first step that fails and one fresh image of the window is returned at the end, so no separate look_at_screen is needed.',
+      parameters: {
+        type: 'object',
+        properties: {
+          steps: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 20,
+            description:
+              'Ordered steps. click needs mark or x,y; press_keys needs keys; type_text needs text; scroll needs direction. Repeat a click step to click the same control several times.',
+            items: {
+              type: 'object',
+              properties: {
+                action: { type: 'string', enum: ['click', 'press_keys', 'type_text', 'scroll'] },
+                mark: { type: 'number', description: 'Mark number from look_at_screen marks.' },
+                x: { type: 'number' },
+                y: { type: 'number' },
+                button: { type: 'string', enum: ['left', 'right'] },
+                keys: { type: 'string', description: 'Key or shortcut, e.g. Enter or Ctrl+A.' },
+                text: { type: 'string' },
+                direction: { type: 'string', enum: ['up', 'down'] },
+                amount: { type: 'number', description: 'Scroll steps, 1 to 8; default 3.' }
+              },
+              required: ['action']
+            }
+          },
+          capture_after: {
+            type: 'boolean',
+            description: CAPTURE_AFTER
+          },
+          readback_region: {
+            type: 'object',
+            description:
+              'Optional crop for the final capture, in full overview image pixels. Omit if the batch may change the window layout.',
+            properties: {
+              x: { type: 'number' },
+              y: { type: 'number' },
+              width: { type: 'number' },
+              height: { type: 'number' }
+            },
+            required: ['x', 'y', 'width', 'height']
+          }
+        },
+        required: ['steps']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'scroll',
       description:
         'Scroll an app up or down by a small number of steps. Good for PDF pages or articles.',

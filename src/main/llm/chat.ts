@@ -64,7 +64,7 @@ const MAX_SAVED_RESULT = 300
 // Outcomes that stop dependent work until the model or user resolves them.
 const UNRESOLVED = ['denied', 'failed', 'uncertain']
 // Input tools that capture their result; see executeTool.
-const INPUT = ['click', 'scroll', 'press_keys', 'type_text']
+const INPUT = ['click', 'input_batch', 'scroll', 'press_keys', 'type_text']
 const clean = (s: string): string => s.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
 
 // Repair hints for the tools in a rejected batch only; a small model handles

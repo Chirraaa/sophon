@@ -14,6 +14,7 @@ const toolActivities: Record<string, string> = {
   close_window: 'Closing a window',
   close_app: 'Closing an app',
   click: 'Clicking',
+  input_batch: 'Running several steps',
   scroll: 'Scrolling',
   press_keys: 'Pressing keys',
   type_text: 'Typing text',
