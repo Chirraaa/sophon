@@ -4,7 +4,7 @@ This harness teaches the model through compact instructions and retrieved refere
 
 ## Start using it
 
-1. In **Settings → Model → Context window**, enter the context size actually configured in your local server. The initial value is 16,384; Sophon cannot discover your model's loaded context allocation reliably. Reply limits are capped at one third of this window. Long visual requests need more room than ordinary chat.
+1. In **Settings → Model → Context window**, enter the context size actually configured in your local server. The initial value is 32,000; Sophon cannot discover your model's loaded context allocation reliably. Reply limits are capped at one third of this window. Long visual requests need more room than ordinary chat.
 2. In **Settings → Memory**, save one useful fact, preference, procedure, or task note at a time. Use a specific title. Set its scope to all chats, the current working folder, or the current conversation.
 3. Start with a few high-value entries. For example, a global preference could say “When teaching me code, give a small example and explain unfamiliar terms.” A project procedure could name the actual test command and the README where it was verified. A chat task note could hold the current goal, constraints, decisions, and next step.
 4. For a correction, edit the existing entry. Identical saves are deduplicated; conflicting entries with the same title and scope require editing the original. Prefer explicit updates over accumulating contradictory notes.
