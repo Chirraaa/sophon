@@ -119,7 +119,10 @@ const policy = load('src/main/security/policy.ts', {
 })
 let captures = 0,
   invalidatedCaptures = 0,
-  markedTargets = null
+  markedTargets = null,
+  settled = 0,
+  captureArgs = null,
+  lastCapturedWindow = null
 const tools = load('src/main/tools/index.ts', {
   '../settings': { getSettings: () => settings },
   '../harness/store': {},
@@ -150,8 +153,14 @@ const tools = load('src/main/tools/index.ts', {
     invalidateScreenCoordinates: () => {
       invalidatedCaptures++
     },
-    captureScreen: async (_args, _guard, window) => {
+    capturedWindow: () => lastCapturedWindow,
+    settle: async (window) => {
+      settled++
+      assert.equal(window.hwnd, 2)
+    },
+    captureScreen: async (args, _guard, window) => {
       captures++
+      captureArgs = args
       assert.equal(window.hwnd, 2)
       return { text: 'Fresh fixture image', image: 'data:image/png;base64,fixture' }
     },
@@ -160,7 +169,11 @@ const tools = load('src/main/tools/index.ts', {
       return { image: 'data:image/jpeg;base64,marked', labels: targets.map((t) => t.label) }
     }
   },
-  './interact': { clickScreen: async () => 'Clicked left at (1, 1).' },
+  './interact': {
+    clickScreen: async () => 'Clicked left at (1, 1).',
+    typeText: async () => 'Typed 2 characters in "Fixture".',
+    pressKeys: async () => 'Pressed Enter in "Fixture".'
+  },
   './automation/controls': controls
 })
 let decision = 'once'
@@ -339,7 +352,53 @@ async function main() {
     assert.equal(captures - start, permission === 'allow' ? 1 : 0)
     assert.equal(Boolean(clicked.image), permission === 'allow')
   }
+  // Input returns its own settled image by default: always for a click, and for
+  // keys or text only when the task last captured that window.
+  settings.tools.look_at_screen = 'allow'
+  const fixture = { window: windows.listWindows().find((w) => w.hwnd === 2) }
+  let start = captures
+  const settledBefore = settled
+  const clickedByDefault = await tools.executeTool('click', { x: 1, y: 1 }, run, fixture)
+  assert.equal(captures - start, 1, 'A click captures its result by default')
+  assert.equal(settled - settledBefore, 1, 'The capture waits for the window to settle')
+  assert.equal(captureArgs.if_changed, true, 'An unchanged window does not resend its image')
+  assert.match(clickedByDefault.text, /do not call look_at_screen again/)
+  start = captures
+  await tools.executeTool('click', { x: 1, y: 1, capture_after: false }, run, fixture)
+  assert.equal(captures - start, 0, 'capture_after: false skips the capture')
+  lastCapturedWindow = null
+  start = captures
+  let typed = await tools.executeTool('type_text', { text: 'hi' }, run, fixture)
+  assert.equal(captures - start, 0, 'Typing on the accessibility route stays text-only')
+  assert.equal(typeof typed, 'string')
+  lastCapturedWindow = 2
+  typed = await tools.executeTool('type_text', { text: 'hi' }, run, fixture)
+  assert.equal(captures - start, 1, 'Typing into the captured window returns an image')
+  assert(typed.image)
+  start = captures
+  await tools.executeTool('press_keys', { keys: 'Enter', capture_after: false }, run, fixture)
+  assert.equal(captures - start, 0)
   settings.tools.look_at_screen = 'ask'
+  start = captures
+  typed = await tools.executeTool('type_text', { text: 'hi' }, run, fixture)
+  assert.equal(captures - start, 0, 'Default capture never widens look_at_screen')
+  assert.equal(typeof typed, 'string', 'A default skip adds no permission note')
+  assert.throws(
+    () =>
+      contracts.validateToolArguments('click', {
+        x: 1,
+        y: 1,
+        capture_after: false,
+        readback_region: { x: 0, y: 0, width: 20, height: 20 }
+      }),
+    /readback_region/
+  )
+  contracts.validateToolArguments('click', {
+    x: 1,
+    y: 1,
+    readback_region: { x: 0, y: 0, width: 20, height: 20 }
+  })
+  lastCapturedWindow = null
   // Set-of-Marks: one call returns the marked image plus a live observation whose
   // cN references match the drawn numbers. It never widens inspect_app's grant.
   const target = { window: windows.listWindows().find((w) => w.hwnd === 2) }
