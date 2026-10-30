@@ -91,6 +91,17 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
   const object = args as Record<string, unknown>
   if (name === 'click' && object.readback_region !== undefined && object.capture_after !== true)
     throw new Error('readback_region requires capture_after: true.')
+  if (name === 'click') {
+    const point = object.x !== undefined || object.y !== undefined
+    if (object.mark !== undefined) {
+      if (point) throw new Error('Click a mark or x,y coordinates, not both.')
+      if (!Number.isInteger(object.mark) || Number(object.mark) < 1 || Number(object.mark) > 99)
+        throw new Error('mark must be a number drawn on the latest screenshot.')
+    } else if (object.x === undefined || object.y === undefined)
+      throw new Error('Provide x and y from a captured image, or a mark number.')
+  }
+  if (name === 'look_at_screen' && object.marks === true && object.if_changed === true)
+    throw new Error('marks cannot be combined with if_changed.')
   if (name === 'browser_act') {
     if (
       !/^dom-[\da-f]{12}$/.test(String(object.observation)) ||

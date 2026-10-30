@@ -15,7 +15,7 @@ import type { FileIdentity } from './workspace-handles'
 import { extname } from 'path'
 import { READ_EXTENSIONS, validateCsv } from './workspace-policy'
 import { searchProviderLabel } from '../network/search-provider'
-import { captureCoordinates } from '../tools/screen'
+import { captureCoordinates, markPoint } from '../tools/screen'
 import { resolveApp, type AppLaunch } from '../tools/openApp'
 import type { DeviceTarget } from '../tools/system-control'
 import type { CalendarBinding } from '../tools/calendar'
@@ -111,6 +111,21 @@ export async function bindLocalAction(
     ].includes(name)
   ) {
     const control = name === 'act_on_control' ? controlTarget(args, run) : undefined
+    if (name === 'click' && args.mark !== undefined) {
+      // A mark resolves to image coordinates once, so every later check is the coordinate path.
+      const centre = markPoint(Number(args.mark))
+      if (!centre)
+        throw Object.assign(
+          new Error(
+            'Screenshot required: that mark is not on the latest screenshot or input has made it stale. Capture with marks again. No click was executed.'
+          ),
+          { code: 'SCREENSHOT_REQUIRED' }
+        )
+      details.mark = args.mark
+      delete args.mark
+      args.x = centre.x
+      args.y = centre.y
+    }
     const point = name === 'click' ? captureCoordinates(Number(args.x), Number(args.y)) : undefined
     if (name === 'click' && !point?.window)
       throw Object.assign(
