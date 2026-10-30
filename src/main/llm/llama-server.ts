@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'child_process'
-import { lstatSync, statSync, readFileSync, writeFileSync, renameSync, mkdirSync } from 'fs'
-import { basename, dirname, extname, isAbsolute } from 'path'
+import { lstatSync, readdirSync, statSync, readFileSync, writeFileSync, renameSync, mkdirSync } from 'fs'
+import { basename, dirname, extname, isAbsolute, join } from 'path'
 import { createServer } from 'net'
 import { setTimeout as delay } from 'timers/promises'
 import {
@@ -182,6 +182,19 @@ export type HealthCheck = (port: number, pid: number, signal: AbortSignal) => Pr
 const START_TIMEOUT_MS = 10 * 60 * 1000
 const LOG_LIMIT = 6000
 
+// Vision needs the model's projector file, which sits beside it as mmproj*.gguf. Without it the
+// server loads fine but answers every image request with HTTP 500.
+export function findProjector(modelPath: string): string | undefined {
+  try {
+    const name = readdirSync(dirname(modelPath)).find((file) =>
+      /^mmproj.*\.gguf$/i.test(file)
+    )
+    return name ? join(dirname(modelPath), name) : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export class LlamaServer {
   private child: ChildProcess | null = null
   private controller: AbortController | null = null
@@ -223,7 +236,12 @@ export class LlamaServer {
     this.stopping = false
     const controller = new AbortController()
     this.controller = controller
-    const args = buildLlamaArgs(config.options, config.caps, config.modelPath)
+    const args = buildLlamaArgs(
+      config.options,
+      config.caps,
+      config.modelPath,
+      findProjector(config.modelPath)
+    )
     const child = spawn(config.executable, args, {
       cwd: dirname(config.executable),
       windowsHide: true,
