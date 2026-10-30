@@ -446,8 +446,126 @@ async function main() {
   assert.equal(session.snapshot().categories.length, 0)
   assert.equal(titled.categoryId, undefined)
   assert.equal(titled.items.length, countBeforeRemove, 'Removing a category keeps its chats')
+
+  // Follow-ups: messages sent while the chat works join the running task.
+  const tick = () => new Promise((resolve) => setImmediate(resolve))
+  const idle = async () => {
+    while (session.snapshot().busy) await tick()
+  }
+  const texts = (chat) => chat.items.map((item) => item.text)
+  let openGate
+  const gate = () =>
+    new Promise((resolve) => {
+      openGate = resolve
+    })
+  session.createChat()
+  const followChat = store.chats[0]
+  let waiting = gate()
+  chatBehavior = async (emit) => {
+    emit({ type: 'tool_start', id: 'open', name: 'open_app', args: {} })
+    emit({ type: 'tool_end', id: 'open', result: 'Opened' })
+    emit({ type: 'text', text: 'Opened Spotify.' })
+    await waiting
+    assert(run.followUps.pending())
+    assert.deepEqual(run.followUps.take(), [{ text: 'Also set a timer', attachments: [] }])
+    assert(!run.followUps.pending(), 'A follow-up is delivered once')
+    return 'Timer set.'
+  }
+  const startCalls = modelCalls
+  const firstRequest = session.send('Open Spotify')
+  await tick()
+  await session.send('Also set a timer')
+  assert.equal(followChat.items.at(-1).followUp, 'queued', 'Sending mid-task queues the message')
+  assert.equal(modelCalls, startCalls + 1, 'Queuing does not start another run')
+  openGate()
+  await firstRequest
+  assert.deepEqual(texts(followChat), [
+    'Open Spotify',
+    'Opened Spotify.',
+    'Also set a timer',
+    'Timer set.'
+  ])
+  assert(followChat.items.every((item) => !item.pending && !item.followUp))
+  assert.equal(followChat.items[1].actions.length, 1, 'Earlier work stays with its reply')
+  assert.equal(followChat.items[3].actions.length, 0)
+
+  waiting = gate()
+  chatBehavior = async () => {
+    await waiting
+    run.followUps.take()
+    return 'Both done.'
+  }
+  const quickRequest = session.send('Do A')
+  await tick()
+  await session.send('And B')
+  openGate()
+  await quickRequest
+  assert.deepEqual(
+    texts(followChat).slice(-3),
+    ['Do A', 'And B', 'Both done.'],
+    'A reply with nothing shown yet moves below the follow-up'
+  )
+
+  waiting = gate()
+  let runs = 0
+  chatBehavior = async () => {
+    if (++runs === 1) await waiting
+    return 'Answer ' + runs
+  }
+  const callsBefore = modelCalls
+  const unreadRequest = session.send('First task')
+  await tick()
+  await session.send('Leftover')
+  openGate()
+  await unreadRequest
+  await idle()
+  assert.equal(modelCalls, callsBefore + 2, 'An unread follow-up starts the next task')
+  assert.equal(received.text, 'Leftover')
+  assert.deepEqual(texts(followChat).slice(-4), ['First task', 'Answer 1', 'Leftover', 'Answer 2'])
+  assert(!followChat.items.at(-2).followUp)
+
+  waiting = gate()
+  chatBehavior = async () => {
+    await waiting
+    run.controller.abort()
+    throw new Error('Stopped')
+  }
+  const stoppedRequest = session.send('Long task')
+  await tick()
+  await session.send('Never read')
+  await session.send('Removed first')
+  const removedId = followChat.items.at(-1).id
+  session.removeFollowUp(followChat.id, removedId)
+  assert(!followChat.items.some((item) => item.id === removedId), 'Queued messages can be removed')
+  openGate()
+  await stoppedRequest
+  await idle()
+  assert.equal(followChat.items.at(-1).text, 'Never read')
+  assert.equal(
+    followChat.items.at(-1).followUp,
+    'unsent',
+    'Stopping leaves waiting messages unsent'
+  )
+  assert.throws(
+    () => session.removeFollowUp(followChat.id, followChat.items.at(-2).id),
+    /already read/
+  )
+
+  waiting = gate()
+  chatBehavior = async () => {
+    await waiting
+    return 'Done elsewhere'
+  }
+  const elsewhereRequest = session.send('Busy here')
+  await tick()
+  session.selectChat(original.id)
+  await assert.rejects(session.send('Other chat'), /working in another chat/)
+  session.selectChat(followChat.id)
+  openGate()
+  await elsewhereRequest
+  chatBehavior = undefined
   console.log(
-    'PASS in-place edit/rerun, stable chat and prompt IDs, bounded preceding context, attachment reuse/cleanup, startup failures, navigation races, invalid IDs and active-run exclusion'
+    'PASS in-place edit/rerun, stable chat and prompt IDs, bounded preceding context, attachment reuse/cleanup, startup failures, navigation races, invalid IDs, active-run exclusion and mid-task follow-ups'
   )
 }
 main().catch((error) => {

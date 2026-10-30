@@ -62,7 +62,11 @@ export class Desktop {
   private readonly offSettings: () => void
   readonly voice = new VoiceSession({
     publish: (state) => broadcast('voice:state', state),
-    busy: () => snapshot().busy,
+    // Speaking while the open chat works adds to its request; only another chat's task blocks.
+    busy: () => {
+      const state = snapshot()
+      return state.busy && state.runningChatId !== state.chatId
+    },
     send: (text, owner) => send(text, [], this.interaction(owner, 'voice'))
   })
   constructor() {

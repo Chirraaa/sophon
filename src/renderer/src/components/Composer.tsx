@@ -17,10 +17,10 @@ import { designBrief, useDesignGuide } from '@/hooks/useDesignGuide'
 import { CodingMode } from './CodingMode'
 import { ContextUsage } from './ContextUsage'
 import { useModelInfo } from '@/hooks/useModelInfo'
+import { useSession } from '@/hooks/useSession'
 type Props = {
   onSend: (text: string, attachments: string[]) => Promise<void>
   chatId: string
-  busy: boolean
   focusToken?: number
   autoFocus?: boolean
   variant?: 'panel' | 'bar'
@@ -31,7 +31,6 @@ type Props = {
 export function Composer({
   onSend,
   chatId,
-  busy,
   focusToken = 0,
   autoFocus = true,
   variant = 'panel',
@@ -40,6 +39,12 @@ export function Composer({
   placeholder = 'Ask anything, or ask me to do something…'
 }: Props): React.JSX.Element {
   const ref = useRef<HTMLTextAreaElement>(null)
+  const { runningChatId, items } = useSession()
+  // Messages sent while this chat works join its task; another chat's task blocks sending.
+  const busy = runningChatId !== null
+  const working = runningChatId === chatId
+  const elsewhere = busy && !working
+  const queued = working ? items.filter((item) => item.followUp === 'queued').length : 0
   const voice = useVoice()
   const settings = useSettings()
   const modelInfo = useModelInfo(settings)
@@ -86,7 +91,7 @@ export function Composer({
   const recording = voice.phase === 'starting' || voice.phase === 'listening'
   const voiceBusy = recording || voice.phase === 'transcribing'
   const hold = settings?.voice.mode !== 'toggle'
-  const draft = useComposer(chatId, busy || voiceBusy, async (text, attachments) => {
+  const draft = useComposer(chatId, elsewhere || voiceBusy, async (text, attachments) => {
     await onSend(
       design.preferences.attached
         ? [text, designBrief(design.preferences)].filter(Boolean).join('\n\n')
@@ -95,8 +100,11 @@ export function Composer({
     )
     if (design.preferences.attached) design.update({ attached: false })
   })
-  const disabled = busy || voiceBusy || draft.loading || draft.sending
+  const disabled = elsewhere || voiceBusy || draft.loading || draft.sending
+  // Settings that shape a task stay fixed while one runs.
+  const settingsLocked = disabled || busy
   const draftActive = draft.text.length > 0 || draft.attachments.length > 0
+  const canSend = (!!draft.text.trim() || draft.attachments.length > 0) && !disabled
   useEffect(() => {
     onDraftChange?.(draftActive)
   }, [draftActive, onDraftChange])
@@ -121,7 +129,7 @@ export function Composer({
           if (patch.attached && !draft.text.trim())
             draft.setText('Continue the previous task; use this design direction.')
         }}
-        disabled={disabled}
+        disabled={settingsLocked}
       />
       {recovery?.required && (
         <div
@@ -153,7 +161,7 @@ export function Composer({
             <Button
               variant="ghost"
               type="button"
-              disabled={disabled}
+              disabled={settingsLocked}
               onClick={() => openGuide(true)}
               className="h-auto min-w-0 truncate p-0 text-left text-[11px] hover:underline"
             >
@@ -204,7 +212,7 @@ export function Composer({
                 void draft.submit()
               }
             }}
-            placeholder={placeholder}
+            placeholder={working ? 'Add to the current request…' : placeholder}
             spellCheck={false}
             className="selectable min-h-10 resize-none overflow-hidden rounded-none border-0 bg-transparent! px-1.5 py-2 text-[13px] leading-6 shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
           />
@@ -234,46 +242,67 @@ export function Composer({
               <Camera className="size-3.5" />
             </Button>
             {settings?.files.workspace && (
-              <CodingMode value={settings.coding?.mode ?? 'ask-before-edit'} disabled={disabled} />
-            )}
-            {draft.loading && <Spinner className="ml-1 size-3 text-muted-foreground" />}
-            {settings && ['openai', 'chatgpt', 'anthropic', 'claude'].includes(settings.model.provider) && (
-              <ReasoningEffort
-                value={settings.model.reasoningEffort}
-                model={modelInfo}
-                disabled={disabled}
+              <CodingMode
+                value={settings.coding?.mode ?? 'ask-before-edit'}
+                disabled={settingsLocked}
               />
             )}
+            {draft.loading && <Spinner className="ml-1 size-3 text-muted-foreground" />}
+            {settings &&
+              ['openai', 'chatgpt', 'anthropic', 'claude'].includes(settings.model.provider) && (
+                <ReasoningEffort
+                  value={settings.model.reasoningEffort}
+                  model={modelInfo}
+                  disabled={settingsLocked}
+                />
+              )}
           </div>
           <div className="flex items-center gap-1.5">
             {settings?.voice.enabled && (
               <VoiceButton
-                disabled={busy || draft.sending || voice.phase === 'transcribing'}
+                disabled={elsewhere || draft.sending || voice.phase === 'transcribing'}
                 recording={recording}
                 hold={hold}
               />
             )}
-            <Button
-              size="icon"
-              onClick={() => {
-                setStopError('')
-                if (busy)
+            {busy && (
+              <Button
+                size="icon"
+                variant={working && canSend ? 'outline' : 'default'}
+                onClick={() => {
+                  setStopError('')
                   void window.api.stop().catch((error: Error) => setStopError(error.message))
-                else void draft.submit()
-              }}
-              disabled={!busy && ((!draft.text.trim() && !draft.attachments.length) || disabled)}
-              aria-label={busy ? 'Stop response' : 'Send message'}
-              title={busy ? 'Stop response' : 'Send message'}
-              className="size-8 rounded-full shadow-sm disabled:opacity-25"
-            >
-              {busy ? (
+                }}
+                aria-label="Stop response"
+                title={queued ? 'Stop response; waiting messages are not sent' : 'Stop response'}
+                className="size-8 rounded-full shadow-sm"
+              >
                 <Square className="size-3.5" fill="currentColor" />
-              ) : voice.phase === 'transcribing' ? (
-                <Spinner className="size-4" />
-              ) : (
-                <ArrowUp className="size-4" strokeWidth={2} />
-              )}
-            </Button>
+              </Button>
+            )}
+            {(!busy || (working && canSend)) && (
+              <Button
+                size="icon"
+                onClick={() => {
+                  setStopError('')
+                  void draft.submit()
+                }}
+                disabled={!canSend}
+                aria-label={working ? 'Add to current request' : 'Send message'}
+                title={
+                  working
+                    ? 'Add to the current request; Sophon reads it at its next step'
+                    : 'Send message'
+                }
+                className="size-8 rounded-full shadow-sm disabled:opacity-25"
+              >
+                {voice.phase === 'transcribing' ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <ArrowUp className="size-4" strokeWidth={2} />
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>

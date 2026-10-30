@@ -107,7 +107,13 @@ export class Shortcuts {
   private talkPressed = (): void => {
     if (!getSettings().voice.enabled) return
     const voice = this.desktop.voice
-    if (this.releaseTalk || snapshot().busy || voice.snapshot().phase === 'transcribing') return
+    const state = snapshot()
+    if (
+      this.releaseTalk ||
+      (state.busy && state.runningChatId !== state.chatId) ||
+      voice.snapshot().phase === 'transcribing'
+    )
+      return
     const hold = getSettings().voice.mode === 'hold'
     let released = false
     let captureId: string | undefined
