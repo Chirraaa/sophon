@@ -371,7 +371,9 @@ async function review() {
     },
     '../tools': { activeToolSchemas: () => [] },
     '../network/json-request': {
-      requestJson: async () => {
+      // Model metadata lookups may run; the conversation itself must never be sent.
+      requestJson: async (url) => {
+        if (/\/(?:models|props)$/.test(url.pathname)) return { data: [] }
         networkCalls++
         throw new Error('Unexpected network')
       }

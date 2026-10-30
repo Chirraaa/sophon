@@ -83,6 +83,15 @@ declare global {
     contextWindow?: number | null
     windowSource?: 'configured' | 'provider' | 'documented' | 'unknown'
     estimatedTotalTokens?: number
+    /** Estimate before scaling by the model's measured ratio. */
+    rawEstimatedTokens?: number
+    /** The estimate is scaled by the ratio measured on this model's last request. */
+    calibrated?: boolean
+    /** Provider-reported prompt tokens of the latest main request. */
+    reportedInputTokens?: number
+    reportedOutputTokens?: number
+    /** Largest measured main request (prompt plus reply) in this reply. */
+    peakTokens?: number
     headroomTokens?: number
     breakdown?: { category: ContextCategory; tokens: number }[]
   }

@@ -87,14 +87,18 @@ export function modelCapabilities(
   const defaultEffort = data.default_reasoning_level ?? data.default_reasoning_effort
   if (result.reasoningEfforts?.includes(defaultEffort as ReasoningEffort))
     result.defaultReasoningEffort = defaultEffort as ReasoningEffort
-  if (
-    typeof data.context_window === 'number' &&
-    Number.isSafeInteger(data.context_window) &&
-    data.context_window > 0 &&
-    data.context_window <= 100000000
-  ) {
-    result.contextWindow = data.context_window
-    result.contextSource = 'provider'
+  // context_window (OpenAI-style), context_length (OpenRouter-style), max_model_len (vLLM).
+  for (const key of ['context_length', 'max_model_len', 'context_window']) {
+    const value = data[key]
+    if (
+      typeof value === 'number' &&
+      Number.isSafeInteger(value) &&
+      value > 0 &&
+      value <= 100000000
+    ) {
+      result.contextWindow = value
+      result.contextSource = 'provider'
+    }
   }
   return result
 }

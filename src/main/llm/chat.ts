@@ -204,7 +204,7 @@ export async function chat(
       ? rankMemories(listMemories(), taskText, run.workspace, chatId)
       : []
     const model = await getModel()
-    const modelInfo = settings.model.provider === 'chatgpt' ? await getModelInfo(model) : undefined
+    const modelInfo = await getModelInfo(model)
     const visual = wantsVisual(taskText, history)
     const inlineVisual = visual && !needsVisualTools(taskText)
     if (inlineVisual) session.active = false
@@ -697,6 +697,7 @@ export async function chat(
           volatile: volatileTail,
           allowTools: !finalCall && !answerReviewed && (!inlineVisual || modelTools().length > 0),
           tools: finalCall ? [] : modelTools(),
+          reportContext: true,
           onText,
           onProgress: (progress) => {
             generatingTool = true

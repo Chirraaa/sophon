@@ -512,7 +512,9 @@ async function main() {
     '../settings': { getSettings: () => settings },
     '../tools': { activeToolSchemas },
     '../network/json-request': {
-      requestJson: async () => {
+      requestJson: async (_url, options) => {
+        // Model metadata lookups carry no body; count only conversation requests.
+        if (!options?.body) return { data: [] }
         transported++
         return { choices: [{ message: { role: 'assistant', content: 'bounded' } }] }
       }

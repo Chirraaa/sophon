@@ -4,11 +4,8 @@ import { currentRun, assertRun } from '../security/run-manager'
 export async function generateChatTitle(prompt: string, answer: string): Promise<string | null> {
   const run = currentRun()
   if (!run) return null
-  const reportContext = run.onModelContext
   try {
     assertRun(run)
-
-    run.onModelContext = undefined
     const reply = await callLLM(
       await getModel(),
       [
@@ -29,7 +26,5 @@ export async function generateChatTitle(prompt: string, answer: string): Promise
     return title && title.length <= 80 && !/[\r\n<>`]/.test(title) ? title : null
   } catch {
     return null
-  } finally {
-    run.onModelContext = reportContext
   }
 }

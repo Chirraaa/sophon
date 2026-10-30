@@ -84,6 +84,17 @@ function load(file, dependencies = {}) {
           }
         }
       }
+      // The chat loop asks every provider for model info; fixtures written when only
+      // ChatGPT did may mock just callLLM. Supply "no window reported" for those.
+      if (
+        file === 'src/main/llm/chat.ts' &&
+        name === './client' &&
+        dependencies[name] &&
+        !dependencies[name].getModelInfo
+      )
+        return Object.create(dependencies[name], {
+          getModelInfo: { value: async (id) => ({ id, label: id }) }
+        })
       if (['./powershell-worker', '../powershell-worker'].includes(name))
         return load('src/main/tools/powershell-worker.ts', {
           child_process: dependencies.child_process,
@@ -123,6 +134,15 @@ function load(file, dependencies = {}) {
         ['../shared/model-tuning', '../../shared/model-tuning'].includes(name)
       )
         return load('src/shared/model-tuning.ts')
+      if (
+        !Object.hasOwn(dependencies, name) &&
+        [
+          '../../shared/context-usage',
+          '../../../shared/context-usage',
+          '../../../../shared/context-usage'
+        ].includes(name)
+      )
+        return load('src/shared/context-usage.ts')
       if (!Object.hasOwn(dependencies, name) && name === '../../shared/coding-resources')
         return load('src/shared/coding-resources.ts')
       if (!Object.hasOwn(dependencies, name) && name === '../../shared/model-capabilities')
