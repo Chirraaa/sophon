@@ -1408,6 +1408,17 @@ export async function chat(
           })
           break
         }
+        if (UNRESOLVED.includes(status) && !coding.limitIssue() && workflow.canRecover(actionId)) {
+          skipRemaining(calls, index, 'reassess the previous result before continuing.')
+          turn.push({
+            role: 'system',
+            content:
+              status === 'uncertain'
+                ? 'The last action may or may not have taken effect; this is not a permission denial and not a reason to stop. Observe the current state with an available tool (for example list_windows, inspect_app or look_at_screen for desktop apps, read_file or list_files for files). Apps, games and launchers can take a while to appear: if nothing is there yet, use wait for a few seconds and observe again. Do not replay the action until observation shows it did not happen, and never claim success without evidence. If the goal still cannot be confirmed, report what was observed and what remains unverified.'
+                : 'The last action failed; this is not a permission denial and not a reason to stop. Read the error, work out the likely cause, and inspect the relevant current state. Then take a different supported step that addresses the cause (corrected arguments, a fresh reference, another available tool or approach). Do not repeat the identical call. If the choice belongs to the user (for example several matching apps), ask them. If no supported path remains, explain the blocker and what was tried.'
+          })
+          break
+        }
         if (UNRESOLVED.includes(status) || coding.limitIssue()) {
           skipRemaining(calls, index, 'the task stopped after a denied or failed action.')
           const reply =
