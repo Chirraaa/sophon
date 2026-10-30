@@ -5,6 +5,7 @@ import { chat, generateChatTitle } from '../llm'
 import { attachmentInfo, storeImage } from '../services/attachments'
 import { TOOL_INFO } from '../tools/registry'
 import { fallbackActionLabel } from '../../shared/action-label'
+import { mergeContext } from '../../shared/context-usage'
 import {
   loadConversations,
   newConversation,
@@ -326,13 +327,10 @@ async function respond(
     emit(false)
   }
   run.onModelContext = (context) => {
-    reply.context = {
-      droppedTurns: 0,
-      memories: [],
-      playbooks: [],
-      ...reply.context,
-      ...context
-    }
+    reply.context = mergeContext(
+      { droppedTurns: 0, memories: [], playbooks: [], ...reply.context },
+      context
+    ) as ContextReport
     emit(false)
   }
   const images: Promise<void>[] = []
@@ -402,7 +400,7 @@ async function respond(
       return
     }
     if (event.type === 'context') {
-      reply.context = event.report
+      reply.context = mergeContext(reply.context, event.report)
       emit(false)
       return
     }

@@ -5,7 +5,7 @@ import { requestJson } from '../network/json-request'
 import { modelEndpoint } from '../network/endpoint'
 import { currentRun, assertRun } from '../security/run-manager'
 import type { ModelMessage as Msg, ModelReply } from './types'
-import { contextBudget, assertContextFits, measureContext } from './context'
+import { contextBudget, assertContextFits, measureContext, calibrateContext } from './context'
 import { modelCapabilities, supportedEffort } from '../../shared/model-capabilities'
 import { addUsage, tokenUsage } from '../../shared/model-usage'
 import { completionStream } from './stream'
@@ -15,7 +15,8 @@ import {
   anthropicInput,
   anthropicReply,
   anthropicStream,
-  anthropicTools
+  anthropicTools,
+  anthropicUsage
 } from './anthropic'
 import { modelKey } from '../security/model-credentials'
 import { chatgptAccessToken, chatgptAccountScope, chatgptStatus } from '../security/chatgpt-auth'
@@ -175,17 +176,48 @@ export async function listModelChoices(refresh = true): Promise<ModelChoice[]> {
   })
   return entry.result
 }
+// llama.cpp reports the per-slot context it is actually running with, which can
+// differ from the window typed into Settings. Other local servers return nothing.
+let serverContext: { key: string; expires: number; result: Promise<number | undefined> } | undefined
+function localServerContext(): Promise<number | undefined> {
+  let base: string
+  try {
+    base = modelEndpoint(getSettings().model.endpoint, 'local')
+  } catch {
+    return Promise.resolve(undefined)
+  }
+  if (serverContext?.key === base && serverContext.expires > Date.now()) return serverContext.result
+  const entry = {
+    key: base,
+    expires: Infinity,
+    result: requestJson(new URL(`${base.replace(/\/v1\/?$/, '')}/props`), { timeout: 1500 })
+      .then((data) => {
+        const n = (data as { default_generation_settings?: { n_ctx?: unknown } } | null)
+          ?.default_generation_settings?.n_ctx
+        return typeof n === 'number' && Number.isSafeInteger(n) && n > 0 && n <= 10000000
+          ? n
+          : undefined
+      })
+      .catch(() => undefined)
+  }
+  serverContext = entry
+  void entry.result.then(() => (entry.expires = Date.now() + 60000))
+  return entry.result
+}
 export async function getModelInfo(model = getSettings().model.modelId): Promise<ModelChoice> {
   const settings = getSettings().model
-  const choices = await listModelChoices(false)
-  const id = model || (settings.provider === 'local' ? choices[0]?.id : '') || ''
-  return (
-    choices.find((choice) => choice.id === id) ?? {
-      id,
-      label: id || 'No model selected',
-      ...modelCapabilities(id, settings.provider ?? 'local', undefined)
-    }
-  )
+  const provider = settings.provider ?? 'local'
+  const [choices, served] = await Promise.all([
+    listModelChoices(false),
+    provider === 'local' ? localServerContext() : undefined
+  ])
+  const id = model || (provider === 'local' ? choices[0]?.id : '') || ''
+  const info = choices.find((choice) => choice.id === id) ?? {
+    id,
+    label: id || 'No model selected',
+    ...modelCapabilities(id, provider, undefined)
+  }
+  return served ? { ...info, contextWindow: served, contextSource: 'provider' } : info
 }
 export async function callLLM(
   model: string,
@@ -197,7 +229,8 @@ export async function callLLM(
     outputTokens,
     timeoutMs = 120000,
     onText,
-    onProgress
+    onProgress,
+    reportContext = false
   }: {
     visual?: boolean
     allowTools?: boolean
@@ -206,6 +239,8 @@ export async function callLLM(
     timeoutMs?: number
     onText?: (text: string) => void
     onProgress?: (progress: ModelProgress) => void
+    /** A main conversation request: its size is what the context meter shows. */
+    reportContext?: boolean
   } = {}
 ): Promise<ModelReply | null> {
   const s = { ...getSettings().model, ...(outputTokens ? { maxTokens: outputTokens } : {}) }
@@ -215,9 +250,7 @@ export async function callLLM(
   const responses = plan || provider === 'openai'
   const tools = allowTools ? (selectedTools ?? activeToolSchemas()) : []
   const claude = provider === 'anthropic' || provider === 'claude'
-  const info = ['openai', 'chatgpt', 'anthropic', 'claude'].includes(provider)
-    ? await getModelInfo(model)
-    : { id: model, label: model }
+  const info = await getModelInfo(model)
   const budget = contextBudget(s, tools, visual, info)
   const clockRun = currentRun()
   let started = performance.now()
@@ -269,9 +302,10 @@ export async function callLLM(
     run.modelCalls = (run.modelCalls ?? 0) + 1
   }
   const effort = supportedEffort(s.reasoningEffort, info)
-  if (run) {
+  const context = reportContext ? measureContext(normalized, tools, s, visual, info) : undefined
+  if (run && context) {
     assertRun(run)
-    run.onModelContext?.(measureContext(normalized, tools, s, visual, info))
+    run.onModelContext?.(context)
   }
   const stream =
     onText || onProgress || plan || (claude && budget.reservedOutputTokens > 16000)
@@ -367,7 +401,8 @@ export async function callLLM(
       measured = reply.usage
       return reply
     }
-    measured = tokenUsage(data.usage)
+    // Claude reports cache reads and writes outside input_tokens.
+    measured = claude ? anthropicUsage(data.usage) : tokenUsage(data.usage)
     if (claude) return anthropicReply(data, model)
     if (responses) return responsesReply(data, model, plan ? 'sophon' : undefined, scope)
     const choice = Array.isArray(data.choices) ? data.choices[0] : undefined
@@ -396,6 +431,15 @@ export async function callLLM(
     if (run) {
       run.usage = addUsage(run.usage, measured)
       run.onModelUsage?.(run.usage)
+      if (context && measured && !run.signal?.aborted) {
+        calibrateContext(s, info.id, context.rawEstimatedTokens ?? 0, measured.inputTokens)
+        run.onModelContext?.({
+          ...context,
+          reportedInputTokens: measured.inputTokens,
+          reportedOutputTokens: measured.outputTokens,
+          measuredAt: Date.now()
+        })
+      }
     }
   }
 }

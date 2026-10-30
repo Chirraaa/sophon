@@ -4,9 +4,95 @@ import { untrustedData } from './untrusted-data'
 export const estimateTextTokens = (text: string): number =>
   Math.ceil(Buffer.byteLength(text, 'utf8') / 3)
 
+// Budget checks keep this conservative flat cost; the display uses imageTokens.
+const IMAGE_TOKENS = 2048
+
+function imageSize(url: string): { width: number; height: number } | undefined {
+  const match = /^data:image\/(?:png|jpeg|gif);base64,/.exec(url)
+  if (!match) return
+  // Dimensions sit in the header; JPEG frames can follow a large EXIF block.
+  const bytes = Buffer.from(url.slice(match[0].length, match[0].length + 349528), 'base64')
+  if (bytes.length >= 24 && bytes.readUInt32BE(0) === 0x89504e47)
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+  if (bytes.length >= 10 && bytes.toString('ascii', 0, 3) === 'GIF')
+    return { width: bytes.readUInt16LE(6), height: bytes.readUInt16LE(8) }
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return
+  for (let at = 2; at + 9 < bytes.length;) {
+    if (bytes[at] !== 0xff) return
+    const marker = bytes[at + 1]
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker))
+      return { width: bytes.readUInt16BE(at + 7), height: bytes.readUInt16BE(at + 5) }
+    at += 2 + bytes.readUInt16BE(at + 2)
+  }
+  return
+}
+
+// Each provider encodes images differently; these follow their published rules,
+// and calibration against reported counts absorbs the remaining difference.
+export function imageTokens(url: string, provider?: ModelProvider): number {
+  const size = provider ? imageSize(url) : undefined
+  if (!size || !size.width || !size.height) return IMAGE_TOKENS
+  let { width, height } = size
+  const fit = (scale: number): void => {
+    if (scale < 1) {
+      width = Math.max(1, Math.floor(width * scale))
+      height = Math.max(1, Math.floor(height * scale))
+    }
+  }
+  if (provider === 'anthropic' || provider === 'claude') {
+    fit(Math.min(1568 / Math.max(width, height), Math.sqrt(1150000 / (width * height))))
+    return Math.ceil((width * height) / 750)
+  }
+  if (provider === 'openai' || provider === 'chatgpt') {
+    fit(2048 / Math.max(width, height))
+    fit(768 / Math.min(width, height))
+    return 85 + 170 * Math.ceil(width / 512) * Math.ceil(height / 512)
+  }
+  // Local vision models (Qwen-VL style) merge 28×28 pixel patches into one token.
+  return Math.ceil(width / 28) * Math.ceil(height / 28)
+}
+
+// One window rule for budgets and the display. Hosted models use their reported
+// or published window; local servers use what the server reports it is running
+// with (llama.cpp /props), else the window configured in Settings.
+export function contextWindow(
+  model: AppSettings['model'],
+  info?: ModelChoice
+): { window: number | null; source: NonNullable<ContextMeasurements['windowSource']> } {
+  const provider = model.provider ?? 'local'
+  const known = info?.contextWindow
+  if (provider === 'chatgpt')
+    return known
+      ? { window: known, source: info?.contextSource ?? 'documented' }
+      : { window: null, source: 'unknown' }
+  if (provider === 'anthropic' || provider === 'claude')
+    return known
+      ? { window: known, source: info?.contextSource ?? 'documented' }
+      : { window: 200000, source: 'documented' }
+  if (known && (provider === 'openai' || info?.contextSource === 'provider'))
+    return { window: known, source: info?.contextSource ?? 'documented' }
+  return { window: model.contextWindow ?? 16384, source: 'configured' }
+}
+
+// Ratio of provider-reported prompt tokens to Sophon's estimate for the last
+// measured request of each model, so pre-request estimates track reality.
+const calibrations = new Map<string, number>()
+const calibrationKey = (model: AppSettings['model'], id?: string): string =>
+  `${model.provider ?? 'local'}\n${model.endpoint ?? ''}\n${id || model.modelId}`
+export function calibrateContext(
+  model: AppSettings['model'],
+  id: string | undefined,
+  estimated: number,
+  reported: number
+): void {
+  if (estimated > 0 && reported > 0)
+    calibrations.set(calibrationKey(model, id), Math.min(3, Math.max(0.3, reported / estimated)))
+}
+
 export function contextBreakdown(
   messages: ModelMessage[],
-  tools: unknown[]
+  tools: unknown[],
+  provider?: ModelProvider
 ): NonNullable<ContextMeasurements['breakdown']> {
   const buckets = new Map<ContextCategory, number>()
   const add = (category: ContextCategory, tokens: number): void => {
@@ -40,7 +126,7 @@ export function contextBreakdown(
     if (typeof message.content === 'string') text(message.content)
     else
       for (const part of message.content) {
-        if (part.type === 'image_url') add('attachments', 2048)
+        if (part.type === 'image_url') add('attachments', imageTokens(part.image_url.url, provider))
         else text(part.text)
       }
     if (message.tool_calls) add('toolCalls', estimateTextTokens(JSON.stringify(message.tool_calls)))
@@ -62,19 +148,25 @@ export function measureContext(
 ): ContextMeasurements {
   const budget = contextBudget(model, tools, visual, info)
   const provider = model.provider ?? 'local'
-  const hosted = provider === 'chatgpt' || provider === 'anthropic' || provider === 'claude'
-  const window = hosted ? (info?.contextWindow ?? null) : model.contextWindow
-  const breakdown = contextBreakdown(messages, tools)
+  const { window, source } = contextWindow(model, info)
+  const raw = contextBreakdown(messages, tools, provider)
+  const rawTotal = raw.reduce((sum, part) => sum + part.tokens, 0)
+  const ratio = calibrations.get(calibrationKey(model, info?.id))
+  const breakdown = ratio
+    ? raw.map((part) => ({ ...part, tokens: Math.round(part.tokens * ratio) }))
+    : raw
   return {
     model: info?.id || model.modelId,
     provider,
     measuredAt: Date.now(),
     estimatedInputTokens: estimateMessages(messages),
     estimatedTotalTokens: breakdown.reduce((sum, part) => sum + part.tokens, 0),
+    rawEstimatedTokens: rawTotal,
+    ...(ratio ? { calibrated: true } : {}),
     inputBudget: Number.isFinite(budget.inputBudget) ? budget.inputBudget : null,
     reservedOutputTokens: budget.reservedOutputTokens,
     contextWindow: window,
-    windowSource: hosted ? (info?.contextSource ?? 'unknown') : 'configured',
+    windowSource: source,
     headroomTokens: window ? Math.max(256, Math.ceil(window * 0.2)) : 0,
     breakdown
   }
@@ -253,15 +345,8 @@ export function contextBudget(
   inputBudget: number
   reservedOutputTokens: number
 } {
-  if (model.provider === 'chatgpt' && !info?.contextWindow)
-    return { inputBudget: Infinity, reservedOutputTokens: 0 }
-  const claude = model.provider === 'anthropic' || model.provider === 'claude'
-  const window =
-    model.provider === 'chatgpt'
-      ? info!.contextWindow!
-      : claude
-        ? (info?.contextWindow ?? 200000)
-        : (model.contextWindow ?? 16384)
+  const { window } = contextWindow(model, info)
+  if (!window) return { inputBudget: Infinity, reservedOutputTokens: 0 }
 
   const requested = visual ? Math.floor(window / 3) : model.maxTokens
   const reservedOutputTokens = Math.min(requested, Math.floor(window / 3))
