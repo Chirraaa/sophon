@@ -388,6 +388,7 @@ async function review() {
     'PASS actual chat-loop recall, shared research memory/history/instructions, disabled recall and transport rejects overflow before network'
   )
   await learning()
+  coreInstructions()
   console.log('All memory/harness checks passed without a model, network or Electron process.')
 }
 
@@ -695,6 +696,40 @@ async function learning() {
   console.log(
     'PASS chat loop saves learned memories without approval and recalls them in a new chat'
   )
+}
+function coreInstructions() {
+  let current
+  const prompt = load('src/main/llm/prompt.ts', {
+    '../settings': { getSettings: () => current },
+    './visuals': { VISUAL_CAPABILITIES: '', VISUAL_PROMPT: '' },
+    './visual-routing': { INLINE_VISUAL_TASK: '' }
+  })
+  const build = (memory, systemPrompt = '') => {
+    current = {
+      behavior: { systemPrompt, style: 'terse', neverDo: '' },
+      rules: { blockedApps: [], protectedWindows: [] },
+      memory
+    }
+    return prompt.buildSystemPrompt()
+  }
+  const role = prompt.getDefaultPrompt()
+  const full = build({ enabled: true, learn: true, episodes: true })
+  assert(full.includes(role))
+  assert.match(full, /Host rules:/)
+  assert.match(full, /persistent memory across chats/)
+  assert.match(full, /search summaries of earlier conversations/)
+  assert.match(build({ enabled: true, learn: true, episodes: false }), /Conversation recall is off/)
+  assert.match(build({ enabled: true, learn: false, episodes: true }), /cannot save new ones/)
+  const off = build({ enabled: false, learn: true, episodes: true })
+  assert.match(off, /Memory is off/)
+  assert.doesNotMatch(off, /persistent memory across chats/)
+  // Custom instructions replace the role guidance, as Settings > Behavior says; host rules stay.
+  const custom = build({ enabled: true, learn: true, episodes: true }, 'You are Ada, a pirate.')
+  assert(custom.startsWith('You are Ada, a pirate.'))
+  assert(!custom.includes(role))
+  assert.match(custom, /Host rules:/)
+  assert.match(custom, /untrusted data/)
+  console.log('PASS core instructions follow memory settings; custom role keeps host rules')
 }
 review().catch((error) => {
   console.error(error)
