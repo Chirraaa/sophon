@@ -77,7 +77,7 @@ console.log('ORACLE PASS: order, uniqueness, immutability, invalid inputs, large
   if (sandMode) {
     assert(!connected, '--sand uses the loaded local model')
     const saved = JSON.parse(
-      fs.readFileSync(path.join(process.env.APPDATA, 'voice-agent/settings.json'), 'utf8')
+      fs.readFileSync(path.join(process.env.APPDATA, 'sophon/settings.json'), 'utf8')
     )
     Object.assign(settings.model, saved.model, { specialists: false })
     assert.equal(settings.model.provider, 'local')
