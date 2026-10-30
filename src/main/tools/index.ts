@@ -229,7 +229,16 @@ export async function executeTool(
     if (parameters.screenshot === true) {
       const shot = latestScreenshot()
       if (!shot) return 'No screenshot from this task to show. Call look_at_screen first.'
-      return { text: `Showed the user a screenshot of ${shot.label}.`, image: shot.image }
+      return {
+        text: `Showed the user a screenshot of ${shot.label}.`,
+        image: shot.image,
+        display: true
+      }
+    }
+    if (typeof parameters.path === 'string') {
+      const file = await readWorkspaceFile({ path: parameters.path }, scope.file)
+      if (typeof file === 'string') throw new Error('That file is not a picture.')
+      return { text: `Showed the user ${file.text}.`, image: file.image }
     }
     if (!getSettings().research.enabled)
       throw new Error('Public web access is disabled in Settings.')

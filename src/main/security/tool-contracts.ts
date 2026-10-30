@@ -163,8 +163,8 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
   }
   if (name === 'show_image') {
     const web = object.url !== undefined
-    if (web === (object.screenshot === true))
-      throw new Error('Provide either a public image url or screenshot: true.')
+    if ([web, object.screenshot === true, object.path !== undefined].filter(Boolean).length !== 1)
+      throw new Error('Provide exactly one of a public image url, screenshot: true, or a path.')
     if (web && (typeof object.url !== 'string' || object.url.length > 2000))
       throw new Error('url must be a public HTTPS address of at most 2000 characters.')
     if (object.caption !== undefined && String(object.caption).length > 120)

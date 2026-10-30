@@ -25,6 +25,8 @@ export type CaptureArgs = {
 export type CapturedScreen = {
   text: string
   image: string
+  // Show the picture to the user without sending it to the model again.
+  display?: boolean
 }
 let lastCapture: {
   runId: string

@@ -238,7 +238,7 @@ export const TOOL_INFO: ToolInfo[] = [
     name: 'show_image',
     label: 'Show pictures',
     description:
-      'Show a public web image or your latest screenshot in the chat. Web images are fetched over public HTTPS without cookies; the image URL goes to its website.',
+      'Show a public web image, your latest screenshot or a picture from your working folder in the chat. Web images are fetched over public HTTPS without cookies; the image URL goes to its website.',
     default: 'ask'
   },
   {

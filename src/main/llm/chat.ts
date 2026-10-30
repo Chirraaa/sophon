@@ -1332,7 +1332,7 @@ export async function chat(
           type: 'tool_end',
           id: actionId,
           result: resultText,
-          image: result.image,
+          image: result.image ?? result.shownImage,
           outcome: result.status
         })
         assertRun(run)

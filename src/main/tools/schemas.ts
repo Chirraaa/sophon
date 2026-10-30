@@ -296,7 +296,7 @@ export const toolSchemas = [
     function: {
       name: 'show_image',
       description:
-        'Show the user a picture inline in the chat, below your reply. Give a public HTTPS image URL (PNG, JPEG, WebP, GIF or BMP, up to 8 MB; animations show their first frame) or set screenshot: true to show your latest look_at_screen capture. Use it when the user asks to see something, not for every capture. Only use image URLs from the user or returned by web_fetch or web_search; never invent one. At most six web images per task. Say in your reply what the picture shows.',
+        'Show the user a picture inline in the chat, below your reply. Give a public HTTPS image URL (PNG, JPEG, WebP, GIF or BMP, up to 8 MB; animations show their first frame) set screenshot: true to show your latest look_at_screen capture, or give a picture path inside the working folder. Use it when the user asks to see something, not for every capture. Only use image URLs from the user or returned by web_fetch or web_search; never invent one. At most six web images per task. Say in your reply what the picture shows.',
       parameters: {
         type: 'object',
         properties: {
@@ -305,6 +305,7 @@ export const toolSchemas = [
             type: 'boolean',
             description: 'Show the latest screenshot instead of a web image.'
           },
+          path: { type: 'string', description: 'Relative path of an image in the working folder.' },
           caption: { type: 'string', description: 'Short title shown with the picture.' }
         }
       }
