@@ -24,7 +24,7 @@ const settings = {
   research: { enabled: false },
   tools: registry.defaultToolPermissions()
 }
-let run, requests, replies, executions, guidanceReads, toolHandler
+let run, requests, replies, executions, guidanceReads, toolHandler, afterCall
 const tools = () =>
   schema.toolSchemas.filter(
     (tool) =>
@@ -48,6 +48,7 @@ const client = {
       })
     )
     run.modelCalls++
+    afterCall?.(run.modelCalls)
     const next = replies.shift()
     if (!next) throw new Error('Unexpected model call')
     return next
@@ -453,6 +454,62 @@ async function main() {
   console.log(
     'PASS Spotify fixture: 5 model calls, 5 actions, zero discovery calls; bounded read-back, denied/failed/empty/wrong-target recovery, batch integrity and continuation refs'
   )
+
+  let queue = []
+  const followUps = () => ({ pending: () => queue.length > 0, take: () => queue.splice(0) })
+  const added = (request, text) =>
+    request.messages.find(
+      (message) =>
+        message.role === 'user' &&
+        typeof message.content === 'string' &&
+        message.content.includes(text)
+    )
+  reset([call('open_app', { name: 'Spotify' }), { content: 'Timer set for five minutes.' }])
+  run.followUps = followUps()
+  toolHandler = () => {
+    queue.push({ text: 'Also set a five minute timer', attachments: [] })
+    return 'Opened Spotify. Window: ' + windowRef
+  }
+  const shown = []
+  assert.equal(
+    await chat('Open Spotify', (e) => e.type === 'text' && shown.push(e.text), []),
+    'Timer set for five minutes.'
+  )
+  assert.equal(requests.length, 2, 'A direct reply does not end the task while a message waits')
+  assert(shown.includes('Opened Spotify.'), 'The direct reply is still shown')
+  assert.match(
+    added(requests[1], 'Also set a five minute timer').content,
+    /while you were working/,
+    'The follow-up reaches the model as a user message'
+  )
+
+  queue = []
+  reset([{ content: 'Paris is the capital.' }, { content: 'Berlin is the capital of Germany.' }])
+  run.followUps = followUps()
+  afterCall = (calls) => {
+    if (calls === 1) queue.push({ text: 'And Germany?', attachments: [] })
+  }
+  assert.equal(
+    await chat('What is the capital of France?', () => {}, []),
+    'Berlin is the capital of Germany.'
+  )
+  afterCall = undefined
+  assert.equal(requests.length, 2, 'A message that arrives with the answer continues the task')
+  assert.match(JSON.stringify(requests[1].messages), /Paris is the capital\..*And Germany\?/)
+
+  queue = [{ text: 'and tell me what time it is', attachments: [] }]
+  reset([{ content: 'It is noon; Spotify is not open yet.' }])
+  run.followUps = followUps()
+  await chat('Open Spotify', () => {}, [])
+  assert(added(requests[0], 'what time it is'), 'Messages queued before the first step are read')
+  assert(
+    requests[0].options.tools.some(
+      (tool) => !['open_app', 'discover_tools'].includes(tool.function.name)
+    ),
+    'A follow-up lifts the single-command tool restriction'
+  )
+  assert.equal(queue.length, 0)
+  console.log('PASS mid-task follow-ups: direct reply, final answer and first-step delivery')
 
   settings.behavior.systemPrompt = 'Custom persona: respond warmly.'
   reset([{ content: 'Hi' }])

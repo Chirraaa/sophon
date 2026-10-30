@@ -445,6 +445,9 @@ declare global {
     attachments?: ChatAttachment[]
     actions: ToolAction[]
     pending: boolean
+    // A message sent while a task was running: 'queued' until the task reads it at its
+    // next step, 'unsent' when the task stopped first.
+    followUp?: 'queued' | 'unsent'
   }
   interface SessionSnapshot {
     githubContext?: GithubContext
@@ -546,6 +549,7 @@ declare global {
     }
     send: (text: string, attachments?: string[]) => Promise<void>
     rerun: (chatId: string, itemId: string, text: string) => Promise<void>
+    removeFollowUp: (chatId: string, itemId: string) => Promise<void>
     chats: {
       create: () => Promise<void>
       select: (id: string) => Promise<void>

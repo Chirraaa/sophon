@@ -116,6 +116,7 @@ const api: Api = {
   },
   send: (text, attachments) => ipcRenderer.invoke('agent:send', text, attachments),
   rerun: (chatId, itemId, text) => ipcRenderer.invoke('agent:rerun', chatId, itemId, text),
+  removeFollowUp: (chatId, itemId) => ipcRenderer.invoke('agent:remove-follow-up', chatId, itemId),
   chats: {
     create: () => ipcRenderer.invoke('chats:create'),
     select: (id) => ipcRenderer.invoke('chats:select', id),

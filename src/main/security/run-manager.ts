@@ -23,8 +23,11 @@ export interface RunContext {
   timing?: RequestTiming
   onTiming?: (timing: RequestTiming) => void
   onModelContext?: (context: ContextMeasurements) => void
+  // Messages the user sent to this chat while the run was working.
+  followUps?: { pending: () => boolean; take: () => FollowUp[] }
   searchUnavailable: boolean
 }
+export type FollowUp = { text: string; attachments: string[] }
 let active: { run: RunContext; controller: AbortController; timer: NodeJS.Timeout } | null = null
 let revision = 0
 let interfacePresence: () => InterfacePresence | undefined = () => undefined
@@ -81,6 +84,7 @@ export function startRun(
     timing: undefined,
     onTiming: undefined,
     onModelContext: undefined,
+    followUps: undefined,
     searchUnavailable: false
   })
   const timer = setTimeout(stopRun, RUN_SECONDS * 1000)

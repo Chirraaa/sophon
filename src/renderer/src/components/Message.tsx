@@ -15,7 +15,7 @@ import { VISUAL_FENCE } from '../../../shared/visuals'
 import { TaskEvidence } from './chat/TaskEvidence'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
-import { Pencil, RotateCw } from 'lucide-react'
+import { Clock, Pencil, RotateCw, X } from 'lucide-react'
 import { CopyButton } from './chat/CopyButton'
 import { useStreamingText } from '@/hooks/useStreamingText'
 import { PageLink } from './chat/PageLink'
@@ -65,7 +65,18 @@ export function Message({
     setError(null)
     void window.api.send(question).catch((error: Error) => setError(error.message))
   }
+  const remove = async (): Promise<void> => {
+    setError(null)
+    setSaving(true)
+    try {
+      await window.api.removeFollowUp(chatId, item.id)
+    } catch (error) {
+      setError((error as Error).message)
+      setSaving(false)
+    }
+  }
   const you = item.from === 'you'
+  const queued = item.followUp === 'queued'
   const isQuestion = !you && dockQuestions && !!questionsFromReply(item.text)
   const showBubble = !isQuestion && (Boolean(item.text) || item.pending)
   const shown = you ? [] : (item.attachments ?? []).filter((attachment) => attachment.shown)
@@ -155,6 +166,7 @@ export function Message({
               you
                 ? 'whitespace-pre-wrap rounded-br-md border border-border bg-muted text-foreground'
                 : 'w-full max-w-full rounded-bl-md border border-border bg-muted/10',
+              item.followUp && 'border-dashed bg-muted/40 text-muted-foreground',
               !you &&
                 VISUAL_FENCE.test(item.text) &&
                 'w-full max-w-full border-0 bg-transparent px-0'
@@ -195,30 +207,67 @@ export function Message({
       )}
       {you && !editing && (
         <div className="flex items-center gap-1">
+          {item.followUp && (
+            <span
+              role="status"
+              className="mr-1 flex items-center gap-1 text-xs text-muted-foreground"
+            >
+              {queued ? (
+                <>
+                  <Clock className="size-3" aria-hidden />
+                  Waiting · Sophon reads this at its next step
+                </>
+              ) : (
+                'Not sent · the task stopped first'
+              )}
+            </span>
+          )}
           <CopyButton text={item.text} label="Copy message" />
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            disabled={busy || saving}
-            aria-label="Edit prompt"
-            title="Edit prompt"
-            onClick={() => {
-              setDraft(item.text)
-              setEditing(true)
-            }}
-          >
-            <Pencil />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            disabled={busy || saving}
-            aria-label="Rerun prompt"
-            title="Rerun in this chat, replacing the response and later messages"
-            onClick={() => void repeat(item.text)}
-          >
-            <RotateCw />
-          </Button>
+          {!queued && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                disabled={busy || saving}
+                aria-label="Edit prompt"
+                title="Edit prompt"
+                onClick={() => {
+                  setDraft(item.text)
+                  setEditing(true)
+                }}
+              >
+                <Pencil />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                disabled={busy || saving}
+                aria-label={
+                  item.followUp && items.at(-1)?.id === item.id ? 'Send message' : 'Rerun prompt'
+                }
+                title={
+                  item.followUp && items.at(-1)?.id === item.id
+                    ? 'Send this message now'
+                    : 'Rerun in this chat, replacing the response and later messages'
+                }
+                onClick={() => void repeat(item.text)}
+              >
+                <RotateCw />
+              </Button>
+            </>
+          )}
+          {item.followUp && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              disabled={saving}
+              aria-label="Remove message"
+              title={queued ? 'Remove before Sophon reads it' : 'Remove this unsent message'}
+              onClick={() => void remove()}
+            >
+              <X />
+            </Button>
+          )}
         </div>
       )}
       {error && (

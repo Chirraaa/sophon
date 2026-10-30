@@ -32,6 +32,11 @@ import { searchProviderLabel } from '../network/search-provider'
 import { archiveAction, readActionDetails } from './action-details'
 let store: ConversationStore
 let runningChatId: string | null = null
+// Where each queued follow-up was sent from, so a task started from it keeps that surface.
+const followUpInteractions = new Map<string, InteractionContext>()
+const MAX_FOLLOW_UPS = 8
+const queuedFollowUps = (conversation: Conversation): ChatItem[] =>
+  conversation.items.filter((item) => item.followUp === 'queued')
 const listeners = new Set<(snapshot: SessionSnapshot) => void>()
 const textListeners = new Set<(update: { chatId: string; itemId: string; text: string }) => void>()
 export function onSessionText(
@@ -267,27 +272,92 @@ export async function send(
   interaction?: InteractionContext
 ): Promise<void> {
   const conversation = store.chats.find((value) => value.id === store.activeId)!
-  await respond(conversation, text, attachmentIds, interaction)
+  if (runningChatId === conversation.id)
+    await queueFollowUp(conversation, text, attachmentIds, interaction)
+  else await respond(conversation, text, attachmentIds, interaction)
+}
+const BUSY_ELSEWHERE =
+  'Sophon is working in another chat. Open that chat to add to its request, or wait for it to finish.'
+// A message sent to the chat that is already working waits for the task's next step.
+async function queueFollowUp(
+  conversation: Conversation,
+  text: string,
+  attachmentIds: string[],
+  interaction?: InteractionContext
+): Promise<void> {
+  const trimmed = text.trim()
+  if (!Array.isArray(attachmentIds) || attachmentIds.length > 4)
+    throw new Error('Attach up to four files.')
+  if (!trimmed && !attachmentIds.length) return
+  if (text.length > 32000) throw new Error('Message is too long.')
+  const attachments = await Promise.all(attachmentIds.map(attachmentInfo))
+  if (!store.chats.includes(conversation))
+    throw new Error('This chat was deleted. Please choose another chat.')
+  // The task finished while the attachments were read: this message starts the next one.
+  if (runningChatId !== conversation.id)
+    return respond(conversation, text, attachmentIds, interaction)
+  if (queuedFollowUps(conversation).length >= MAX_FOLLOW_UPS)
+    throw new Error(
+      `Up to ${MAX_FOLLOW_UPS} messages can wait for the current task. Remove one or wait for Sophon to read them.`
+    )
+  const item: ChatItem = {
+    id: randomUUID(),
+    from: 'you',
+    text: trimmed,
+    attachments,
+    actions: [],
+    pending: false,
+    followUp: 'queued'
+  }
+  conversation.items.push(item)
+  if (interaction) followUpInteractions.set(item.id, interaction)
+  conversation.updatedAt = Date.now()
+  emit()
+}
+export function removeFollowUp(chatId: string, itemId: string): void {
+  const conversation = store.chats.find((chat) => chat.id === chatId)
+  const item = conversation?.items.find((value) => value.id === itemId)
+  if (!conversation || !item?.followUp)
+    throw new Error('Sophon already read this message, so it can no longer be removed.')
+  const old = attachmentIds(store)
+  conversation.items.splice(conversation.items.indexOf(item), 1)
+  followUpInteractions.delete(item.id)
+  emit()
+  cleanAttachments(store, old)
 }
 async function respond(
   conversation: Conversation,
   text: string,
   promptAttachmentIds: string[],
   interaction?: InteractionContext,
-  prompt?: ChatItem
+  prompt?: ChatItem,
+  // A follow-up left over from the previous task, already in the conversation.
+  queued?: ChatItem
 ): Promise<void> {
   const trimmed = text.trim()
   if (!Array.isArray(promptAttachmentIds) || promptAttachmentIds.length > 4)
     throw new Error('Attach up to four files.')
   if (!trimmed && !promptAttachmentIds.length) return
   if (runningChatId)
-    throw new Error('Wait for the current response before sending another message.')
+    throw new Error(
+      runningChatId === conversation.id
+        ? 'Wait for the current response before sending another message.'
+        : BUSY_ELSEWHERE
+    )
   if (text.length > 32000) throw new Error('Message is too long.')
   const previousItems = conversation.items
   const previousCount = previousItems.length
-  const attachments = await Promise.all(promptAttachmentIds.map(attachmentInfo))
+  // A queued prompt already holds its attachment details, so it starts without
+  // yielding and no other request can claim the run first.
+  const attachments = queued
+    ? (queued.attachments ?? [])
+    : await Promise.all(promptAttachmentIds.map(attachmentInfo))
   if (runningChatId)
-    throw new Error('Wait for the current response before sending another message.')
+    throw new Error(
+      runningChatId === conversation.id
+        ? 'Wait for the current response before sending another message.'
+        : BUSY_ELSEWHERE
+    )
   if (!store.chats.includes(conversation))
     throw new Error('This chat was deleted. Please choose another chat.')
   if (
@@ -312,22 +382,31 @@ async function respond(
     conversation.items = conversation.items.slice(0, index + 1)
     prompt.text = trimmed
     prompt.attachments = attachments
+    delete prompt.followUp
     conversation.history = history!
     delete conversation.workflow
   } else if (needsTitle)
     conversation.title = (trimmed || attachments[0]?.name || 'New chat').slice(0, 60)
   const initialTitle = conversation.title
   conversation.updatedAt = Date.now()
-  const reply: ChatItem = {
+  const newReply = (): ChatItem => ({
     id: randomUUID(),
     from: 'agent',
     text: '',
     actions: [],
     attachments: [],
     pending: true
-  }
-  const promptId = prompt?.id ?? randomUUID()
-  if (!prompt)
+  })
+  // The reply is split where follow-ups are read, so it can be replaced mid-run.
+  let reply = newReply()
+  const replies = [reply]
+  const asked = [trimmed || attachments.map((attachment) => attachment.name).join(', ')]
+  let sourceStart = 0
+  const promptId = prompt?.id ?? queued?.id ?? randomUUID()
+  if (queued) {
+    delete queued.followUp
+    followUpInteractions.delete(queued.id)
+  } else if (!prompt)
     conversation.items.push({
       id: promptId,
       from: 'you',
@@ -337,6 +416,47 @@ async function respond(
       pending: false
     })
   conversation.items.push(reply)
+  run.followUps = {
+    pending: () => queuedFollowUps(conversation).length > 0,
+    take: () => {
+      const added = queuedFollowUps(conversation)
+      if (!added.length) return []
+      for (const item of added) {
+        delete item.followUp
+        followUpInteractions.delete(item.id)
+        asked.push(item.text)
+      }
+      const items = conversation.items
+      if (
+        !reply.text &&
+        !reply.actions.length &&
+        !reply.attachments?.length &&
+        !reply.specialists?.length
+      ) {
+        // Nothing shown yet: the reply simply moves below the new messages.
+        items.splice(items.indexOf(reply), 1)
+        items.push(reply)
+      } else {
+        // Keep what was done so far as its own reply above the new messages.
+        const next = newReply()
+        if (reply.workflow) next.workflow = reply.workflow
+        delete reply.workflow
+        delete reply.modelProgress
+        if (reply.quality === 'checking') delete reply.quality
+        if (reply.compaction?.status === 'running') delete reply.compaction
+        reply.pending = false
+        sourceStart = run.sources.length
+        reply = next
+        replies.push(reply)
+        items.push(reply)
+      }
+      emit()
+      return added.map((item) => ({
+        text: item.text,
+        attachments: (item.attachments ?? []).map((attachment) => attachment.id)
+      }))
+    }
+  }
   run.onModelUsage = (usage) => {
     reply.usage = { ...usage }
     emit(false)
@@ -357,7 +477,7 @@ async function respond(
   let compactionBefore: ContextCompactionNotice | undefined
   let progressTimer: ReturnType<typeof setTimeout> | undefined
   const onEvent = (event: ChatEvent): void => {
-    reply.sources = run.sources.map((source) => ({ ...source }))
+    reply.sources = run.sources.slice(sourceStart).map((source) => ({ ...source }))
     if (event.type === 'model_progress') {
       const first = !reply.modelProgress
       reply.modelProgress = event.progress
@@ -482,6 +602,7 @@ async function respond(
           action.detail = event.result
           if (event.image) {
             const shown = action.name === 'show_image'
+            const owner = reply
             images.push(
               storeImage(
                 event.image,
@@ -492,7 +613,7 @@ async function respond(
                     : 'Screenshot.jpg'
               )
                 .then((attachment) => {
-                  reply.attachments!.push(shown ? { ...attachment, shown: true } : attachment)
+                  owner.attachments!.push(shown ? { ...attachment, shown: true } : attachment)
                   emit()
                 })
                 .catch((error: Error) => {
@@ -509,7 +630,8 @@ async function respond(
   try {
     emit()
     if (removedAttachments) cleanAttachments(store, removedAttachments)
-    reply.text = await chat(
+    // Read the answer before assigning: the reply may have split while the task ran.
+    const answer = await chat(
       trimmed || 'Describe the attached files.',
       onEvent,
       conversation.history,
@@ -518,6 +640,7 @@ async function respond(
       conversation.workflow,
       validGithubContext(conversation.githubContext) ? conversation.githubContext : undefined
     )
+    reply.text = answer
     assertRun(run)
     await Promise.all(images)
     if (needsTitle) {
@@ -533,8 +656,11 @@ async function respond(
           title: conversation.title,
           workspace: run.workspace ?? '',
           promptId,
-          user: trimmed || attachments.map((attachment) => attachment.name).join(', '),
-          reply: reply.text
+          user: asked.filter(Boolean).join('\n\n'),
+          reply: replies
+            .map((segment) => segment.text)
+            .filter(Boolean)
+            .join('\n\n')
         })
       } catch {
         // Conversation memory is best effort; the reply itself succeeded.
@@ -551,7 +677,7 @@ async function respond(
     delete reply.modelProgress
 
     await Promise.all(images)
-    reply.sources = run.sources.map((source) => ({ ...source }))
+    reply.sources = run.sources.slice(sourceStart).map((source) => ({ ...source }))
     securityEvent('run_stopped', run.id)
     // finishRun aborts the run's signal, so read whether the user stopped it first.
     const stopped = run.signal.aborted
@@ -574,7 +700,31 @@ async function respond(
       }
     runningChatId = null
     conversation.updatedAt = Date.now()
+    const clearing = takeChatClear() && !stopped
+    const leftover = queuedFollowUps(conversation)
+    if (stopped) for (const item of leftover) item.followUp = 'unsent'
+    // Messages the task ended before reading start the next task; the rest of them
+    // are read at its first step. Started before emit releases the conversation.
+    else if (leftover.length && !clearing && store.chats.includes(conversation))
+      startFollowUp(conversation, leftover[0], run.interaction)
     emit()
-    if (takeChatClear() && !stopped) clear()
+    if (clearing) clear()
   }
+}
+function startFollowUp(
+  conversation: Conversation,
+  item: ChatItem,
+  interaction: InteractionContext
+): void {
+  respond(
+    conversation,
+    item.text,
+    (item.attachments ?? []).map((attachment) => attachment.id),
+    followUpInteractions.get(item.id) ?? interaction,
+    undefined,
+    item
+  ).catch(() => {
+    for (const queued of queuedFollowUps(conversation)) queued.followUp = 'unsent'
+    emit()
+  })
 }

@@ -18,7 +18,7 @@ import { runTool } from './run-tool'
 import { wantsVisual } from './visuals'
 import { correctVisualReply, correctVisualToolCall } from './visual-reply'
 import { needsVisualTools } from './visual-routing'
-import { currentRun, assertRun } from '../security/run-manager'
+import { currentRun, assertRun, type FollowUp } from '../security/run-manager'
 import {
   parseToolCalls,
   InvalidToolJsonError,
@@ -66,6 +66,8 @@ const UNRESOLVED = ['denied', 'failed', 'uncertain']
 // Input tools that capture their result; see executeTool.
 const INPUT = ['click', 'input_batch', 'scroll', 'press_keys', 'type_text']
 const clean = (s: string): string => s.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+const FOLLOW_UP_NOTE =
+  'The user sent this while you were working on the request above. Handle it together with the earlier request; if it changes or cancels part of that request, follow the newer message:\n'
 
 // Repair hints for the tools in a rejected batch only; a small model handles
 // one relevant hint better than a catalogue of every tool's limits.
@@ -299,11 +301,14 @@ export async function chat(
     // step. Offering only that tool keeps small models from detouring through
     // related tools; the full working set returns after the first result.
     const directTool = workflow.resumed ? undefined : requestedDesktopTool(userText)
+    // A message added mid-task widens the request beyond the original command.
+    let followedUp = false
     const modelTools = (): ReturnType<typeof activeToolSchemas> => {
       const catalog = stepTools()
       if (inlineVisual || exclusiveTools) return catalog
       if (
         directTool &&
+        !followedUp &&
         !session.active &&
         !turn.some((message) => message.role === 'tool') &&
         catalog.some((tool) => tool.function.name === directTool)
@@ -320,6 +325,17 @@ export async function chat(
       role: 'user',
       content: attached.length ? [{ type: 'text', text: userText }, ...attached] : userText
     })
+    const addFollowUps = async (added: FollowUp[]): Promise<void> => {
+      for (const message of added) {
+        const files = await attachmentContent(message.attachments)
+        const text = FOLLOW_UP_NOTE + (message.text || 'Describe the attached files.')
+        turn.push({
+          role: 'user',
+          content: files.length ? [{ type: 'text', text }, ...files] : text
+        })
+        followedUp = true
+      }
+    }
     const context = async (): Promise<Msg[]> => {
       const tools = modelTools()
       const catalog = stepTools()
@@ -687,6 +703,8 @@ export async function chat(
         else if (coding.active) session.verified(coding.report())
         persistSession(true)
       }
+      await addFollowUps(run.followUps?.take() ?? [])
+      assertRun(run)
       const messages = await context()
       remainingCalls = maxSteps - run.modelCalls
       if (run.modelCalls >= maxSteps) break
@@ -971,6 +989,15 @@ export async function chat(
             : '')
         if (answerReviewed && !retainedDraft && !truncated)
           onEvent({ type: 'quality', status: 'reviewed' })
+        // Messages that arrived while this answer was written: keep it as an intermediate
+        // reply and continue the same task with them instead of ending.
+        if (run.followUps?.pending() && run.modelCalls < maxSteps) {
+          onEvent({ type: 'text', text: reply })
+          turn.push({ role: 'assistant', content: reply })
+          answerReviewed = false
+          reviewDraft = ''
+          continue
+        }
         workflow.finish(truncated || (finalCall && session.active), coding.report())
         persistSession(true)
         turn.push({ role: 'assistant', content: reply })
@@ -1469,7 +1496,10 @@ export async function chat(
           return reply
         }
       }
-      if (directReply) {
+      if (directReply && run.followUps?.pending() && run.modelCalls < maxSteps) {
+        turn.push({ role: 'assistant', content: directReply })
+        onEvent({ type: 'text', text: directReply })
+      } else if (directReply) {
         workflow.finish()
         turn.push({ role: 'assistant', content: directReply })
         onEvent({ type: 'text', text: directReply })
