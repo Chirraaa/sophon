@@ -150,7 +150,7 @@ console.log(
   `PASS accessibility context fixture: ${before} -> ${after} estimated tokens (${Math.round((1 - after / before) * 100)}% reduction); current snapshot, uncertainty and full stored logs preserved`
 )
 
-let run = { id: 'capture-test' }
+let run = { id: 'capture-test', startedAt: performance.now() }
 let win = {
   hwnd: 1,
   title: 'Fixture',
@@ -277,10 +277,15 @@ async function main() {
     { x: -1470, y: 280, window: win },
     'A mark centre resolves to the control centre on the desktop'
   )
+  assert.equal(run.timing.captures, 1, 'Each capture records its time on the task')
+  assert(run.timing.captureMs >= 0 && run.timing.wallMs >= run.timing.captureMs)
+  let published
+  run.onTiming = (timing) => (published = timing)
   const unchanged = await capture.captureScreen({ window: 'Fixture', if_changed: true })
   assert.equal(typeof unchanged, 'string')
   assert.match(unchanged, /pixel-identical/)
   assert.equal(sourceCalls, 3, 'Deduplication still captures current pixels')
+  assert.equal(published.captures, 2, 'Timing updates are published to the reply')
   assert.match(await interact.clickScreen({ x: 640, y: 360 }), /^Clicked/)
   assert.equal(inputCount, 2)
   assert.equal(

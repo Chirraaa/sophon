@@ -19,6 +19,8 @@ export interface RunContext {
   modelCalls: number
   usage?: RequestUsage
   onModelUsage?: (usage: RequestUsage) => void
+  timing?: RequestTiming
+  onTiming?: (timing: RequestTiming) => void
   onModelContext?: (context: ContextMeasurements) => void
   searchUnavailable: boolean
 }
@@ -74,6 +76,8 @@ export function startRun(
     modelCalls: 0,
     usage: undefined,
     onModelUsage: undefined,
+    timing: undefined,
+    onTiming: undefined,
     onModelContext: undefined,
     searchUnavailable: false
   })

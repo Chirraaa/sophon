@@ -4,6 +4,7 @@ import { protectedWindowRule } from '../permissions'
 import { currentRun, assertRun } from '../security/run-manager'
 import { getProcess } from './win32'
 import { hideScreenGlow, showScreenGlow } from '../services/screen-glow'
+import { recordTiming } from '../workflow/timing'
 const checkRun = (): void => {
   const run = currentRun()
   if (run) assertRun(run)
@@ -142,6 +143,19 @@ function target(
   return { window: win, display, captureWindow: Boolean(win) }
 }
 export async function captureScreen(
+  args: CaptureArgs,
+  guard?: () => void,
+  bound?: WinInfo
+): Promise<CapturedScreen | string> {
+  const started = performance.now()
+  try {
+    return await capture(args, guard, bound)
+  } finally {
+    const run = currentRun()
+    if (run) recordTiming(run, 'capture', performance.now() - started)
+  }
+}
+async function capture(
   args: CaptureArgs,
   guard?: () => void,
   bound?: WinInfo

@@ -231,6 +231,9 @@ export async function executeTool(
             { summary: result.summary }
           )
         try {
+          // The accessibility worker answers in tens of milliseconds; give the app
+          // a moment to apply the action before reading it back.
+          await wait(0.25, run)
           scope.guard?.()
           const window = listWindows().find((win) => win.hwnd === scope.window?.hwnd)
           if (!window) throw new Error('Original window closed.')

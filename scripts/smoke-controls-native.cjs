@@ -9,6 +9,8 @@ const worker = load('src/main/tools/automation/worker.ts', {
   '../../security/worker-job': load('src/main/security/worker-job.ts', {
     koffi: { default: require('koffi') }
   }),
+  '../../security/run-manager': { currentRun: () => null },
+  '../../workflow/timing': { recordTiming: () => {} },
   './bridge.ps1?raw': {
     default: fs.readFileSync(path.join(root, 'src/main/tools/automation/bridge.ps1'), 'utf8')
   }
@@ -52,8 +54,14 @@ async function main() {
     const inspect = () => worker({ ...identity, operation: 'inspect' }, signal)
     const act = (expected, action, text) =>
       worker({ ...identity, operation: 'act', expected, action, text }, signal)
+    // The first request starts the persistent worker; later ones reuse it.
+    let clock = performance.now()
     let view = await inspect()
+    const cold = performance.now() - clock
     assert.equal(view.status, 'observed', JSON.stringify(view))
+    clock = performance.now()
+    for (let i = 0; i < 5; i++) assert.equal((await inspect()).status, 'observed')
+    const warm = (performance.now() - clock) / 5
     assert(!JSON.stringify(view).includes('PASSWORD_CANARY'))
     assert(!view.controls.some((c) => c.name === 'Secret fixture'))
     const group = await worker(
@@ -134,6 +142,9 @@ async function main() {
     await assert.rejects(pending, /stopped|abort/i)
     console.log(
       'PASS real Windows UI Automation: named controls, Unicode field replacement/readback, stale identity/value rejection, toggle, selection, expand/collapse, scrolling, button invocation, password exclusion, cancellation; only isolated fixture app used'
+    )
+    console.log(
+      `TIMING persistent worker inspect: first ${Math.round(cold)} ms (includes start), then ${Math.round(warm)} ms average`
     )
   } finally {
     fixture.kill()
