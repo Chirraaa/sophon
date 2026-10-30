@@ -15,6 +15,18 @@ const schemas = load('src/main/tools/schemas.ts', {
 })
 const contracts = load('src/main/security/tool-contracts.ts', { '../tools/schemas': schemas })
 const endpoint = load('src/main/network/endpoint.ts')
+// Every channel the preload calls must have an argument contract, or the handler
+// throws "Missing IPC contract" when the app starts.
+{
+  const preload = fs.readFileSync(path.join(root, 'src/preload/index.ts'), 'utf8')
+  const ipc = fs.readFileSync(path.join(root, 'src/main/security/ipc.ts'), 'utf8')
+  const called = [...preload.matchAll(/ipcRenderer\.(?:invoke|send)\(\s*'([^']+)'/g)].map(
+    (match) => match[1]
+  )
+  assert(called.length > 20, 'Preload channels were found')
+  for (const channel of new Set(called))
+    assert(ipc.includes(`'${channel}':`), `Missing IPC contract: ${channel}`)
+}
 let settings = {
   coding: { mode: 'auto' },
   tools: registry.defaultToolPermissions(),

@@ -109,6 +109,7 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   },
   'agent:stop': {},
   'agent:rerun': { required: [id, id, text(32000)] },
+  'agent:remove-follow-up': { required: [id, id] },
   'session:get': {},
   'session:github-context': { required: [id, (v) => v === null || validGithubContext(v)] },
   'session:page': { required: [id, (v) => Number.isSafeInteger(v) && Number(v) >= 0] },
