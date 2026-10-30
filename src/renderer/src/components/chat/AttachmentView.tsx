@@ -9,6 +9,7 @@ import {
   DialogClose,
   DialogTrigger
 } from '@/components/ui/dialog'
+import { loadPreview } from '@/lib/attachment-preview'
 export function AttachmentView({
   attachment,
   compact = false,
@@ -35,8 +36,7 @@ export function AttachmentView({
   useEffect(() => {
     let alive = true
     let imageId: string | undefined
-    void window.api.attachments
-      .preview(attachment.id)
+    void loadPreview(attachment.id)
       .then(async (data) => {
         if (alive) setPreview(data)
         if (data.url) {
