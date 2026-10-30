@@ -76,6 +76,36 @@ function summary(report) {
         ' |'
     )
   }
+  const measured = report.runs.filter((r) => r.efficiency)
+  if (measured.length) {
+    lines.push(
+      '',
+      '## Efficiency',
+      '',
+      'Prefix reuse is the share of each request’s predecessor that it repeats from the start (1.00 lets a prompt cache reuse everything). Parallelizable batches hold two or more calls, all read-only; approval settings may still keep them sequential.',
+      '',
+      '| Category | Runs | Model calls/run | Multi-call batches | Parallelizable batches | Prefix reuse | Cached tokens |',
+      '| --- | ---: | ---: | ---: | ---: | ---: | ---: |'
+    )
+    for (const category of [...new Set(measured.map((r) => r.category))]) {
+      const rows = measured.filter((r) => r.category === category)
+      const sum = (fn) => rows.reduce((s, r) => s + fn(r.efficiency), 0)
+      const reuse = rows.map((r) => r.efficiency.prefixReuse).filter((v) => v !== null)
+      lines.push(
+        '| ' +
+          [
+            category,
+            rows.length,
+            (sum((e) => e.modelCalls) / rows.length).toFixed(1),
+            sum((e) => e.multiCallBatches),
+            sum((e) => e.parallelizableBatches),
+            reuse.length ? (reuse.reduce((s, v) => s + v, 0) / reuse.length).toFixed(2) : 'n/a',
+            sum((e) => e.cachedTokens)
+          ].join(' | ') +
+          ' |'
+      )
+    }
+  }
   for (const split of ['tuning', 'heldout']) {
     const rows = report.runs.filter((r) => r.split === split)
     lines.push(

@@ -206,6 +206,7 @@ let run = { modelCalls: 0, id: 'run-1', mode: 'assistant', workspace: 'M:\\Proje
 let latest
 let queue = []
 let captured = []
+let volatile = []
 let offered = []
 let executions = []
 let toolResult = 'Opened Notepad'
@@ -224,6 +225,7 @@ const chat = load('src/main/llm/chat.ts', {
     callLLM: async (_id, messages, options) => {
       run.modelCalls = (run.modelCalls ?? 0) + 1
       captured.push(messages)
+      volatile.push(options?.volatile ?? '')
       offered.push((options?.tools ?? []).map((tool) => tool.function.name))
       assert(queue.length, 'Unexpected model call')
       const reply = queue.shift()
@@ -270,6 +272,7 @@ function reset(replies) {
   run.modelCallLimit = undefined
   latest = undefined
   captured = []
+  volatile = []
   offered = []
   executions = []
   queue = replies
@@ -354,12 +357,8 @@ async function review() {
   assert.equal(captured.length, 1)
   assert.deepEqual(executions, ['open_app'])
   const system = captured[0][0].content
-  assert.match(system, /\nRUN STATE \(refreshed every model call\): \{"remaining":/)
-  assert(!/RUNTIME: [^\n]*"remaining"/.test(system), 'Per-call budgets stay out of the prefix')
-  assert(
-    system.lastIndexOf('RUN STATE') > system.lastIndexOf('RUNTIME:'),
-    'Volatile run state follows the stable instructions'
-  )
+  assert.match(volatile[0], /^RUN STATE \(refreshed every model call\): \{"remaining":/)
+  assert(!/RUN STATE \(refreshed/.test(system), 'Per-call budgets stay out of the system message')
   reset([tool('focus_window', { window: 'win-1' }), answer('Focused it.')])
   toolResult = 'Focus request sent but not confirmed.'
   await chat('Focus Notepad', event, [])
