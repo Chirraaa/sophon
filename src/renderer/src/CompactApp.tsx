@@ -26,7 +26,6 @@ import { ApprovalRequests } from '@/components/chat/ApprovalCard'
 import { CodingRun } from '@/components/chat/CodingRun'
 import { codingView, shortcutCodingItem } from '@/lib/coding'
 import { replyActivity } from '@/lib/activity'
-import { Spinner } from '@/components/ui/spinner'
 import { useChatScroll } from '@/hooks/useChatScroll'
 import { useCompactBackdrop } from '@/hooks/useCompactBackdrop'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -100,7 +99,9 @@ export default function CompactApp(): React.JSX.Element {
   // update, briefly shifting the command panel on transparent Windows windows.
   const sideBySide = workArea.width >= mainWidth + 320 + 16 + 40
   const mainOffset = sideBySide && !barMode ? 336 : 0
-  const popupWidth = barMode ? 360 : mainWidth + 40 + mainOffset
+  // The resting bar's window is exactly the bar, so no transparent margin
+  // blocks clicks meant for a game underneath.
+  const popupWidth = barMode ? 320 : mainWidth + 40 + mainOffset
 
   const visibleOffset = `clamp(0px, calc(100vw - ${mainWidth + 40}px), 336px)`
   const maxHeight = Math.max(0, Math.min(roomy ? 840 : 640, workArea.height - 40))
@@ -158,6 +159,8 @@ export default function CompactApp(): React.JSX.Element {
       setDocked(next.docked === true)
       setNotice(next.notice ?? null)
       setHovered(false)
+      // The composer takes focus once mounted; its blur folds the bar again.
+      setFocused(next.expand === true)
     }
     void window.api.compact.presentation().then(setPresentation)
     return window.api.compact.onShown(shown)
@@ -171,7 +174,7 @@ export default function CompactApp(): React.JSX.Element {
           'dialog:modal, [role="dialog"], [role="alertdialog"], [role="listbox"]'
         )
       )
-        window.api.compact.hide()
+        window.api.compact.dismiss()
     }
     window.addEventListener('keydown', escape)
     return () => window.removeEventListener('keydown', escape)
@@ -184,7 +187,10 @@ export default function CompactApp(): React.JSX.Element {
       const modal = document.querySelector('[role="dialog"], [role="alertdialog"]')
       const height = Math.min(
         workArea.height,
-        Math.max(Math.ceil(element.offsetHeight) + (docked ? 20 : 40), modal ? 640 : 0)
+        Math.max(
+          Math.ceil(element.offsetHeight) + (barMode ? 0 : docked ? 20 : 40),
+          modal ? 640 : 0
+        )
       )
       const size = `${height}:${popupWidth}:${mainOffset}`
 
@@ -249,7 +255,7 @@ export default function CompactApp(): React.JSX.Element {
     setDocked(!docked)
   }
   return (
-    <div className={`flex justify-center p-5 ${docked ? 'pt-0' : ''}`}>
+    <div className={`flex justify-center ${barMode ? '' : docked ? 'p-5 pt-0' : 'p-5'}`}>
       <div
         ref={card}
         className="grid w-full min-w-0 grid-cols-1 items-start gap-4"
@@ -269,6 +275,7 @@ export default function CompactApp(): React.JSX.Element {
             aria-expanded={false}
             onClick={enter}
             className={`glass-solid mx-auto flex h-8 w-[320px] max-w-full items-center justify-start gap-2 rounded-t-none rounded-b-[14px] px-3 text-[11px] font-normal ${notice ? 'ring-1 ring-success/60' : ''}`}
+            style={{ boxShadow: 'none' }}
           >
             {notice ? (
               <Check className="size-3.5 shrink-0 text-success" aria-hidden="true" />
@@ -287,7 +294,8 @@ export default function CompactApp(): React.JSX.Element {
               {status.attention ? (
                 <span className="size-1.5 rounded-full bg-amber-500" aria-hidden />
               ) : busy ? (
-                <Spinner className="size-3 text-muted-foreground" />
+                // Static: a spinner would repaint over a running game every frame.
+                <span className="size-1.5 rounded-full bg-tint" aria-hidden />
               ) : null}
             </span>
           </Button>

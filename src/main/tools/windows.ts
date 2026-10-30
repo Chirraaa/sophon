@@ -4,6 +4,8 @@ import { currentRun, assertRun } from '../security/run-manager'
 import { monitorsText, monitorOf } from './monitors'
 import type { WinInfo } from './window-types'
 import {
+  SW_RESTORE,
+  bringToFront,
   enumTopLevelWindows,
   foregroundWindow,
   getProcess,
@@ -14,7 +16,8 @@ import {
   isMinimized,
   isToolWindow,
   isVisible,
-  requestClose
+  requestClose,
+  showWindow
 } from './win32'
 export { monitors, monitorOf, resolveMonitor } from './monitors'
 export { moveWindow, POSITIONS } from './window-move'
@@ -155,12 +158,24 @@ export function findWindow(query: string): WinInfo | null {
     : null
 }
 let lastExternal: { hwnd: number; pid: number; exe: string } | null = null
-export function rememberExternalWindow(): void {
+// Returns whether another app was in front, so focus can later go back to it.
+export function rememberExternalWindow(): boolean {
   const h = foregroundWindow()
-  if (!h) return
+  if (!h) return false
   const identity = getProcess(h)
-  if (identity.pid === process.pid) return
-  if (listWindows().some((w) => w.hwnd === h)) lastExternal = { hwnd: h, ...identity }
+  if (identity.pid === process.pid) return false
+  if (!listWindows().some((w) => w.hwnd === h)) return false
+  lastExternal = { hwnd: h, ...identity }
+  return true
+}
+// Fullscreen games often minimize when they lose focus; bring them back as they were.
+export function restoreExternalWindow(): boolean {
+  const target = lastExternal
+  if (!target || !isVisible(target.hwnd)) return false
+  const identity = getProcess(target.hwnd)
+  if (identity.pid !== target.pid || identity.exe !== target.exe) return false
+  if (isMinimized(target.hwnd)) showWindow(target.hwnd, SW_RESTORE)
+  return bringToFront(target.hwnd)
 }
 export function activeWindow(): WinInfo | null {
   const windows = listWindows()

@@ -5,7 +5,9 @@ import { rendererDocument } from '../security/trusted-document'
 import { stopRun, setInterfacePresenceProvider } from '../security/run-manager'
 import { getSettings, onSettingsChange } from '../settings'
 import { onSession, send, snapshot } from '../chat/session'
-import { rememberExternalWindow } from '../tools/windows'
+import { rememberExternalWindow, restoreExternalWindow } from '../tools/windows'
+import { exclusiveFullscreen } from '../tools/win32'
+import { fullscreenApp } from '../services/fullscreen'
 import icon from '../../../resources/icon.png?asset'
 import { VoiceSession } from '../voice/session'
 import { clearVisuals } from '../services/visuals'
@@ -40,6 +42,12 @@ export class Desktop {
   private restDock = false
   private wasBusy = false
   private wasWaiting = false
+  // Whether the shortcut opened over another app that should get focus back.
+  private returnToApp = false
+  private summoned = false
+  private overlayTimer: NodeJS.Timeout | null = null
+  private coveredBy = 0
+  private yieldedToGame = false
   private readonly offSettings: () => void
   readonly voice = new VoiceSession({
     publish: (state) => broadcast('voice:state', state),
@@ -217,7 +225,12 @@ export class Desktop {
         return
       this.hideCompact()
     })
-    win.on('focus', () => this.cancelHide())
+    win.on('focus', () => {
+      this.cancelHide()
+      // Clicked into directly: there is no app to hand focus back to.
+      if (!this.summoned) this.returnToApp = false
+      this.summoned = false
+    })
     const reportArea = (): void => {
       if (!win.isDestroyed()) win.webContents.send('compact:work-area', this.compactWorkArea())
     }
@@ -237,6 +250,7 @@ export class Desktop {
     win.on('closed', () => {
       this.compact = null
       this.compactTaskVisible = false
+      this.stopOverlay()
       screen.removeListener('display-metrics-changed', fitWorkArea)
       screen.removeListener('display-removed', fitWorkArea)
     })
@@ -249,9 +263,10 @@ export class Desktop {
     this.hideTimer = null
   }
   showCompact = (mode: 'command' | 'voice' = 'command'): void => {
-    rememberExternalWindow()
+    this.returnToApp = rememberExternalWindow()
     const win = this.compact && !this.compact.isDestroyed() ? this.compact : this.createCompact()
     this.cancelHide()
+    this.stopOverlay()
     this.compactDocked = false
     this.restDock = false
     this.undockedY = null
@@ -288,6 +303,7 @@ export class Desktop {
       win.webContents.send('compact:shown', this.presentation)
       if (mode === 'voice') win.showInactive()
       else {
+        this.summoned = !win.isFocused()
         win.show()
         win.focus()
       }
@@ -297,13 +313,76 @@ export class Desktop {
   }
   hideCompact = (): void => {
     this.cancelHide()
+    this.giveBackFocus()
     this.compactDocked = false
     this.undockedY = null
     if (!this.compact || this.compact.isDestroyed()) return
     this.voice.detached(this.compact.webContents)
     if (this.wantsRestDock()) return this.showDock()
     this.restDock = false
+    this.stopOverlay()
     this.compact.hide()
+  }
+  /** Esc and the shortcut: a docked bar stays where it is and the app behind gets focus back. */
+  dismissCompact = (): void => {
+    const win = this.compact
+    if (!win || win.isDestroyed() || !win.isVisible() || !this.compactDocked)
+      return this.hideCompact()
+    if (!this.giveBackFocus()) win.blur()
+  }
+  private giveBackFocus(): boolean {
+    if (!this.returnToApp || !this.compact?.isFocused()) return false
+    this.returnToApp = false
+    return restoreExternalWindow()
+  }
+  /** Opens the docked bar in place for typing, keeping it docked. */
+  private openDock(win: BrowserWindow): void {
+    this.returnToApp = rememberExternalWindow()
+    this.cancelHide()
+    this.yieldedToGame = false
+    this.presentation = {
+      mode: 'command',
+      token: this.presentation.token + 1,
+      docked: true,
+      expand: true
+    }
+    win.webContents.send('compact:shown', this.presentation)
+    this.summoned = !win.isFocused()
+    win.show()
+    win.focus()
+  }
+  private watchOverlay(): void {
+    if (!this.overlayTimer) this.overlayTimer = setInterval(this.keepOverlay, 1000)
+  }
+  private stopOverlay(): void {
+    if (this.overlayTimer) clearInterval(this.overlayTimer)
+    this.overlayTimer = null
+    this.coveredBy = 0
+    this.yieldedToGame = false
+  }
+  // Keeps the docked bar above fullscreen and borderless games. Exclusive
+  // fullscreen drops to the desktop when anything shows above it, so the bar
+  // steps aside until the game leaves that mode or the shortcut asks for it.
+  private keepOverlay = (): void => {
+    const win = this.compact
+    if (!win || win.isDestroyed() || !this.compactDocked) return this.stopOverlay()
+    const game = fullscreenApp()
+    if (game?.exclusive) {
+      if (win.isVisible() && !win.isFocused()) {
+        win.hide()
+        this.yieldedToGame = true
+      }
+      return
+    }
+    if (this.yieldedToGame) {
+      this.yieldedToGame = false
+      win.showInactive()
+    }
+    if (game && game.hwnd !== this.coveredBy && win.isVisible()) {
+      win.setAlwaysOnTop(true, 'pop-up-menu')
+      win.moveTop()
+    }
+    this.coveredBy = game?.hwnd ?? 0
   }
   private mainShowing(): boolean {
     return Boolean(
@@ -351,13 +430,20 @@ export class Desktop {
     const reveal = (): void => {
       if (win.isDestroyed()) return
       win.webContents.send('compact:shown', this.presentation)
-      win.showInactive()
+      this.watchOverlay()
+      if (exclusiveFullscreen() && !win.isFocused()) {
+        win.hide()
+        this.yieldedToGame = true
+      } else win.showInactive()
     }
     if (win.webContents.isLoading()) win.webContents.once('did-finish-load', reveal)
     else reveal()
   }
   toggleCompact = (): void => {
-    if (this.compact?.isVisible() && this.compact.isFocused()) this.hideCompact()
+    const win = this.compact && !this.compact.isDestroyed() ? this.compact : null
+    if (win?.isVisible() && win.isFocused()) this.dismissCompact()
+    else if (win && this.compactDocked && (win.isVisible() || this.yieldedToGame))
+      this.openDock(win)
     else this.showCompact()
   }
   talkTarget(): BrowserWindow {
@@ -370,7 +456,7 @@ export class Desktop {
     if (!win || win.isDestroyed() || !Number.isFinite(height) || !Number.isFinite(width)) return
     const bounds = win.getBounds()
     const area = screen.getDisplayMatching(bounds).workArea
-    const nextWidth = Math.round(Math.min(Math.max(width, 360), 1664, area.width))
+    const nextWidth = Math.round(Math.min(Math.max(width, 320), 1664, area.width))
     const nextHeight = Math.round(Math.min(Math.max(height, 96), 900, area.height))
     const x = Math.max(
       area.x,
@@ -407,9 +493,11 @@ export class Desktop {
     if (docked) {
       this.undockedY = bounds.y
       this.cancelHide()
+      this.watchOverlay()
       win.setBounds({ ...bounds, y: screen.getDisplayMatching(bounds).workArea.y })
       return
     }
+    this.stopOverlay()
     const area = screen.getDisplayMatching(bounds).workArea
     const y = Math.max(
       area.y,
@@ -435,6 +523,7 @@ export class Desktop {
     this.quitting = true
     this.offSettings()
     this.cancelHide()
+    this.stopOverlay()
     this.voice.dispose()
   }
 }

@@ -299,6 +299,8 @@ declare global {
     mode: 'command' | 'voice'
     token: number
     docked?: boolean
+    // The shortcut opened a docked bar for typing.
+    expand?: boolean
     notice?: 'finished'
   }
   interface HardwareInfo {
@@ -594,6 +596,7 @@ declare global {
     }
     compact: {
       hide: () => void
+      dismiss: () => void
       resize: (height: number, width?: number, mainOffset?: number) => void
       setDocked: (docked: boolean) => void
       setTaskVisible: (visible: boolean) => void
