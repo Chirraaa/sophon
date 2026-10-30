@@ -492,6 +492,11 @@ export const toolSchemas = [
           x: { type: 'number' },
           y: { type: 'number' },
           button: { type: 'string', enum: ['left', 'right'] },
+          hold_ms: {
+            type: 'number',
+            description:
+              'Hold the mouse button down for 50 to 5000 ms before releasing, e.g. to mine or attack in a game. Omit for a normal click.'
+          },
           capture_after: {
             type: 'boolean',
             description: CAPTURE_AFTER
@@ -536,7 +541,10 @@ export const toolSchemas = [
                 y: { type: 'number' },
                 button: { type: 'string', enum: ['left', 'right'] },
                 keys: { type: 'string', description: 'Key or shortcut, e.g. Enter or Ctrl+A.' },
-                hold_ms: { type: 'number', description: 'Hold the key for 50 to 5000 ms.' },
+                hold_ms: {
+                  type: 'number',
+                  description: 'Hold the key or mouse button for 50 to 5000 ms.'
+                },
                 text: { type: 'string' },
                 direction: { type: 'string', enum: ['up', 'down'] },
                 amount: { type: 'number', description: 'Scroll steps, 1 to 8; default 3.' }
