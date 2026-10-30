@@ -101,6 +101,11 @@ const GROUPS = [
     names: ['notes_list', 'notes_read', 'notes_create', 'notes_edit', 'notes_delete']
   },
   {
+    title: 'Timers',
+    description: 'Start and cancel countdown timers that alert you when they end.',
+    names: ['timer_set', 'timer_cancel']
+  },
+  {
     title: 'Chat',
     description: 'Clear the current conversation.',
     names: ['clear_chat']

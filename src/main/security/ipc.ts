@@ -134,6 +134,8 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'llm:modelInfo': {},
   'llm:default-prompt': {},
   'tools:info': {},
+  'timers:list': {},
+  'timers:remove': { required: [(v) => typeof v === 'string' && /^timer-[0-9a-f]{12}$/.test(v)] },
   'hardware:get': {},
   'attachments:pick': {},
   'attachments:preview': { required: [id] },

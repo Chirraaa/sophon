@@ -1,5 +1,6 @@
 import type { PluginsApi } from './plugins'
 import type { UpdatesApi } from './updates'
+import type { TimerInfo } from './timers'
 export {}
 declare global {
   type ModelProvider = 'local' | 'openai' | 'compatible' | 'chatgpt' | 'anthropic' | 'claude'
@@ -305,7 +306,7 @@ declare global {
     docked?: boolean
     // The shortcut opened a docked bar for typing.
     expand?: boolean
-    notice?: 'finished'
+    notice?: 'finished' | 'timer'
   }
   interface HardwareInfo {
     os: string
@@ -592,6 +593,12 @@ declare global {
     llmModelInfo: () => Promise<ModelChoice>
     defaultPrompt: () => Promise<string>
     toolsInfo: () => Promise<ToolInfo[]>
+    timers: {
+      list: () => Promise<TimerInfo[]>
+      /** Stops a running timer, or clears a finished one. */
+      remove: (id: string) => Promise<void>
+      onChange: (cb: (timers: TimerInfo[]) => void) => () => void
+    }
     voice: {
       level: (id: string, value: number) => void
       beginDeviceDetection: () => Promise<void>

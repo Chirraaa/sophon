@@ -25,6 +25,7 @@
     "smoke:memory": "node scripts/smoke-memory.cjs",
     "smoke:calendar": "node scripts/smoke-calendar.cjs",
     "smoke:notes": "node scripts/smoke-notes.cjs",
+    "smoke:timers": "node scripts/smoke-timers.cjs",
     "smoke:desktop-cards": "node scripts/smoke-desktop-cards.cjs",
     "smoke:microsoft": "node scripts/smoke-microsoft.cjs",
     "smoke:microsoft:ui": "electron scripts/smoke-microsoft-ui.cjs --hidden",
