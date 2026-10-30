@@ -15,6 +15,7 @@ import {
   setCursor,
   showWindow
 } from './win32'
+const TAP_MS = 60
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 async function focus(
   title?: string,
@@ -214,11 +215,13 @@ export async function pressKeys(
     for (const mod of mods) {
       if (!keyInput(mod)) return 'Windows refused the shortcut.'
       held.push(mod)
+      await sleep(20)
     }
     if (!keyInput(key)) return 'Windows refused the shortcut.'
-    // Held keys (camera rotation in games) need the key down for the whole span.
+    // Held keys (camera rotation in games) need the key down for the whole span. Games
+    // poll key state once per frame, so even a tap must stay down for a few frames.
     try {
-      if (hold) await sleep(hold)
+      await sleep(hold ?? TAP_MS)
     } finally {
       if (!keyInput(key, true)) return 'Windows refused the shortcut.'
     }
