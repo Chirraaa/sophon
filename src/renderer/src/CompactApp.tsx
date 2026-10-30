@@ -392,7 +392,9 @@ export default function CompactApp(): React.JSX.Element {
             style={{
               maxHeight: commandHeight,
               width: `min(100%, ${mainWidth}px)`,
-              marginLeft: visibleOffset,
+              // Right-anchored: the window grows and shrinks on its left edge, so the
+              // panel must not depend on the viewport width catching up first.
+              justifySelf: 'end',
               gridArea: sideBySide || !sideVisible ? '1 / 1' : undefined,
               height: roomy ? commandHeight : undefined
             }}
