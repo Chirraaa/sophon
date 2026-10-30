@@ -611,7 +611,6 @@ declare global {
       dismiss: () => void
       resize: (height: number, width?: number, mainOffset?: number) => void
       setDocked: (docked: boolean) => void
-      setGutterOpen: (open: boolean) => void
       setTaskVisible: (visible: boolean) => void
       workArea: () => Promise<{ width: number; height: number }>
       onWorkArea: (cb: (area: { width: number; height: number }) => void) => () => void

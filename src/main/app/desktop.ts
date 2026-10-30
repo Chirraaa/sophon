@@ -43,7 +43,6 @@ export class Desktop {
   private modalDepth = 0
   private compactTaskVisible = false
   private compactMainOffset = 0
-  private compactGutterOpen = false
   private compactDocked = false
   private undockedY: number | null = null
   private hideTimer: NodeJS.Timeout | null = null
@@ -530,20 +529,6 @@ export class Desktop {
       bounds.x !== x
     )
       win.setBounds({ width: nextWidth, height: nextHeight, x, y })
-    this.clipCompactGutter()
-  }
-  // The window keeps room for a side card at all times; while none is open the
-  // empty gutter is cut out so it cannot be dragged, clicked or seen.
-  private clipCompactGutter(): void {
-    const win = this.compact
-    if (!win || win.isDestroyed()) return
-    const { width, height } = win.getBounds()
-    const left = this.compactGutterOpen ? 0 : Math.min(this.compactMainOffset, width)
-    win.setShape([{ x: left, y: 0, width: width - left, height }])
-  }
-  setCompactGutterOpen(open: boolean): void {
-    this.compactGutterOpen = open
-    this.clipCompactGutter()
   }
   compactWorkArea(): { width: number; height: number } {
     const area =
