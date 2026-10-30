@@ -222,8 +222,8 @@ Regression checks execute the adapted storage snippet against malformed JSON, in
 
 ## Execution limits
 
-Specialists currently run **sequentially on the selected model** and do not edit
-project files. Researcher can use enabled web tools; other specialists have no
+Subagents run on the selected model (in parallel when batched in one step) and do not edit
+project files. Researcher can use enabled web tools; other profiles have no
 tools. Consultations use the same context-dependent limits as other assistant tasks
 and share the total model-call budget, preserving a final coordinator response.
 Parallel coding workers and automatic registry installation are not available.
