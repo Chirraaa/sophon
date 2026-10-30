@@ -311,22 +311,41 @@ async function review() {
   assert.deepEqual(executions, ['read_file'], 'Invalid arguments must be repaired before execution')
   assert(JSON.stringify(captured[1]).includes('did not match its argument schema'))
   run = { ...run, mode: 'assistant' }
+  for (const result of ['Denied by the user.', 'Blocked: rule']) {
+    reset([tool('open_app', { name: 'notepad' })])
+    toolResult = result
+    const reply = await chat('Open Notepad', event, [])
+    assert.match(reply, /Stopped after a denied action/)
+    assert.equal(captured.length, 1)
+    assert.notEqual(latest.outcome, 'actions_checked')
+    assert.equal(latest.evidence.length, 1)
+  }
+  // Failed or uncertain results go back to the model to diagnose instead of ending the task.
   for (const result of [
-    'Denied by the user.',
-    'Blocked: rule',
     'Failed to open Notepad',
     'No window matching target',
     'Windows refused to move target',
     'Unverified: bytes differ'
   ]) {
-    reset([tool('open_app', { name: 'notepad' })])
+    reset([tool('open_app', { name: 'notepad' }), answer('Notepad could not be confirmed open.')])
     toolResult = result
     const reply = await chat('Open Notepad', event, [])
-    assert.match(reply, /Stopped/)
-    assert.equal(captured.length, 1)
+    assert.equal(reply, 'Notepad could not be confirmed open.')
+    assert.equal(captured.length, 2)
+    assert(
+      captured[1].some((m) => m.role === 'system' && /not a reason to stop/.test(String(m.content)))
+    )
     assert.notEqual(latest.outcome, 'actions_checked')
     assert.equal(latest.evidence.length, 1)
   }
+  reset([
+    tool('open_app', { name: 'notepad' }),
+    tool('open_app', { name: 'notepad' }, 'call-two'),
+    tool('open_app', { name: 'notepad' }, 'call-three')
+  ])
+  toolResult = 'Failed to open Notepad'
+  assert.match(await chat('Open Notepad', event, []), /Stopped after a failed action/)
+  assert.equal(executions.length, 3, 'General failure recovery is bounded to two attempts')
   reset([
     answer('Opened Notepad.'),
     tool('open_app', { name: 'notepad' }),

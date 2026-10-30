@@ -64,15 +64,19 @@ export async function openApp(name: string, approved?: AppLaunch): Promise<strin
     else await launchDetached(join(root, 'explorer.exe'), [`shell:AppsFolder\\${appId}`])
 
     const deadline = Date.now() + 10000
+    const title = appName.toLowerCase()
     let previous = ''
     let stableAt = Date.now()
     while (Date.now() < deadline) {
       assertRun(run)
+      // Games and launcher-started apps often run under an executable unrelated to the
+      // Start menu name, so a window titled with the app name also counts.
       const win = listWindows().find(
         (w) =>
-          (target || executable
+          ((target || executable
             ? w.exe.toLowerCase() === (target ?? executable)!.toLowerCase()
-            : w.exe.toLowerCase().replace(/\.exe$/, '') === appName.toLowerCase()) &&
+            : w.exe.toLowerCase().replace(/\.exe$/, '') === title) ||
+            (!target && title.length >= 4 && w.title.toLowerCase().startsWith(title))) &&
           w.state !== 'minimized' &&
           w.width >= 150 &&
           w.height >= 100 &&
@@ -85,7 +89,7 @@ export async function openApp(name: string, approved?: AppLaunch): Promise<strin
       previous = identity
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    return `Unverified: sent launch request for ${appName}, but could not confirm a matching stable app window. Use list_windows or inspect_app to check before claiming success; do not launch again automatically.`
+    return `Unverified: sent launch request for ${appName}, but no matching stable window appeared within 10 seconds. It may still be loading (games and launcher-started apps often take longer or open under a different name). Check list_windows, wait a few seconds and check again if needed; launch again only if it is clearly not running.`
   } catch (error) {
     return `Failed to open ${name}: ${(error as Error).message}`
   }
