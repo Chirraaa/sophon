@@ -52,6 +52,7 @@ function loadLegacyConversations(): ConversationStore {
       restoreWorkflow(chat)
       for (const item of chat.items) {
         restoreWorkflow(item)
+        if (item.followUp === 'queued') item.followUp = 'unsent'
         if (item.pending) {
           for (const specialist of item.specialists ?? [])
             if (specialist.status === 'running') {
@@ -166,6 +167,7 @@ function attach(chat: Conversation): void {
       restoreWorkflow(body)
       for (const item of body.items) {
         restoreWorkflow(item)
+        if (item.followUp === 'queued') item.followUp = 'unsent'
         if (item.pending) {
           item.pending = false
           item.text ||= 'This request was interrupted when Sophon closed.'

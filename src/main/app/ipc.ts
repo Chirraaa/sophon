@@ -40,6 +40,7 @@ import {
   deleteChat,
   send,
   rerun,
+  removeFollowUp,
   setGithubContext,
   snapshot
 } from '../chat/session'
@@ -263,6 +264,9 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
     if (voice.active()) throw new Error('Finish or cancel the voice recording before rerunning.')
     await rerun(chatId, itemId, text, desktop.interaction(_event.sender))
   })
+  ipcMain.handle('agent:remove-follow-up', (_event, chatId: string, itemId: string) =>
+    removeFollowUp(String(chatId), String(itemId))
+  )
   ipcMain.handle('session:get', snapshot)
   ipcMain.handle('session:github-context', (_event, chatId, context) =>
     setGithubContext(chatId, context)

@@ -33,7 +33,7 @@ import { BrandIcon } from '@/components/BrandIcon'
 export default function CompactApp(): React.JSX.Element {
   useSettings()
   useCompactBackdrop()
-  const { items, busy, chatId, githubContext } = useSession()
+  const { items, busy, chatId, githubContext, runningChatId } = useSession()
   const voice = useVoice()
   const [presentation, setPresentation] = useState<CompactPresentation>({
     mode: 'command',
@@ -112,11 +112,18 @@ export default function CompactApp(): React.JSX.Element {
   const contentRef = useChatScroll(
     `${chatId}:${presentation.token}:${collapsed}:${visible.length > 0}`
   )
-  const count = useRef({ total: 0, busy: false, chatId })
+  // Reopening shows the running request from its prompt, with any messages added since.
+  const working = items.findLastIndex((item) => item.pending)
+  const count = useRef({ total: 0, busy: false, chatId, start: 0 })
   const noticeRef = useRef(notice)
   useEffect(() => {
-    count.current = { total: items.length, busy, chatId }
-  }, [items.length, busy, chatId])
+    count.current = {
+      total: items.length,
+      busy,
+      chatId,
+      start: working > 0 ? working - 1 : items.length
+    }
+  }, [items.length, busy, chatId, working])
   useEffect(() => {
     let current = true
     const update = (area: { width: number; height: number }): void => {
@@ -152,7 +159,7 @@ export default function CompactApp(): React.JSX.Element {
     const shown = (next: CompactPresentation): void => {
       setStart({
         chatId: count.current.chatId,
-        index: Math.max(0, count.current.total - (count.current.busy ? 2 : 0))
+        index: count.current.start
       })
       setPresentation(next)
       setSizeChoice('auto')
@@ -515,14 +522,20 @@ export default function CompactApp(): React.JSX.Element {
                     chatId={chatId}
                     variant="bar"
                     onDesignGuideChange={setDesignGuideOpen}
-                    busy={busy}
                     focusToken={presentation.token}
                     autoFocus={presentation.mode === 'command'}
-                    placeholder={busy ? 'Working on it…' : 'What should I do?'}
+                    placeholder="What should I do?"
                     onSend={(text, attachments) => window.api.send(text, attachments)}
                   />
                   <div className="mt-2 flex items-center justify-between px-2 text-[10px] text-muted-foreground">
-                    <span>Esc to hide{busy ? ' · Task keeps running' : ' · Drag to move'}</span>
+                    <span>
+                      Esc to hide
+                      {runningChatId === chatId
+                        ? ' · Task keeps running · Send more to add to it'
+                        : busy
+                          ? ' · Task keeps running'
+                          : ' · Drag to move'}
+                    </span>
                     <Button
                       variant="ghost"
                       size="sm"

@@ -214,13 +214,7 @@ export function ChatView({
               </p>
             )}
             {githubVisible && <GithubContextCard key={`github:${chatId}`} />}
-            <Composer
-              key={chatId}
-              chatId={chatId}
-              onSend={send}
-              busy={busy}
-              onDraftChange={onDraftChange}
-            />
+            <Composer key={chatId} chatId={chatId} onSend={send} onDraftChange={onDraftChange} />
             <div className="mt-3 flex min-h-4 items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
               {status?.online === false ? (
                 <Button
@@ -232,7 +226,11 @@ export function ChatView({
                 </Button>
               ) : (
                 <span>
-                  {busy ? 'Sophon is working on it…' : 'A little help, right where you need it.'}
+                  {runningChatId === chatId
+                    ? 'Working on it · send more to add to this request'
+                    : busy
+                      ? 'Sophon is working on it…'
+                      : 'A little help, right where you need it.'}
                 </span>
               )}
               {usingChatgpt && (
