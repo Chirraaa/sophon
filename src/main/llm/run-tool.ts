@@ -12,6 +12,7 @@ import { allowApprovedTool, getSettings } from '../settings'
 import { readHarnessProposal } from '../harness/store'
 import { normalizeToolOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
 import { MUTATIONS } from '../workflow/results'
+import { recordTiming } from '../workflow/timing'
 export async function runTool(
   name: string,
   args: unknown,
@@ -65,7 +66,9 @@ export async function runTool(
         canAlwaysAllow ? () => allowApprovedTool(name, run) : undefined
       )
       onEvent?.({ type: 'tool_wait', id: actionId, canAlwaysAllow })
+      const waited = performance.now()
       const decision = await approval
+      recordTiming(run, 'approval', performance.now() - waited)
       assertRun(run)
       onEvent?.({ type: 'tool_resume', id: actionId })
       if (decision === 'timeout' || decision === 'deny') {
@@ -85,9 +88,15 @@ export async function runTool(
     assertRun(run)
     securityEvent('tool_allowed', run.id, name)
     executing = true
-    const result = await executeTool(name, parameters, run, bound.scope, (output) =>
-      onEvent?.({ type: 'tool_output', id: actionId, output })
-    )
+    const started = performance.now()
+    let result: Awaited<ReturnType<typeof executeTool>>
+    try {
+      result = await executeTool(name, parameters, run, bound.scope, (output) =>
+        onEvent?.({ type: 'tool_output', id: actionId, output })
+      )
+    } finally {
+      recordTiming(run, 'tool', performance.now() - started)
+    }
     return normalizeToolOutcome(name, parameters, result)
   } catch (error) {
     assertRun(run)

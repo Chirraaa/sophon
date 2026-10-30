@@ -8,6 +8,7 @@ import type { ModelMessage as Msg, ModelReply } from './types'
 import { contextBudget, assertContextFits, measureContext } from './context'
 import { modelCapabilities, supportedEffort } from '../../shared/model-capabilities'
 import { addUsage, tokenUsage } from '../../shared/model-usage'
+import { recordTiming } from '../workflow/timing'
 import { completionStream } from './stream'
 import { responsesInput, responsesReply, responsesStream, chatgptFailure } from './providers'
 import {
@@ -288,6 +289,7 @@ export async function callLLM(
           : completionStream(onText ?? (() => {}), onProgress)
       : undefined
   let measured: TokenUsage | undefined
+  const requested = performance.now()
   try {
     const data = await request(
       claude ? '/messages' : responses ? '/responses' : '/chat/completions',
@@ -396,6 +398,7 @@ export async function callLLM(
     if (run) {
       run.usage = addUsage(run.usage, measured)
       run.onModelUsage?.(run.usage)
+      recordTiming(run, 'model', performance.now() - requested)
     }
   }
 }

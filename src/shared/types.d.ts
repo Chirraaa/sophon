@@ -49,6 +49,19 @@ declare global {
     cachedReportedCalls: number
     reasoningReportedCalls: number
   }
+  interface RequestTiming {
+    wallMs: number
+    modelMs: number
+    modelCalls: number
+    toolMs: number
+    toolCalls: number
+    approvalMs: number
+    approvals: number
+    captureMs: number
+    captures: number
+    automationMs: number
+    automationCalls: number
+  }
   type ContextCategory =
     | 'instructions'
     | 'history'
@@ -402,6 +415,7 @@ declare global {
     workflow?: WorkflowState
     context?: ContextReport
     usage?: RequestUsage
+    timing?: RequestTiming
     sources?: ResearchSource[]
     id: string
     from: 'you' | 'agent'

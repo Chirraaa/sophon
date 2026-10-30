@@ -25,6 +25,11 @@ function load(file, dependencies = {}) {
         return load('src/main/workflow/tool-outcome.ts', {
           './results': load('src/main/workflow/results.ts')
         })
+      if (
+        !Object.hasOwn(dependencies, name) &&
+        ['../workflow/timing', '../../workflow/timing', './timing'].includes(name)
+      )
+        return load('src/main/workflow/timing.ts')
       if (!Object.hasOwn(dependencies, name) && name.endsWith('/action-ledger'))
         return load('src/main/workflow/action-ledger.ts')
       if (!Object.hasOwn(dependencies, name) && name === '../workflow/runtime')
@@ -82,6 +87,7 @@ function load(file, dependencies = {}) {
       if (['./powershell-worker', '../powershell-worker'].includes(name))
         return load('src/main/tools/powershell-worker.ts', {
           child_process: dependencies.child_process,
+          crypto: dependencies.crypto ?? require('node:crypto'),
           path: dependencies.path,
           '../security/worker-job':
             dependencies['../security/worker-job'] ?? dependencies['../../security/worker-job']
