@@ -100,6 +100,17 @@ Clicks, scrolling, keys, typing, accessibility actions and window changes
 invalidate screenshot coordinates. A fresh capture is required before another
 coordinate action. The host checks window bounds again after capturing.
 
+`look_at_screen` accepts `marks: true` (not with `if_changed`). When
+`inspect_app` is Always allow, the same call runs one accessibility inspection
+of the captured window and draws numbered boxes on the controls inside the
+image. Mark N is control cN of the returned observation, so the model can use
+`act_on_control` with that reference or `click {"mark": N}` for the box centre
+instead of estimating coordinates. A mark resolves to image coordinates before
+binding, so every existing coordinate check still applies, and input invalidates
+marks with coordinates. Other grants return the unmarked image; marks never
+widen read permissions. Windows that expose no controls (games, canvas UIs) get
+no marks and keep coordinate clicks.
+
 Related coordinate tools load alongside screenshots, avoiding repeated schema
 discovery. Both browser DOM and accessibility history retain only current
 actionable observations in model context. Historical references expire across

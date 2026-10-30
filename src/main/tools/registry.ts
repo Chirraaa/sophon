@@ -286,7 +286,7 @@ export const TOOL_INFO: ToolInfo[] = [
   {
     name: 'click',
     label: 'Click',
-    description: 'Click at coordinates from the last captured image.',
+    description: 'Click a numbered mark or coordinates from the last captured image.',
     default: 'ask'
   },
   {

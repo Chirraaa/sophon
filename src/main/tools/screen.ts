@@ -1,4 +1,5 @@
-import { BrowserWindow, desktopCapturer } from 'electron'
+import { BrowserWindow, desktopCapturer, nativeImage, type NativeImage } from 'electron'
+import { drawMarks, type Mark } from './marks'
 import { protectedWindowRule } from '../permissions'
 import { currentRun, assertRun } from '../security/run-manager'
 import { getProcess } from './win32'
@@ -34,10 +35,50 @@ let lastCapture: {
   }
   window: WinInfo | null
   encoded: string
+  picture: NativeImage
+  marks: Map<number, { x: number; y: number }>
   clickable: boolean
 } | null = null
 export function invalidateScreenCoordinates(): void {
   if (lastCapture) lastCapture.clickable = false
+}
+// Draw numbered boxes for desktop-coordinate rectangles on the latest capture.
+// Returns the marked image and the labels that landed inside it; the centre of
+// each drawn box becomes clickable by its label until the next capture or input.
+export function markCapture(
+  targets: { label: number; bounds: Rect }[]
+): { image: string; labels: number[] } | null {
+  if (!lastCapture?.clickable || lastCapture.runId !== (currentRun()?.id ?? '')) return null
+  const { bounds, image, picture } = lastCapture
+  const marks: Mark[] = []
+  lastCapture.marks.clear()
+  for (const { label, bounds: b } of targets) {
+    const x = ((b.x - bounds.x) * image.width) / bounds.width
+    const y = ((b.y - bounds.y) * image.height) / bounds.height
+    const width = (b.width * image.width) / bounds.width
+    const height = (b.height * image.height) / bounds.height
+    const left = Math.max(0, x)
+    const top = Math.max(0, y)
+    const right = Math.min(image.width, x + width)
+    const bottom = Math.min(image.height, y + height)
+    if (right - left < 4 || bottom - top < 4) continue
+    marks.push({ label, x: left, y: top, width: right - left, height: bottom - top })
+    lastCapture.marks.set(label, {
+      x: Math.floor((left + right) / 2),
+      y: Math.floor((top + bottom) / 2)
+    })
+  }
+  const bitmap = Buffer.from(picture.toBitmap())
+  drawMarks(bitmap, image.width, image.height, marks)
+  const marked = nativeImage.createFromBitmap(bitmap, image)
+  return {
+    image: `data:image/jpeg;base64,${marked.toJPEG(88).toString('base64')}`,
+    labels: marks.map((m) => m.label)
+  }
+}
+export function markPoint(label: number): { x: number; y: number } | null {
+  if (!lastCapture?.clickable || lastCapture.runId !== (currentRun()?.id ?? '')) return null
+  return lastCapture.marks.get(label) ?? null
 }
 export function captureCoordinates(
   x: number,
@@ -252,6 +293,8 @@ export async function captureScreen(
       image: imageSize,
       window: win ? { ...win } : null,
       encoded,
+      picture: image,
+      marks: new Map(),
       clickable: true
     }
     const label = win ? `"${win.title}" on monitor ${display.index}` : `monitor ${display.index}`
