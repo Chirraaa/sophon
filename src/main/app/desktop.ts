@@ -409,10 +409,14 @@ export class Desktop {
       this.yieldedToGame = false
       win.showInactive()
     }
-    if (game && game.hwnd !== this.coveredBy && win.isVisible()) {
-      win.setAlwaysOnTop(true, 'pop-up-menu')
+    if (game && win.isVisible()) {
+      // A game that regains focus takes the top of the topmost band, so the bar
+      // is raised again on every tick rather than only when the game first shows.
+      if (game.hwnd !== this.coveredBy) {
+        win.setAlwaysOnTop(true, 'pop-up-menu')
+        this.raisedAt = Date.now()
+      }
       win.moveTop()
-      this.raisedAt = Date.now()
     }
     this.coveredBy = game?.hwnd ?? 0
   }
