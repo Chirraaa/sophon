@@ -41,6 +41,7 @@ class Window extends EventEmitter {
 }
 const glow = load('src/main/services/screen-glow.ts', {
   electron: { BrowserWindow: Window, screen },
+  './fullscreen': { fullscreenApp: () => null },
   '../settings': {
     getSettings: () => settings,
     onSettingsChange: (fn) => {
