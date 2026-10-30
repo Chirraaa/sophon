@@ -17,6 +17,7 @@ const toolActivities: Record<string, string> = {
   input_batch: 'Running several steps',
   scroll: 'Scrolling',
   press_keys: 'Pressing keys',
+  move_mouse: 'Moving the mouse',
   type_text: 'Typing text',
   list_files: 'Browsing files',
   read_file: 'Reading a file',

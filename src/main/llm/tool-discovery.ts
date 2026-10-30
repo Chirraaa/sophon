@@ -31,7 +31,15 @@ const RELATED: Record<string, string[]> = {
   open_app: DESKTOP_TOOLS,
   inspect_app: DESKTOP_TOOLS,
   act_on_control: DESKTOP_TOOLS,
-  look_at_screen: ['click', 'input_batch', 'scroll', 'press_keys', 'type_text', ...DESKTOP_TOOLS],
+  look_at_screen: [
+    'click',
+    'input_batch',
+    'scroll',
+    'press_keys',
+    'type_text',
+    'move_mouse',
+    ...DESKTOP_TOOLS
+  ],
   show_image: ['web_fetch', 'look_at_screen'],
   click: ['input_batch', 'look_at_screen', 'inspect_app', 'list_windows'],
   input_batch: ['look_at_screen', 'inspect_app', 'list_windows'],
@@ -78,6 +86,7 @@ export class ToolDiscovery {
           'input_batch',
           'type_text',
           'press_keys',
+          'move_mouse',
           'scroll'
         ]
       ],

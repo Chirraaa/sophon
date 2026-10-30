@@ -52,6 +52,7 @@ import {
 } from './screen'
 import {
   clickScreen,
+  moveMouse,
   focusWindow,
   pressKeys,
   runBatch,
@@ -62,7 +63,14 @@ import {
 import { inspectApp, actOnControl, observationBounds } from './automation/controls'
 import { commandOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
 import { MUTATIONS, resultFailure } from '../workflow/results'
-export const INPUT_TOOLS = ['click', 'input_batch', 'scroll', 'press_keys', 'type_text']
+export const INPUT_TOOLS = [
+  'click',
+  'input_batch',
+  'scroll',
+  'press_keys',
+  'type_text',
+  'move_mouse'
+]
 export const activeToolSchemas = (): typeof toolSchemas =>
   toolSchemas.filter(
     (t) =>
@@ -93,6 +101,8 @@ const handlers: Record<
       : 'Could not run the batch: its window was not resolved.',
   scroll: (a, scope) =>
     scrollWindow(a as Parameters<typeof scrollWindow>[0], scope.guard, scope.window),
+  move_mouse: (a, scope) =>
+    moveMouse(a as Parameters<typeof moveMouse>[0], scope.guard, scope.window),
   press_keys: (a, scope) =>
     pressKeys(a as Parameters<typeof pressKeys>[0], scope.guard, scope.window),
   type_text: (a, scope) => typeText(a as Parameters<typeof typeText>[0], scope.guard, scope.window),

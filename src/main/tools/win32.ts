@@ -171,8 +171,10 @@ export function keyInput(key: number, up = false, unicode = false): boolean {
     )
   })
 }
-export function mouseInput(flags: number, wheel = 0): boolean {
+export function mouseInput(flags: number, wheel = 0, dx = 0, dy = 0): boolean {
   return submitInput(0, (data) => {
+    data.writeInt32LE(dx, 0)
+    data.writeInt32LE(dy, 4)
     data.writeInt32LE(wheel, 8)
     data.writeUInt32LE(flags, 12)
   })

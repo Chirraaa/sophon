@@ -71,6 +71,7 @@ const GROUPS = [
       'scroll',
       'press_keys',
       'type_text',
+      'move_mouse',
       'wait'
     ]
   },
