@@ -133,11 +133,13 @@ export function llamaOptionIssues(
 export function buildLlamaArgs(
   o: LlamaOptions,
   caps: LlamaCapabilities,
-  modelPath: string
+  modelPath: string,
+  projectorPath?: string
 ): string[] {
   const args = [
     '--model',
     modelPath,
+    ...(projectorPath ? ['--mmproj', projectorPath] : []),
     '--host',
     '127.0.0.1',
     '--port',
