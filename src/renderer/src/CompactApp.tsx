@@ -94,11 +94,11 @@ export default function CompactApp(): React.JSX.Element {
   const githubVisible = githubVisibility[chatId] ?? (!!githubContext || githubSuggested)
   const sideVisible = githubVisible || taskVisible
   const mainWidth = collapsed ? 320 : roomy ? 880 : 640
-  // Reserve the side gutter only while a card is open, so the window's
-  // draggable and clickable area matches what is visible. The command panel
-  // keeps its screen position because the main process re-centres around it.
+  // Reserve the side gutter whenever the display has room. Resizing a
+  // transparent Windows window when a card opens makes it blink, so the window
+  // keeps its width and the main process clips the unused gutter instead.
   const sideBySide = workArea.width >= mainWidth + 320 + 16 + 40
-  const mainOffset = sideBySide && sideVisible && !barMode ? 336 : 0
+  const mainOffset = sideBySide && !barMode ? 336 : 0
   // The resting bar's window is exactly the bar, so no transparent margin
   // blocks clicks meant for a game underneath.
   const popupWidth = barMode ? 320 : mainWidth + 40 + mainOffset
@@ -144,6 +144,9 @@ export default function CompactApp(): React.JSX.Element {
     },
     []
   )
+  useEffect(() => {
+    window.api.compact.setGutterOpen(sideVisible)
+  }, [sideVisible])
   useEffect(() => {
     window.api.compact.setTaskVisible(taskVisible)
     return () => window.api.compact.setTaskVisible(false)
