@@ -3,10 +3,8 @@ $ProgressPreference = 'SilentlyContinue'
 [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 
-$request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+# Persistent worker: load assemblies once, then answer one JSON request per line.
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
-$clock = [Diagnostics.Stopwatch]::StartNew()
-$script:attempted = $false
 function Short([string]$value) {
   if ($value.Length -gt 240) { return $value.Substring(0, 240) }
   return $value
@@ -68,6 +66,9 @@ function Describe($element) {
     actions = @($ops.ToArray())
   }
 }
+function Handle($request) {
+$clock = [Diagnostics.Stopwatch]::StartNew()
+$script:attempted = $false
 try {
   $root = [Windows.Automation.AutomationElement]::FromHandle([IntPtr][long]$request.hwnd)
   if (-not $root -or $root.Current.ProcessId -ne $request.pid) { throw 'The target application changed.' }
@@ -190,4 +191,13 @@ try {
   $status = if ($script:attempted) { 'uncertain' } else { 'failed' }
   $result = @{ status = $status; message = Short $_.Exception.Message }
 }
-[Console]::Out.Write(($result | ConvertTo-Json -Depth 12 -Compress))
+$script:reply = $result
+}
+while ($null -ne ($line = [Console]::In.ReadLine())) {
+  $script:reply = @{ status = 'failed'; message = 'Invalid request.' }
+  $id = $null
+  try { $request = $line | ConvertFrom-Json; $id = $request.id; $null = Handle $request } catch { }
+  $script:reply.id = $id
+  [Console]::Out.WriteLine(($script:reply | ConvertTo-Json -Depth 12 -Compress))
+  [Console]::Out.Flush()
+}

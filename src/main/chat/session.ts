@@ -325,6 +325,9 @@ async function respond(
     reply.usage = { ...usage }
     emit(false)
   }
+  run.onTiming = (timing) => {
+    reply.timing = { ...timing }
+  }
   run.onModelContext = (context) => {
     reply.context = {
       droppedTurns: 0,
@@ -509,6 +512,8 @@ async function respond(
     securityEvent('run_stopped', run.id)
     // finishRun aborts the run's signal, so read whether the user stopped it first.
     const stopped = run.signal.aborted
+    if (reply.timing)
+      reply.timing = { ...reply.timing, wallMs: Math.round(performance.now() - run.startedAt) }
     finishRun(run)
     for (const action of reply.actions) {
       if (action.status === 'waiting' || action.status === 'running') {

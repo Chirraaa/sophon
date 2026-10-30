@@ -72,9 +72,20 @@ character cap. Pages read current state, so they are not stable cursors through
 a changing UI. Narrow queries are preferable. A lack of controls can reflect
 the app's accessibility provider; it does not establish that the UI is empty.
 
+The accessibility bridge is one persistent PowerShell process that answers one
+JSON request per line, so requests skip process start and assembly loading. It
+keeps the previous limits: one request at a time, a 10 s timeout, bounded
+output, the CPU/memory job, and cancellation killing the process. Replies are
+matched by request id; a mismatch, timeout, crash or cancellation kills the
+process and the next request starts a fresh one. It is recycled after 20
+requests (under the job's lifetime CPU cap) and after 60 s idle. On the WPF
+fixture, an inspection takes about 1.6 s for the first request and about 70 ms
+afterwards; the full native fixture test went from about 31 s to about 6 s.
+
 `act_on_control` accepts `readback_query` (empty for an overview). After a
 reported/verified action, it returns a fresh inspection only when `inspect_app`
-is already Always allow. Other grants remain unchanged. Fresh references are
+is already Always allow, after a 250 ms pause so the app can apply the action.
+Other grants remain unchanged. Fresh references are
 registered in the action ledger, and superseded trees are compacted without
 discarding the original action evidence. Existing bounded recovery handles
 uncertain actions separately. Read-back itself is not proof of the full goal.

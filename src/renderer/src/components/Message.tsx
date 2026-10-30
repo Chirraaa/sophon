@@ -26,6 +26,8 @@ import { Hint } from './ui/tooltip'
 import { ContextDetails } from './chat/ContextDetails'
 import { contextSummary } from '@/lib/context'
 import { UsageDetails } from './chat/UsageDetails'
+import { TimingDetails } from './chat/TimingDetails'
+import { seconds } from '@/lib/duration'
 import { CompactionNotice } from './chat/CompactionNotice'
 import { SubagentPanel } from './chat/SubagentPanel'
 export function Message({
@@ -234,6 +236,16 @@ export function Message({
           <CollapsibleContent>
             <div className="mt-3">
               <UsageDetails usage={item.usage} />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+      {showDiagnostics && item.timing && !you && (
+        <Collapsible className="max-w-[88%] text-xs text-muted-foreground">
+          <CollapsibleTrigger>Time · {seconds(item.timing.wallMs)}</CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-3">
+              <TimingDetails timing={item.timing} />
             </div>
           </CollapsibleContent>
         </Collapsible>
