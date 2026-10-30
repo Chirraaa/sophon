@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { loadPreview } from '@/lib/attachment-preview'
 type Draft = {
   text: string
   attachments: ChatAttachment[]
@@ -55,7 +56,7 @@ export function useComposer(
   useEffect(() => {
     let alive = true
     for (const attachment of drafts.get(chatId)?.attachments ?? []) {
-      void window.api.attachments.preview(attachment.id).catch(() => {
+      void loadPreview(attachment.id).catch(() => {
         if (!alive) return
         setAttachments((current) => current.filter((item) => item.id !== attachment.id))
         setError('An attachment is no longer available. Attach the file again before sending.')
