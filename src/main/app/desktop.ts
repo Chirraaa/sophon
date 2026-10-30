@@ -6,7 +6,14 @@ import { stopRun, setInterfacePresenceProvider } from '../security/run-manager'
 import { getSettings, onSettingsChange } from '../settings'
 import { onSession, send, snapshot } from '../chat/session'
 import { rememberExternalWindow, restoreExternalWindow } from '../tools/windows'
-import { exclusiveFullscreen } from '../tools/win32'
+import {
+  SW_RESTORE,
+  bringToFront,
+  foregroundWindow,
+  getProcess,
+  isMinimized,
+  showWindow
+} from '../tools/win32'
 import { fullscreenApp } from '../services/fullscreen'
 import icon from '../../../resources/icon.png?asset'
 import { VoiceSession } from '../voice/session'
@@ -47,7 +54,11 @@ export class Desktop {
   private summoned = false
   private overlayTimer: NodeJS.Timeout | null = null
   private coveredBy = 0
+  private raisedAt = 0
   private yieldedToGame = false
+  // Games that dropped out of exclusive fullscreen when the bar showed over them.
+  private readonly yieldTo = new Set<string>()
+  private restTimer: NodeJS.Timeout | null = null
   private readonly offSettings: () => void
   readonly voice = new VoiceSession({
     publish: (state) => broadcast('voice:state', state),
@@ -155,7 +166,14 @@ export class Desktop {
       }
     })
     this.main = win
-    win.on('focus', () => this.hideCompact())
+    win.on('focus', () => {
+      this.stopRestWatch()
+      this.hideCompact()
+    })
+    // A game brought over the full app hides it without minimizing it.
+    win.on('blur', () => {
+      if (!this.restTimer) this.restTimer = setInterval(this.syncRest, 1000)
+    })
     win.on('hide', this.syncRest)
     win.on('minimize', this.syncRest)
     win.on('ready-to-show', () => {
@@ -170,6 +188,7 @@ export class Desktop {
     })
     win.on('closed', () => {
       this.main = null
+      this.stopRestWatch()
     })
     this.watch(win)
     loadRenderer(win)
@@ -213,6 +232,8 @@ export class Desktop {
     })
     this.compact = win
     win.setAlwaysOnTop(true, 'pop-up-menu')
+    // Kept out of screenshots, so captures need not hide it first.
+    win.setContentProtection(true)
     win.on('blur', () => {
       if (
         this.modalDepth ||
@@ -360,14 +381,20 @@ export class Desktop {
     this.coveredBy = 0
     this.yieldedToGame = false
   }
-  // Keeps the docked bar above fullscreen and borderless games. Exclusive
-  // fullscreen drops to the desktop when anything shows above it, so the bar
-  // steps aside until the game leaves that mode or the shortcut asks for it.
+  private stopRestWatch(): void {
+    if (this.restTimer) clearInterval(this.restTimer)
+    this.restTimer = null
+  }
+  // Keeps the docked bar above fullscreen and borderless games. Most fullscreen
+  // games are composed by Windows and keep running under a window that never
+  // takes focus. One that still drops to the desktop when the bar shows over it
+  // gets its window back, and the bar steps aside for that game from then on.
   private keepOverlay = (): void => {
     const win = this.compact
     if (!win || win.isDestroyed() || !this.compactDocked) return this.stopOverlay()
+    if (this.coveredBy && this.droppedOut(win)) return
     const game = fullscreenApp()
-    if (game?.exclusive) {
+    if (game && this.yieldTo.has(game.exe)) {
       if (win.isVisible() && !win.isFocused()) {
         win.hide()
         this.yieldedToGame = true
@@ -381,13 +408,35 @@ export class Desktop {
     if (game && game.hwnd !== this.coveredBy && win.isVisible()) {
       win.setAlwaysOnTop(true, 'pop-up-menu')
       win.moveTop()
+      this.raisedAt = Date.now()
     }
     this.coveredBy = game?.hwnd ?? 0
   }
+  // The covered game minimized right after the bar rose and nothing else took
+  // the foreground: it left exclusive fullscreen because of the bar.
+  private droppedOut(win: BrowserWindow): boolean {
+    const hwnd = this.coveredBy
+    if (Date.now() - this.raisedAt > 5000 || win.isFocused() || !isMinimized(hwnd)) return false
+    const front = foregroundWindow()
+    if (front && front !== hwnd) {
+      const { pid, exe } = getProcess(front)
+      if (pid !== process.pid && exe.toLowerCase() !== 'explorer.exe') return false
+    }
+    this.yieldTo.add(getProcess(hwnd).exe)
+    this.coveredBy = 0
+    win.hide()
+    this.yieldedToGame = true
+    showWindow(hwnd, SW_RESTORE)
+    bringToFront(hwnd)
+    return true
+  }
   private mainShowing(): boolean {
-    return Boolean(
-      this.main && !this.main.isDestroyed() && this.main.isVisible() && !this.main.isMinimized()
-    )
+    const main = this.main
+    if (!main || main.isDestroyed() || !main.isVisible() || main.isMinimized()) return false
+    if (main.isFocused()) return true
+    // A fullscreen game in front hides the full app as surely as minimizing it.
+    const game = fullscreenApp()
+    return !game || game.displayId !== screen.getDisplayMatching(main.getBounds()).id
   }
   private wantsRestDock(): boolean {
     return getSettings().dockAlwaysVisible && !this.mainShowing() && !this.quitting
@@ -403,7 +452,9 @@ export class Desktop {
   }
   /** Rests the shortcut window as a slim top bar when the full app is away. */
   syncRest = (): void => {
-    if (this.wantsRestDock() && !this.compact?.isVisible()) this.showDock()
+    if (!this.mainShowing() || this.main?.isFocused()) this.stopRestWatch()
+    if (this.yieldedToGame || this.compact?.isVisible()) return
+    if (this.wantsRestDock()) this.showDock()
   }
   /** Shows the docked bar without taking focus, optionally flagging a finished task. */
   showDock = (notice?: 'finished'): void => {
@@ -431,7 +482,8 @@ export class Desktop {
       if (win.isDestroyed()) return
       win.webContents.send('compact:shown', this.presentation)
       this.watchOverlay()
-      if (exclusiveFullscreen() && !win.isFocused()) {
+      const game = fullscreenApp()
+      if (game && this.yieldTo.has(game.exe) && !win.isFocused()) {
         win.hide()
         this.yieldedToGame = true
       } else win.showInactive()
@@ -524,6 +576,7 @@ export class Desktop {
     this.offSettings()
     this.cancelHide()
     this.stopOverlay()
+    this.stopRestWatch()
     this.voice.dispose()
   }
 }

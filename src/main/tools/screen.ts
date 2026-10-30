@@ -1,8 +1,8 @@
-import { BrowserWindow, desktopCapturer, nativeImage, type NativeImage } from 'electron'
+import { BrowserWindow, desktopCapturer, nativeImage, screen, type NativeImage } from 'electron'
 import { drawMarks, type Mark } from './marks'
 import { protectedWindowRule } from '../permissions'
 import { currentRun, assertRun } from '../security/run-manager'
-import { getProcess } from './win32'
+import { enumTopLevelWindows, getProcess } from './win32'
 import { hideScreenGlow, showScreenGlow } from '../services/screen-glow'
 import { recordTiming } from '../workflow/timing'
 const checkRun = (): void => {
@@ -10,6 +10,7 @@ const checkRun = (): void => {
   if (run) assertRun(run)
 }
 import { activeWindow, findWindow, listWindows, monitorOf, monitors, type WinInfo } from './windows'
+type Mon = ReturnType<typeof monitors>[number]
 type Rect = {
   x: number
   y: number
@@ -126,7 +127,7 @@ function target(
 ):
   | {
       window: WinInfo | null
-      display: ReturnType<typeof monitors>[number]
+      display: Mon
       captureWindow: boolean
     }
   | string {
@@ -141,6 +142,54 @@ function target(
   const display = win ? monitorOf(win) : monitors().find((m) => m.primary)
   if (!display) return 'No monitor is available to capture.'
   return { window: win, display, captureWindow: Boolean(win) }
+}
+// A window nothing covers is cut from a monitor capture instead. Window capture
+// thumbnails every open window, which is slow, and often returns a stale frame
+// for games and other GPU-drawn windows.
+function uncovered(win: WinInfo, display: Mon): boolean {
+  const f = display.full
+  if (
+    win.x < f.x ||
+    win.y < f.y ||
+    win.x + win.width > f.x + f.width ||
+    win.y + win.height > f.y + f.height
+  )
+    return false
+  // Windows are listed front to back.
+  for (const w of listWindows()) {
+    if (w.hwnd === win.hwnd) return true
+    if (
+      w.state !== 'minimized' &&
+      w.x < win.x + win.width &&
+      w.x + w.width > win.x &&
+      w.y < win.y + win.height &&
+      w.y + w.height > win.y
+    )
+      return false
+  }
+  return false
+}
+// Own windows that would show in a monitor capture. The shortcut bar and glow
+// are excluded from capture, so only the full app can, and for a window cut it
+// only matters when it sits above that window: hiding and reshowing it would
+// otherwise raise it over a game.
+function ownInView(display: Mon, win: WinInfo | null): BrowserWindow[] {
+  const order = win ? enumTopLevelWindows() : []
+  return BrowserWindow.getAllWindows().filter((own) => {
+    if (!own.isVisible() || own.isContentProtected()) return false
+    if (!win) return screen.getDisplayMatching(own.getBounds()).id === display.id
+    const r = screen.dipToScreenRect(own, own.getBounds())
+    const hwnd = Number(own.getNativeWindowHandle().readBigUInt64LE())
+    const above = order.indexOf(hwnd)
+    return (
+      above >= 0 &&
+      above < order.indexOf(win.hwnd) &&
+      r.x < win.x + win.width &&
+      r.x + r.width > win.x &&
+      r.y < win.y + win.height &&
+      r.y + r.height > win.y
+    )
+  })
 }
 export async function captureScreen(
   args: CaptureArgs,
@@ -167,6 +216,7 @@ async function capture(
   const choice = target(args, bound)
   if (typeof choice === 'string') return choice
   const { window: win, display, captureWindow } = choice
+  const fromScreen = !win || uncovered(win, display)
   if (
     !captureWindow &&
     listWindows().some(
@@ -180,26 +230,29 @@ async function capture(
   }
   const hidden: BrowserWindow[] = []
   try {
-    if (!captureWindow) {
-      for (const own of BrowserWindow.getAllWindows()) {
-        if (own.isVisible()) {
-          hidden.push(own)
-          own.hide()
-        }
+    if (fromScreen) {
+      for (const own of ownInView(display, win)) {
+        hidden.push(own)
+        own.hide()
       }
       if (hidden.length) await new Promise((resolve) => setTimeout(resolve, 120))
     }
     const options = {
-      types: [captureWindow ? 'window' : 'screen'],
-      thumbnailSize: args.region ? { width: 2560, height: 1600 } : { width: 1280, height: 960 }
+      types: [fromScreen ? 'screen' : 'window'],
+      thumbnailSize:
+        fromScreen && win
+          ? { width: display.full.width, height: display.full.height }
+          : args.region
+            ? { width: 2560, height: 1600 }
+            : { width: 1280, height: 960 }
     } satisfies Parameters<typeof desktopCapturer.getSources>[0]
     let sources = await desktopCapturer.getSources(options)
     checkRun()
     guard?.()
     const select = (): (typeof sources)[number] | undefined =>
-      captureWindow
-        ? sources.find((s) => s.id.startsWith(`window:${win!.hwnd}:`))
-        : sources.find((s) => s.display_id === String(display.id))
+      fromScreen
+        ? sources.find((s) => s.display_id === String(display.id))
+        : sources.find((s) => s.id.startsWith(`window:${win!.hwnd}:`))
     let source = select()
     if (!source || source.thumbnail.isEmpty()) {
       sources = await desktopCapturer.getSources(options)
@@ -212,6 +265,19 @@ async function capture(
         ? 'Could not capture the last active window. Bring that window to the foreground, reopen Sophon, and try again. You can also attach an image file.'
         : 'Could not capture that monitor. Check that it is connected and try again, or attach an image file.'
     let image = source.thumbnail
+    if (fromScreen && win) {
+      const full = image.getSize()
+      const sx = full.width / display.full.width
+      const sy = full.height / display.full.height
+      const left = Math.round((win.x - display.full.x) * sx)
+      const top = Math.round((win.y - display.full.y) * sy)
+      image = image.crop({
+        x: left,
+        y: top,
+        width: Math.max(1, Math.min(full.width - left, Math.round(win.width * sx))),
+        height: Math.max(1, Math.min(full.height - top, Math.round(win.height * sy)))
+      })
+    }
     const rawSize = image.getSize()
 
     const scale = Math.min(
