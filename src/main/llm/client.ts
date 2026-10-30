@@ -231,6 +231,7 @@ export async function callLLM(
     timeoutMs = 120000,
     onText,
     onProgress,
+    volatile,
     reportContext = false
   }: {
     visual?: boolean
@@ -240,6 +241,8 @@ export async function callLLM(
     timeoutMs?: number
     onText?: (text: string) => void
     onProgress?: (progress: ModelProgress) => void
+    /** Text that changes every call (run state); it travels with the clock, after the stable prefix. */
+    volatile?: string
     /** A main conversation request: its size is what the context meter shows. */
     reportContext?: boolean
   } = {}
@@ -292,7 +295,7 @@ export async function callLLM(
           return sent
         })
     ],
-    timeContext(started)
+    [timeContext(started), volatile].filter(Boolean).join('\n\n')
   )
   assertContextFits(normalized, budget.inputBudget)
   const run = currentRun()

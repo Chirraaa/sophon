@@ -216,6 +216,7 @@ export async function chat(
       : 0
     let consulted = 0
     let remainingCalls = maxSteps
+    let volatileTail = ''
     let answerReviewed = false
     let reviewDraft = ''
     let harnessPhase = 'before_task'
@@ -439,9 +440,10 @@ export async function chat(
           hostUI: run.interfacePresence,
           context: contextUsage
         })
-      // Coding capacity and run state change between calls; keep them last.
-      const systemText = (): string =>
-        instructions + (session.active ? resources.context() : '') + runState
+      // Coding capacity and run state change between calls. Budgets count them in the system text,
+      // but the model gets them after the history so they do not invalidate its prompt cache.
+      const volatileText = (): string => (session.active ? resources.context() : '') + runState
+      const systemText = (): string => instructions + volatileText()
 
       const observations = latestDesktopObservations(turn)
       for (let index = 0; index < turn.length; index++) turn[index] = observations[index]
@@ -545,6 +547,17 @@ export async function chat(
         compactions: packed.report.compaction?.count ?? 0
       }
       onEvent({ type: 'context', report: packed.report })
+      const head = packed.messages[0]
+      const tail = volatileText()
+      volatileTail = ''
+      if (
+        head?.role === 'system' &&
+        typeof head.content === 'string' &&
+        head.content.endsWith(tail)
+      ) {
+        packed.messages[0] = { ...head, content: head.content.slice(0, -tail.length) }
+        volatileTail = tail.trim()
+      }
       return packed.messages
     }
     const skipRemaining = (
@@ -681,6 +694,7 @@ export async function chat(
       try {
         msg = await callLLM(model, messages, {
           visual,
+          volatile: volatileTail,
           allowTools: !finalCall && !answerReviewed && (!inlineVisual || modelTools().length > 0),
           tools: finalCall ? [] : modelTools(),
           reportContext: true,
