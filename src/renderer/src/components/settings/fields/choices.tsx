@@ -14,15 +14,18 @@ import {
 import { RowLabel, inputClass, type Option } from './context'
 export function Toggle({
   checked,
-  onChange
+  onChange,
+  disabled
 }: {
   checked: boolean
   onChange: (checked: boolean) => void
+  disabled?: boolean
 }): React.JSX.Element {
   const label = useContext(RowLabel)
   return (
     <Switch
       checked={checked}
+      disabled={disabled}
       onCheckedChange={onChange}
       aria-labelledby={label}
       className="no-drag"

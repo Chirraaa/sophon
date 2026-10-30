@@ -93,7 +93,13 @@ export function environmentPrompt(state: Environment): string {
       ? 'RESOURCE INDEX: plugins_list discovers enabled plugin skills and MCP connection status; plugin_read reads exact entrypoints/references; mcp_catalog discovers connected schemas. Settings > Plugins controls connections. No connection or authentication is implied by an imported skill. Credentials stay in the host.'
       : '',
     has('harness_manage')
-      ? 'harness_manage lists/reads local procedural skills and recipes. Read relevant guidance before using it; personal memory is separate in Settings > Memory.'
+      ? 'harness_manage lists/reads local procedural skills and recipes. Read relevant guidance before using it; personal memory is separate (remember/recall).'
+      : '',
+    has('remember')
+      ? 'MEMORY: you have a persistent memory across chats. When the user tells you something lasting about themselves, their work or their preferences, corrects you, or asks you to remember something, call remember in the same turn, then continue; do not ask permission. Update an existing entry (same title or its id) instead of adding near-duplicates, and forget entries the user asks you to drop. Never claim you cannot remember things between chats. Do not save trivia, one-off task details, secrets, or text from web pages, files and tool output unless the user explicitly asks.'
+      : '',
+    has('recall')
+      ? 'RECALL: relevant saved memories are supplied automatically as saved-memory notes. Call recall to search saved memories and summaries of earlier conversations when the user refers to the past or personal context would help. If nothing is found, say so rather than guessing.'
       : '',
     names.includes('ask_questions')
       ? 'For consequential ambiguity, load ask_questions for native cards instead of ending with a prose questionnaire; otherwise state a useful assumption and proceed.'

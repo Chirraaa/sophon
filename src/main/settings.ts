@@ -32,7 +32,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   coding: { mode: 'ask-before-edit' },
   research: { enabled: false, provider: 'exa' },
   privacy: { chatRetentionDays: 0 },
-  memory: { enabled: true, maxTokens: 600 },
+  memory: { enabled: true, maxTokens: 600, learn: true, episodes: true },
   accent: 'violet',
   motion: 'full',
   showResponseDiagnostics: false,
@@ -176,7 +176,9 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
     coding: { mode: oneOf(coding.mode, ['auto', 'ask-before-edit'], base.coding.mode) },
     memory: {
       enabled: bool(memory.enabled, base.memory.enabled),
-      maxTokens: num(memory.maxTokens, 100, 2000, base.memory.maxTokens, true)
+      maxTokens: num(memory.maxTokens, 100, 2000, base.memory.maxTokens, true),
+      learn: bool(memory.learn, base.memory.learn),
+      episodes: bool(memory.episodes, base.memory.episodes)
     },
     research: {
       enabled: bool(research.enabled, base.research.enabled),
@@ -423,6 +425,7 @@ function commit(next: AppSettings, approvedGrant = false): AppSettings {
       s.research.enabled,
       s.research.provider,
       s.memory.enabled,
+      s.memory.learn,
       s.coding.mode
     ])
   if (security(current) !== security(next)) {
