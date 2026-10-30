@@ -1,5 +1,6 @@
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { contextSummary } from '@/lib/context'
+import { contextUsedTokens } from '../../../../shared/context-usage'
 import { Progress } from '@/components/ui/progress'
 import {
   Table,
@@ -25,28 +26,43 @@ const categories: Record<ContextCategory, { label: string; color: string }> = {
 const number = (value: number): string => value.toLocaleString()
 
 export function ContextDetails({ report }: { report: ContextReport }): React.JSX.Element {
+  const used = contextUsedTokens(report)
+  const measured = report.peakTokens !== undefined
   const total = report.estimatedTotalTokens ?? report.estimatedInputTokens
   const window = report.contextWindow
-  const percentage = window ? (total / window) * 100 : null
+  const percentage = window ? (used / window) * 100 : null
   const parts =
     report.breakdown?.filter((part) => categories[part.category] && part.tokens > 0) ?? []
+  const local = report.provider === 'local' || report.provider === 'compatible'
   return (
     <div className="min-w-0 space-y-4 text-xs [overflow-wrap:anywhere]" data-context-details>
       <div>
         <p className="text-base font-medium text-foreground">{contextSummary(report)}</p>
         <p className="mt-1 text-muted-foreground">
-          Latest model request{report.model ? ` · ${report.model}` : ''}
+          {measured ? 'Largest request in this reply' : 'Next request, estimated'}
+          {report.model ? ` · ${report.model}` : ''}
         </p>
         <p className="mt-1 text-muted-foreground">
-          About {number(total)} input tokens{window ? ` / ${number(window)}` : ''}.{' '}
+          {measured
+            ? `${number(used)} tokens measured by the provider`
+            : `About ${number(used)} tokens`}
+          {window ? ` of ${number(window)}` : ''}.{' '}
           {report.windowSource === 'provider'
-            ? 'Window reported by provider.'
+            ? local
+              ? 'Window reported by the running model server.'
+              : 'Window reported by provider.'
             : report.windowSource === 'documented'
               ? 'Published model window; account limits may differ.'
               : report.windowSource === 'configured'
-                ? 'Window configured in Settings.'
+                ? 'Window configured in Settings; the server did not report its own.'
                 : 'Window capacity unavailable; a fullness percentage cannot be calculated.'}
         </p>
+        {measured && report.reportedInputTokens !== undefined && (
+          <p className="mt-1 text-muted-foreground">
+            Latest request: {number(report.reportedInputTokens)} prompt +{' '}
+            {number(report.reportedOutputTokens ?? 0)} reply tokens.
+          </p>
+        )}
       </div>
       {percentage !== null && (
         <div>
@@ -63,7 +79,7 @@ export function ContextDetails({ report }: { report: ContextReport }): React.JSX
       )}
       {parts.length > 0 && (
         <div>
-          <p className="mb-2 font-medium text-foreground">What fills the input</p>
+          <p className="mb-2 font-medium text-foreground">What fills the input (estimated split)</p>
           <div className="mb-3 flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
             {parts.map((part) => (
               <span
@@ -135,8 +151,12 @@ export function ContextDetails({ report }: { report: ContextReport }): React.JSX
           </p>
         )}
         <p>
-          Input counts and shares are estimates. Image encoding and retained reasoning can differ
-          from provider counts. Unsent drafts are not included.
+          {measured
+            ? 'The total is the provider’s count for this model, including the reply it generated. The split by element is estimated.'
+            : report.calibrated
+              ? 'Estimated before the request, scaled by how this model counted its last request. The provider’s count replaces it when the reply arrives.'
+              : 'Estimated before the request. The provider’s count replaces it when the reply arrives.'}{' '}
+          Unsent drafts are not included.
         </p>
         <p>{report.droppedTurns} older exchanges omitted by the context budget.</p>
         {report.measuredAt && (
