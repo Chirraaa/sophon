@@ -279,6 +279,15 @@ export class WorkflowController {
     ) {
       this.state.nextStep =
         'The public web service was unavailable, not denied by the user. Do not repeat a failed search or change providers. Read an available public source or explain the verification limit. Permission denials still stop the task.'
+    } else if (
+      ['execution-error', 'unverified'].includes(result.code) &&
+      this.budgets.setback(result)
+    ) {
+      this.recoveryAction = actionId
+      this.state.nextStep =
+        result.status === 'uncertain'
+          ? 'The action may have happened. Observe the current state before deciding; do not replay it blindly.'
+          : 'Diagnose the failure from its message and current state, then try a different supported step or explain the blocker.'
     } else if (['denied', 'failed', 'uncertain'].includes(assessment.status)) {
       this.state.phase = 'finished'
       this.state.outcome = assessment.status === 'denied' ? 'blocked' : 'needs_review'

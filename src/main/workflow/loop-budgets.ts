@@ -19,6 +19,7 @@ export class LoopBudgets {
   private screenshotRefreshes = 0
   private targetRefreshes = 0
   private controlReadbacks = 0
+  private setbacks = 0
 
   count(kind: Retry): number {
     return this.retries[kind] ?? 0
@@ -57,5 +58,10 @@ export class LoopBudgets {
     }
     if (result.code === 'target-missing') return this.targetRefreshes++ < 2
     return false
+  }
+  // A failed or uncertain result without a dedicated recovery path goes back to the
+  // model a bounded number of times per request; denials always stop.
+  setback(result: ToolOutcome): boolean {
+    return ['failed', 'uncertain'].includes(result.status) && this.setbacks++ < 2
   }
 }
