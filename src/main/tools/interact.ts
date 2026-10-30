@@ -49,12 +49,15 @@ export async function clickScreen(
     x?: number
     y?: number
     button?: string
+    hold_ms?: number
   },
   guard?: () => void,
   bound?: WinInfo
 ): Promise<string> {
   guard?.()
-  const { x, y, button = 'left' } = args
+  const { x, y, button = 'left', hold_ms } = args
+  const invalidHold = holdError(hold_ms)
+  if (invalidHold) return invalidHold
   if (typeof x !== 'number' || typeof y !== 'number')
     return 'Provide x and y from a captured image.'
   const point = captureCoordinates(x, y)
@@ -76,18 +79,35 @@ export async function clickScreen(
   const fresh = captureCoordinates(x, y)
   if (!fresh || fresh.x !== point.x || fresh.y !== point.y)
     return 'Denied: capture the moved window again.'
-  const failure = pointerClick(point, button)
-  return failure ?? `Clicked ${button} at (${Math.round(x)}, ${Math.round(y)}) in "${win.title}".`
+  const failure = await pointerClick(point, button, hold_ms)
+  return (
+    failure ??
+    `Clicked ${button} at (${Math.round(x)}, ${Math.round(y)}) in "${win.title}"${hold_ms ? ` (held ${hold_ms} ms)` : ''}.`
+  )
 }
+const holdError = (hold: number | undefined): string | null =>
+  hold !== undefined && (!Number.isInteger(hold) || hold < 50 || hold > 5000)
+    ? 'Invalid hold_ms: use a whole number from 50 to 5000.'
+    : null
 // Moves the pointer and clicks; returns a failure message, or null on success.
-function pointerClick(point: { x: number; y: number }, button: string): string | null {
+async function pointerClick(
+  point: { x: number; y: number },
+  button: string,
+  hold?: number
+): Promise<string | null> {
   const flags = button === 'right' ? [0x0008, 0x0010] : button === 'left' ? [0x0002, 0x0004] : null
   if (!flags) return 'Button must be left or right.'
   if (!setCursor(point.x, point.y)) return 'Windows could not move the pointer.'
   invalidateScreenCoordinates()
-  return mouseInput(flags[0]) && mouseInput(flags[1])
-    ? null
-    : 'Windows refused the click (the app may be running as administrator).'
+  const refused = 'Windows refused the click (the app may be running as administrator).'
+  if (!mouseInput(flags[0])) return refused
+  // Mining or attacking in a game needs the button down for the whole span.
+  try {
+    if (hold) await sleep(hold)
+  } finally {
+    if (!mouseInput(flags[1])) return refused
+  }
+  return null
 }
 export type BatchStep = {
   action?: string
@@ -117,7 +137,11 @@ export async function runBatch(
     if (foregroundWindow() !== win.hwnd) failure = 'focus changed.'
     else if (step.action === 'click') {
       const point = points[i]
-      failure = point ? pointerClick(point, step.button ?? 'left') : 'no resolved click point.'
+      failure =
+        holdError(step.hold_ms) ??
+        (point
+          ? await pointerClick(point, step.button ?? 'left', step.hold_ms)
+          : 'no resolved click point.')
     } else {
       const result =
         step.action === 'press_keys'
