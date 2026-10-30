@@ -24,6 +24,7 @@ export const MUTATIONS = new Set([
   'run_command',
   'close_app',
   'click',
+  'input_batch',
   'scroll',
   'press_keys',
   'type_text'
@@ -215,6 +216,7 @@ export function assessResult(
     (tool === 'type_text' && /^Typed \d+ characters in "/.test(text)) ||
     (tool === 'press_keys' && /^Pressed .+ in "/.test(text)) ||
     (tool === 'click' && /^Clicked (left|right) at /.test(text)) ||
+    (tool === 'input_batch' && /^Ran d+ input steps in "/.test(text)) ||
     (tool === 'scroll' && /^Scrolled (up|down) \d+ steps in "/.test(text)) ||
     (tool === 'close_app' && /^Asked \d+ windows? of /.test(text))
   )

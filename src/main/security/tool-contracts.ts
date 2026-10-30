@@ -100,6 +100,30 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
     } else if (object.x === undefined || object.y === undefined)
       throw new Error('Provide x and y from a captured image, or a mark number.')
   }
+  if (name === 'input_batch') {
+    let typed = 0
+    for (const [i, raw] of (object.steps as Record<string, unknown>[]).entries()) {
+      const at = `Step ${i + 1}`
+      const has = (key: string): boolean => raw[key] !== undefined
+      if (raw.action === 'click') {
+        if (has('mark') === (has('x') || has('y')))
+          throw new Error(`${at}: click a mark or x,y coordinates, not both or neither.`)
+        if (!has('mark') && !(has('x') && has('y'))) throw new Error(`${at}: provide x and y.`)
+        if (
+          has('mark') &&
+          (!Number.isInteger(raw.mark) || Number(raw.mark) < 1 || Number(raw.mark) > 99)
+        )
+          throw new Error(`${at}: mark must be a number drawn on the latest screenshot.`)
+      } else if (raw.action === 'press_keys') {
+        if (typeof raw.keys !== 'string' || !raw.keys.trim())
+          throw new Error(`${at}: provide keys.`)
+      } else if (raw.action === 'type_text') {
+        if (typeof raw.text !== 'string' || !raw.text) throw new Error(`${at}: provide text.`)
+        typed += raw.text.length
+      } else if (!has('direction')) throw new Error(`${at}: scroll needs a direction.`)
+    }
+    if (typed > 2000) throw new Error('A batch may type at most 2000 characters in total.')
+  }
   if (name === 'look_at_screen' && object.marks === true && object.if_changed === true)
     throw new Error('marks cannot be combined with if_changed.')
   if (name === 'browser_act') {

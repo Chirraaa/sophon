@@ -290,6 +290,12 @@ export const TOOL_INFO: ToolInfo[] = [
     default: 'ask'
   },
   {
+    name: 'input_batch',
+    label: 'Batch input',
+    description: 'Run several clicks, key presses, typing and scrolling steps in one call.',
+    default: 'ask'
+  },
+  {
     name: 'scroll',
     label: 'Scroll',
     description: 'Scroll the active or named window.',
