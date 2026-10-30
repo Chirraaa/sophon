@@ -2,6 +2,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { useSession } from '@/hooks/useSession'
 import { Notice, NumberField, PillButton, Row, Section, SelectField, Toggle } from './controls'
 import { save } from './save'
@@ -24,6 +25,9 @@ export function MemoryTab({ settings }: { settings: AppSettings }): React.JSX.El
   const [saving, setSaving] = useState(false)
   const [enablingHarness, setEnablingHarness] = useState(false)
   const [filter, setFilter] = useState('')
+  const [origin, setOrigin] = useState<'all' | MemoryRecord['source']>('all')
+  const [episodes, setEpisodes] = useState<number | null>(null)
+  const [clearing, setClearing] = useState(false)
   const [harness, setHarness] = useState<{ directory: string; documents: string[] } | null>(null)
   const [document, setDocument] = useState('')
   const [contents, setContents] = useState('')
@@ -60,6 +64,20 @@ export function MemoryTab({ settings }: { settings: AppSettings }): React.JSX.El
   useEffect(() => {
     let alive = true
     window.api.memory
+      .episodes()
+      .then((count) => {
+        if (alive) setEpisodes(count)
+      })
+      .catch(() => {
+        if (alive) setEpisodes(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [refresh, session.busy])
+  useEffect(() => {
+    let alive = true
+    window.api.memory
       .list()
       .then((value) => {
         if (alive) setRecords(value)
@@ -73,7 +91,12 @@ export function MemoryTab({ settings }: { settings: AppSettings }): React.JSX.El
     return () => {
       alive = false
     }
-  }, [refresh])
+  }, [refresh, session.busy])
+  const shown = records.filter(
+    (record) =>
+      (origin === 'all' || record.source === origin) &&
+      `${record.title} ${record.content}`.toLowerCase().includes(filter.toLowerCase())
+  )
   const locked = session.busy || saving || loading
   const harnessEnabled =
     settings.memory.enabled &&
@@ -196,9 +219,55 @@ export function MemoryTab({ settings }: { settings: AppSettings }): React.JSX.El
             onCommit={(maxTokens) => void save({ memory: { maxTokens } })}
           />
         </Row>
+        <Row
+          label="Let Sophon remember on its own"
+          hint="Sophon saves lasting facts, preferences and corrections from your chats without asking, and forgets them when you ask. Each change appears in the chat with Undo."
+        >
+          <Toggle
+            checked={settings.memory.learn}
+            disabled={!settings.memory.enabled}
+            onChange={(learn) => void save({ memory: { learn } })}
+          />
+        </Row>
+        <Row
+          label="Remember past conversations"
+          hint="Keeps a short encrypted digest of each chat so Sophon can recall what you discussed before. Deleting, clearing or expiring a chat removes its digest."
+        >
+          <Toggle
+            checked={settings.memory.episodes}
+            disabled={!settings.memory.enabled}
+            onChange={(episodes) => void save({ memory: { episodes } })}
+          />
+        </Row>
+        <Row
+          label="Conversation memory"
+          hint={
+            episodes === null
+              ? 'Conversation digests could not be read.'
+              : `${episodes} ${episodes === 1 ? 'conversation' : 'conversations'} remembered.`
+          }
+        >
+          <PillButton disabled={session.busy || !episodes} onClick={() => setClearing(true)}>
+            Clear conversation memory
+          </PillButton>
+        </Row>
+        <ConfirmationDialog
+          open={clearing}
+          onOpenChange={setClearing}
+          title="Clear conversation memory?"
+          description="Sophon forgets the digests of all past conversations. The chats themselves and your saved memories are kept."
+          confirmLabel="Clear"
+          cancelLabel="Cancel"
+          pendingLabel="Clearing…"
+          onConfirm={async () => {
+            await window.api.memory.clearEpisodes()
+            setEpisodes(0)
+          }}
+        />
         <Notice>
-          Save reviewed lessons from a reply or edit them here. Only entries you explicitly save
-          become durable memories. Entries are encrypted locally; they do not train the model.
+          Memories and conversation digests are encrypted on this device and sent only as context to
+          your selected model. They do not train the model. Entries Sophon learned are marked below;
+          edit or delete them like your own.
         </Notice>
       </Section>
       <Section
@@ -285,12 +354,23 @@ export function MemoryTab({ settings }: { settings: AppSettings }): React.JSX.El
         title={`Saved memories (${records.length}/200)`}
         description="Preferences and current conversation task notes are considered automatically. Other entries match words in your request. Use specific titles so they are easy to retrieve."
       >
-        <Input
-          aria-label="Filter memories"
-          placeholder="Filter saved memories"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-        />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            aria-label="Filter memories"
+            placeholder="Filter saved memories"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+          <SelectField
+            value={origin}
+            options={[
+              { value: 'all', label: 'All entries' },
+              { value: 'user', label: 'Saved by you' },
+              { value: 'assistant', label: 'Learned by Sophon' }
+            ]}
+            onChange={(value) => setOrigin(value as typeof origin)}
+          />
+        </div>
         <div className="mt-4 flex flex-col gap-3">
           {loading ? (
             <p className="text-xs text-muted-foreground">Loading memories…</p>
@@ -311,17 +391,12 @@ export function MemoryTab({ settings }: { settings: AppSettings }): React.JSX.El
             </div>
           ) : records.length === 0 ? (
             <p className="text-xs text-muted-foreground">No saved memories yet.</p>
-          ) : !records.some((record) =>
-              `${record.title} ${record.content}`.toLowerCase().includes(filter.toLowerCase())
-            ) ? (
+          ) : !shown.length ? (
             <p className="text-xs text-muted-foreground">
               No memories match. Try another search or clear the filter.
             </p>
           ) : (
-            records
-              .filter((record) =>
-                `${record.title} ${record.content}`.toLowerCase().includes(filter.toLowerCase())
-              )
+            shown
               .sort((a, b) => b.updatedAt - a.updatedAt)
               .map((record) => (
                 <article key={record.id} className="rounded-xl border border-border p-3 text-xs">
@@ -330,7 +405,8 @@ export function MemoryTab({ settings }: { settings: AppSettings }): React.JSX.El
                     {record.pinned ? ' · prioritized' : ''}
                   </div>
                   <p className="mt-1 text-muted-foreground">
-                    {record.kind} · {record.scope} · saved by you ·{' '}
+                    {record.kind} · {record.scope} ·{' '}
+                    {record.source === 'assistant' ? 'learned by Sophon' : 'saved by you'} ·{' '}
                     {new Date(record.updatedAt).toLocaleDateString()}
                   </p>
                   {record.scope === 'workspace' && (

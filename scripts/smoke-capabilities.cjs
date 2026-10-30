@@ -126,7 +126,11 @@ async function review() {
     'ask_questions',
     'consult_specialist',
     'coding_checkpoint',
-    'coding_resources'
+    'coding_resources',
+    // Gated by Settings > Memory instead of Permissions.
+    'remember',
+    'forget',
+    'recall'
   ])
   const names = schemas.map((tool) => tool.function.name)
   assert.equal(new Set(names).size, names.length, 'Tool schemas must have unique names')

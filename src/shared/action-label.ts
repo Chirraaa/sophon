@@ -1,7 +1,10 @@
 const INTERNAL_ACTION_LABELS: Record<string, string> = {
   discover_tools: 'Load tool instructions',
   coding_resources: 'Adjust coding working sizes',
-  coding_checkpoint: 'Save coding progress'
+  coding_checkpoint: 'Save coding progress',
+  remember: 'Remember',
+  forget: 'Forget a memory',
+  recall: 'Search memory'
 }
 
 export function fallbackActionLabel(name: string): string {

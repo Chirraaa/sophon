@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { spring } from '@/lib/motion'
 import { ActionHistory } from './chat/ActionHistory'
 import { DesktopResults } from './chat/DesktopCards'
+import { MemoryResults } from './chat/MemoryCards'
 import { AssistantText } from './AssistantText'
 import { AttachmentView } from './chat/AttachmentView'
 import { useState } from 'react'
@@ -90,6 +91,7 @@ export function Message({
         <ActionHistory actions={item.actions} attachments={item.attachments} />
       )}
       {!you && <DesktopResults actions={item.actions} />}
+      {!you && <MemoryResults actions={item.actions} />}
       {!you && <ResearchActivity item={item} />}
       {!you && item.compaction && <CompactionNotice notice={item.compaction} />}
       {!!item.specialists?.length && <SubagentPanel agents={item.specialists} />}

@@ -41,6 +41,7 @@ import { ToolDiscovery, CODING_PINNED_TOOLS } from './tool-discovery'
 import { pluginSkillId } from '../plugins/skills'
 import { listMemories } from '../memory/store'
 import { rankMemories } from '../memory/records'
+import { memoryTools, isMemoryTool, runMemoryTool, noteRecalled } from '../memory/agent'
 import { activeToolSchemas } from '../tools'
 import {
   environmentPrompt,
@@ -221,6 +222,7 @@ export async function chat(
     let reviewDraft = ''
     let harnessPhase = 'before_task'
     let compacted = false
+    let recallNoted = false
     let contextUsage: RunState['context']
     const budgets = workflow.budgets
     let verifyBoundary = false
@@ -268,6 +270,7 @@ export async function chat(
         tools.push(toolSchemas.find((tool) => tool.function.name === 'discover_tools')!)
         tools.push(toolSchemas.find((tool) => tool.function.name === 'ask_questions')!)
         tools.push(toolSchemas.find((tool) => tool.function.name === 'suggest_design_guide')!)
+        tools.push(...(memoryTools(settings.memory) as unknown as typeof tools))
       }
       const available = exclusiveTools
         ? tools.filter((tool) => exclusiveTools.has(tool.function.name))
@@ -304,7 +307,11 @@ export async function chat(
         catalog.some((tool) => tool.function.name === directTool)
       )
         return catalog.filter((tool) => [directTool, 'discover_tools'].includes(tool.function.name))
-      return discovery.select(catalog, session.active ? CODING_PINNED_TOOLS : [])
+      // Memory stays loaded so the model can save what it learns without discovering it first.
+      return discovery.select(catalog, [
+        ...(session.active ? CODING_PINNED_TOOLS : []),
+        ...memoryTools(settings.memory).map((tool) => tool.function.name)
+      ])
     }
     const attached = await attachmentContent(attachments)
     turn.push({
@@ -531,6 +538,10 @@ export async function chat(
         .map(compactionInfo)
         .filter((info): info is ContextCompaction => !!info)
         .sort((a, b) => b.updatedAt - a.updatedAt)[0]
+      if (!recallNoted) {
+        recallNoted = true
+        noteRecalled(packed.report.memories.map((memory) => memory.id))
+      }
       if (session.active) {
         resources.update({
           inputBudget: packed.report.inputBudget ?? Infinity,
@@ -1243,6 +1254,17 @@ export async function chat(
             saveTurn(turns, turn)
             return reply
           }
+          continue
+        }
+        if (isMemoryTool(call.function.name)) {
+          onEvent({ type: 'tool_start', id: call.id, name: call.function.name, args })
+          const text = runMemoryTool(call.function.name, args, {
+            chatId,
+            workspace: run.workspace ?? '',
+            settings: settings.memory
+          })
+          onEvent({ type: 'tool_end', id: call.id, result: text })
+          turn.push({ role: 'tool', tool_call_id: call.id, content: text })
           continue
         }
         const actionId = randomUUID()

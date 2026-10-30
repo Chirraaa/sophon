@@ -26,6 +26,7 @@ import { startRun, finishRun, assertRun } from '../security/run-manager'
 import { securityEvent } from '../security/audit'
 import { takeChatClear } from './clear-request'
 import { pruneChatMemories, clearChatMemories } from '../memory/store'
+import { deleteEpisode, pruneEpisodes, recordEpisode, renameEpisode } from '../memory/episodes'
 import { resultFailure } from '../workflow/results'
 import { searchProviderLabel } from '../network/search-provider'
 import { archiveAction, readActionDetails } from './action-details'
@@ -65,7 +66,17 @@ export function loadSession(): void {
   if (!store.chats.some((c) => c.id === store.activeId)) store.activeId = store.chats[0].id
   if (retention) persistConversations(store)
   pruneChatMemories(new Set(store.chats.map((chat) => chat.id)))
+  updateEpisodes(() => pruneEpisodes(new Set(store.chats.map((chat) => chat.id))))
   cleanAttachments(store, old)
+}
+// Conversation memory follows the chat's lifetime. A failure here must not block deleting or
+// clearing the chat itself; the next startup prunes digests of chats that no longer exist.
+function updateEpisodes(action: () => void): void {
+  try {
+    action()
+  } catch {
+    /* Retried by the startup prune. */
+  }
 }
 export function snapshot(): SessionSnapshot {
   const active = store.chats.find((value) => value.id === store.activeId)!
@@ -129,6 +140,7 @@ export function renameChat(id: string, title: string): void {
   const conversation = store.chats.find((value) => value.id === id)
   if (!conversation || typeof title !== 'string' || !title.trim()) return
   conversation.title = title.trim().slice(0, 80)
+  updateEpisodes(() => renameEpisode(id, conversation.title))
   emit()
 }
 function categoryName(name: string, exceptId?: string): string {
@@ -184,6 +196,7 @@ export function moveChat(
 export function deleteChat(id: string): void {
   if (runningChatId === id) throw new Error('Wait for this chat to finish before deleting it.')
   clearChatMemories(id)
+  updateEpisodes(() => deleteEpisode(id))
   const old = attachmentIds(store)
   store.chats = store.chats.filter((value) => value.id !== id)
   if (!store.chats.length) store.chats.push(newConversation())
@@ -196,6 +209,7 @@ export function clear(): void {
   const active = store.chats.find((value) => value.id === store.activeId)!
   const old = attachmentIds(store)
   clearChatMemories(active.id)
+  updateEpisodes(() => deleteEpisode(active.id))
   clearConversation(active)
   emit()
   cleanAttachments(store, old)
@@ -312,9 +326,10 @@ async function respond(
     attachments: [],
     pending: true
   }
+  const promptId = prompt?.id ?? randomUUID()
   if (!prompt)
     conversation.items.push({
-      id: randomUUID(),
+      id: promptId,
       from: 'you',
       text: trimmed,
       attachments,
@@ -494,6 +509,20 @@ async function respond(
       if (title && conversation.title === initialTitle && !run.signal.aborted)
         conversation.title = title
     }
+    const memory = getSettings().memory
+    if (memory?.enabled && memory.episodes && !run.signal.aborted)
+      try {
+        recordEpisode({
+          chatId: conversation.id,
+          title: conversation.title,
+          workspace: run.workspace ?? '',
+          promptId,
+          user: trimmed || attachments.map((attachment) => attachment.name).join(', '),
+          reply: reply.text
+        })
+      } catch {
+        // Conversation memory is best effort; the reply itself succeeded.
+      }
   } catch (error) {
     delete reply.quality
     const detail = run.signal.aborted

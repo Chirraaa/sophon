@@ -128,6 +128,23 @@ function load(file, dependencies = {}) {
         return load('src/main/tools/notes-schemas.ts')
       if (!Object.hasOwn(dependencies, name) && name === './calendar-schemas')
         return load('src/main/tools/calendar-schemas.ts')
+      if (!Object.hasOwn(dependencies, name) && name === '../memory/schemas')
+        return load('src/main/memory/schemas.ts')
+      if (!Object.hasOwn(dependencies, name) && name === '../memory/episodes')
+        return {
+          recordEpisode: () => {},
+          renameEpisode: () => {},
+          deleteEpisode: () => {},
+          pruneEpisodes: () => {}
+        }
+      // Chat fixtures that do not exercise memory get the tools switched off.
+      if (!Object.hasOwn(dependencies, name) && name === '../memory/agent')
+        return {
+          memoryTools: () => [],
+          isMemoryTool: (tool) => ['remember', 'forget', 'recall'].includes(tool),
+          runMemoryTool: () => 'Could not save the memory: unavailable in this fixture.',
+          noteRecalled: () => {}
+        }
 
       if (
         !Object.hasOwn(dependencies, name) &&
