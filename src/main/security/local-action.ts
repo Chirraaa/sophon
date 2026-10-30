@@ -26,6 +26,8 @@ export interface ExecutionScope {
   window?: WinInfo
   windows?: WinInfo[]
   pid?: number
+  /** Screen points for each step of an input_batch; null for steps that do not click. */
+  points?: ({ x: number; y: number } | null)[]
   file?: FileIdentity
   deletion?: WorkspaceDeletion
   calendar?: CalendarBinding
@@ -105,6 +107,7 @@ export async function bindLocalAction(
       'inspect_app',
       'act_on_control',
       'click',
+      'input_batch',
       'scroll',
       'press_keys',
       'type_text'
@@ -127,6 +130,31 @@ export async function bindLocalAction(
       args.y = centre.y
     }
     const point = name === 'click' ? captureCoordinates(Number(args.x), Number(args.y)) : undefined
+    // A batch resolves every click against the one screenshot now, before input
+    // can invalidate it; the window must be the same for all of them.
+    const batchPoints: (ReturnType<typeof captureCoordinates> | null)[] = []
+    if (name === 'input_batch') {
+      for (const step of args.steps as Record<string, unknown>[]) {
+        if (step.action !== 'click') {
+          batchPoints.push(null)
+          continue
+        }
+        const centre = step.mark !== undefined ? markPoint(Number(step.mark)) : step
+        const resolved = centre ? captureCoordinates(Number(centre.x), Number(centre.y)) : null
+        if (!resolved?.window)
+          throw Object.assign(
+            new Error(
+              'Screenshot required: a click mark or coordinate is not on the latest screenshot or input has made it stale. Capture with marks again. No step was executed.'
+            ),
+            { code: 'SCREENSHOT_REQUIRED' }
+          )
+        batchPoints.push(resolved)
+      }
+      const windows = new Set(batchPoints.map((p) => p?.window?.hwnd).filter(Boolean))
+      if (windows.size > 1) throw new Error('A batch may only target one window.')
+      scope.points = batchPoints.map((p) => (p ? { x: p.x, y: p.y } : null))
+    }
+    const batchWindow = batchPoints.find(Boolean)?.window
     if (name === 'click' && !point?.window)
       throw Object.assign(
         new Error(
@@ -136,6 +164,7 @@ export async function bindLocalAction(
       )
     const win =
       point?.window ??
+      batchWindow ??
       control?.window ??
       targetWindow(String(args.title ?? args.window ?? '') || undefined)
     if (!win)
@@ -150,6 +179,7 @@ export async function bindLocalAction(
     if (name !== 'look_at_screen' && blockedAppRule(win.exe))
       throw new Error('This app is blocked from interaction.')
     if (point) details.screenPoint = { x: point.x, y: point.y }
+    if (name === 'input_batch') details.screenPoints = scope.points
     if (control) details.control = control.preview
     scope.window = { ...win }
     const identity = getProcess(win.hwnd)
@@ -169,7 +199,7 @@ export async function bindLocalAction(
     }
     if (['look_at_screen', 'inspect_app', 'scroll', 'press_keys', 'type_text'].includes(name))
       args.window = win.title
-    else if (!['act_on_control', 'click'].includes(name)) args.title = win.title
+    else if (!['act_on_control', 'click', 'input_batch'].includes(name)) args.title = win.title
     revalidate = async (): Promise<void> => {
       assertRun(run)
       if (name === 'act_on_control') controlTarget(args, run)
@@ -180,6 +210,17 @@ export async function bindLocalAction(
             'Screenshot required: the screenshot target changed. Capture the intended window again. No click was executed.'
           )
       }
+      if (name === 'input_batch')
+        batchPoints.forEach((planned, i) => {
+          if (!planned) return
+          const step = (args.steps as Record<string, unknown>[])[i]
+          const centre = step.mark !== undefined ? markPoint(Number(step.mark)) : step
+          const now = centre ? captureCoordinates(Number(centre.x), Number(centre.y)) : null
+          if (!now || now.window?.hwnd !== win.hwnd || now.x !== planned.x || now.y !== planned.y)
+            throw new Error(
+              'Screenshot required: the screenshot target changed. Capture the intended window again. No step was executed.'
+            )
+        })
       const current = listWindows().find((w) => w.hwnd === win.hwnd)
       if (
         !current ||

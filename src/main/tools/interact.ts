@@ -76,13 +76,62 @@ export async function clickScreen(
   const fresh = captureCoordinates(x, y)
   if (!fresh || fresh.x !== point.x || fresh.y !== point.y)
     return 'Denied: capture the moved window again.'
-  if (!setCursor(point.x, point.y)) return 'Windows could not move the pointer.'
+  const failure = pointerClick(point, button)
+  return failure ?? `Clicked ${button} at (${Math.round(x)}, ${Math.round(y)}) in "${win.title}".`
+}
+// Moves the pointer and clicks; returns a failure message, or null on success.
+function pointerClick(point: { x: number; y: number }, button: string): string | null {
   const flags = button === 'right' ? [0x0008, 0x0010] : button === 'left' ? [0x0002, 0x0004] : null
   if (!flags) return 'Button must be left or right.'
+  if (!setCursor(point.x, point.y)) return 'Windows could not move the pointer.'
   invalidateScreenCoordinates()
   return mouseInput(flags[0]) && mouseInput(flags[1])
-    ? `Clicked ${button} at (${Math.round(x)}, ${Math.round(y)}) in "${win.title}".`
+    ? null
     : 'Windows refused the click (the app may be running as administrator).'
+}
+export type BatchStep = {
+  action?: string
+  button?: string
+  keys?: string
+  text?: string
+  direction?: string
+  amount?: number
+}
+// Runs steps decided from one screenshot, in order, in a single window. Click
+// points were resolved against that screenshot when the batch was approved, so
+// the clicks that would otherwise invalidate it stay usable. The first failing
+// step stops the batch, because later steps assumed its effect.
+export async function runBatch(
+  steps: BatchStep[],
+  points: ({ x: number; y: number } | null)[],
+  guard: (() => void) | undefined,
+  bound: WinInfo
+): Promise<string> {
+  const win = await focus(undefined, bound, guard)
+  if (typeof win === 'string') return win
+  for (const [i, step] of steps.entries()) {
+    checkRun()
+    guard?.()
+    let failure: string | null = null
+    if (foregroundWindow() !== win.hwnd) failure = 'focus changed.'
+    else if (step.action === 'click') {
+      const point = points[i]
+      failure = point ? pointerClick(point, step.button ?? 'left') : 'no resolved click point.'
+    } else {
+      const result =
+        step.action === 'press_keys'
+          ? await pressKeys({ keys: step.keys }, guard, win)
+          : step.action === 'type_text'
+            ? await typeText({ text: step.text }, guard, win)
+            : await scrollWindow({ direction: step.direction, steps: step.amount }, guard, win)
+      if (!/^(Pressed|Typed|Scrolled) /.test(result)) failure = result
+    }
+    if (failure)
+      return `Unverified: stopped at step ${i + 1} of ${steps.length} (${step.action}): ${failure} Steps 1-${i} ran.`
+    // Give the app a moment to apply this step before the next lands.
+    await sleep(step.action === 'click' ? 120 : 60)
+  }
+  return `Ran ${steps.length} input steps in "${win.title}".`
 }
 export async function scrollWindow(
   args: {

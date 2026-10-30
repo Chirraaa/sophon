@@ -48,11 +48,19 @@ import {
   type CapturedScreen,
   type CaptureArgs
 } from './screen'
-import { clickScreen, focusWindow, pressKeys, scrollWindow, typeText } from './interact'
+import {
+  clickScreen,
+  focusWindow,
+  pressKeys,
+  runBatch,
+  scrollWindow,
+  typeText,
+  type BatchStep
+} from './interact'
 import { inspectApp, actOnControl, observationBounds } from './automation/controls'
 import { commandOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
 import { MUTATIONS, resultFailure } from '../workflow/results'
-export const INPUT_TOOLS = ['click', 'scroll', 'press_keys', 'type_text']
+export const INPUT_TOOLS = ['click', 'input_batch', 'scroll', 'press_keys', 'type_text']
 export const activeToolSchemas = (): typeof toolSchemas =>
   toolSchemas.filter(
     (t) =>
@@ -77,6 +85,10 @@ const handlers: Record<
   close_app: (a, scope) => closeApp(a.name as string, scope.windows),
   click: (a, scope) =>
     clickScreen(a as Parameters<typeof clickScreen>[0], scope.guard, scope.window),
+  input_batch: (a, scope) =>
+    scope.window && scope.points
+      ? runBatch(a.steps as BatchStep[], scope.points, scope.guard, scope.window)
+      : 'Could not run the batch: its window was not resolved.',
   scroll: (a, scope) =>
     scrollWindow(a as Parameters<typeof scrollWindow>[0], scope.guard, scope.window),
   press_keys: (a, scope) =>
@@ -270,7 +282,11 @@ export async function executeTool(
 
     if (['move_window', 'close_window', 'close_app'].includes(name)) invalidateScreenCoordinates()
     const result = await handler(parameters, scope)
-    if (scope.window && scope.pid !== undefined && ['type_text', 'press_keys'].includes(name))
+    if (
+      scope.window &&
+      scope.pid !== undefined &&
+      ['type_text', 'press_keys', 'input_batch'].includes(name)
+    )
       rememberEditedWindow(scope.window, scope.pid)
     if (name === 'look_at_screen' && parameters.marks === true && typeof result !== 'string') {
       const captured = result as CapturedScreen
@@ -322,7 +338,8 @@ export async function executeTool(
       scope.window &&
       typeof result === 'string' &&
       !resultFailure(result) &&
-      (parameters.capture_after ?? (name === 'click' || capturedWindow() === scope.window.hwnd))
+      (parameters.capture_after ??
+        (name === 'click' || name === 'input_batch' || capturedWindow() === scope.window.hwnd))
     ) {
       if (toolPermission('look_at_screen') !== 'allow' || !canUseTool(run, 'look_at_screen'))
         return parameters.capture_after === true
