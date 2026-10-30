@@ -2,6 +2,7 @@ import koffi from 'koffi'
 const user32 = koffi.load('user32.dll')
 const dwmapi = koffi.load('dwmapi.dll')
 const kernel32 = koffi.load('kernel32.dll')
+const shell32 = koffi.load('shell32.dll')
 const EnumWindowsProc = koffi.proto('bool __stdcall EnumWindowsProc(void *hwnd, intptr lParam)')
 const EnumWindows = user32.func('bool __stdcall EnumWindows(EnumWindowsProc *cb, intptr lParam)')
 const IsWindowVisible = user32.func('bool __stdcall IsWindowVisible(intptr hwnd)')
@@ -41,6 +42,9 @@ const CloseHandle = kernel32.func('bool __stdcall CloseHandle(intptr handle)')
 const QueryFullProcessImageNameW = kernel32.func(
   'bool __stdcall QueryFullProcessImageNameW(intptr process, uint32 flags, _Out_ uint16_t *buf, _Inout_ uint32_t *size)'
 )
+const SHQueryUserNotificationState = shell32.func(
+  'int __stdcall SHQueryUserNotificationState(_Out_ int32_t *state)'
+)
 export const SW_MAXIMIZE = 3
 export const SW_MINIMIZE = 6
 export const SW_RESTORE = 9
@@ -51,6 +55,7 @@ const DWMWA_CLOAKED = 14
 const DWMWA_EXTENDED_FRAME_BOUNDS = 9
 const SWP_NOACTIVATE = 0x0010
 const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+const QUNS_RUNNING_D3D_FULL_SCREEN = 3
 export type Rect = {
   left: number
   top: number
@@ -137,6 +142,11 @@ export function bringToFront(h: number): boolean {
   }
 }
 export const foregroundWindow = (): number => Number(GetForegroundWindow())
+// An exclusive fullscreen app drops out of its display mode when any window shows above it.
+export function exclusiveFullscreen(): boolean {
+  const state = new Int32Array(1)
+  return SHQueryUserNotificationState(state) === 0 && state[0] === QUNS_RUNNING_D3D_FULL_SCREEN
+}
 export const requestClose = (h: number): boolean => PostMessageW(h, 0x0010, 0, 0)
 export const setCursor = (x: number, y: number): boolean => SetCursorPos(x, y)
 const INPUT_SIZE = process.arch === 'x64' ? 40 : 28

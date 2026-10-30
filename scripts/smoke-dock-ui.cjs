@@ -16,7 +16,7 @@ let hides = 0
 const on = ipcMain.on.bind(ipcMain)
 ipcMain.on = (channel, listener) =>
   on(channel, (...args) => {
-    if (channel === 'compact:hide') hides++
+    if (channel === 'compact:hide' || channel === 'compact:dismiss') hides++
     return listener(...args)
   })
 const errors = []
