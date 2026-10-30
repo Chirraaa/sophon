@@ -401,10 +401,12 @@ async function review() {
     outgoing.messages[0].content,
     /Base instructions[\s\S]*Tool images[\s\S]*Completion correction/
   )
-  assert.deepEqual(
-    outgoing.messages.slice(1),
-    withImage.filter((message) => message.role !== 'system')
-  )
+  const sent = outgoing.messages.slice(1)
+  const kept = withImage.filter((message) => message.role !== 'system')
+  assert.deepEqual(sent.slice(0, -1), kept.slice(0, -1))
+  assert.deepEqual(sent.at(-1).content.slice(0, -1), kept.at(-1).content)
+  assert.match(sent.at(-1).content.at(-1).text, /^LIVE HOST CLOCK/)
+  assert.doesNotMatch(outgoing.messages[0].content, /LIVE HOST CLOCK/)
   assert.deepEqual(withImage, original, 'Transport normalization must preserve the original turn')
   settings.model.thinking = false
   settings.model.temperature = 0.7

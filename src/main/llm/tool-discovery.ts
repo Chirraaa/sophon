@@ -129,9 +129,10 @@ export class ToolDiscovery {
     const optional = [...this.requested]
       .filter((name) => available.has(name) && !pinned.includes(name))
       .slice(0, 8)
-    return [...new Set(['discover_tools', ...pinned, ...optional])].flatMap((name) =>
-      available.has(name) ? [available.get(name)!] : []
-    )
+    // Catalog order, not usage order: tool schemas lead the prompt, so reshuffling an unchanged
+    // set after every call would invalidate the provider's prompt cache for no reason.
+    const chosen = new Set(['discover_tools', ...pinned, ...optional])
+    return catalog.filter((tool) => chosen.has(tool.function.name))
   }
 
   load(names: string[], catalog: Tool[], unload: string[] = []): string {
