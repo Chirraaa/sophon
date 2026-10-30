@@ -155,6 +155,43 @@ export async function scrollWindow(
     ? `Scrolled ${args.direction} ${steps} steps in "${win.title}".`
     : 'Windows refused the scroll.'
 }
+const MOVE_MAX = 5000
+const MOVE_FRAME_MS = 8
+// Relative movement, so it also turns a game camera, which locks the pointer and reads deltas.
+// The distance is eased over the duration in small steps; rounding is carried between steps so
+// the total lands exactly on (dx, dy).
+export async function moveMouse(
+  args: { dx?: number; dy?: number; duration_ms?: number; window?: string },
+  guard?: () => void,
+  bound?: WinInfo
+): Promise<string> {
+  const { dx = 0, dy = 0, duration_ms: duration = 300 } = args
+  if (![dx, dy].every((n) => Number.isInteger(n) && Math.abs(n) <= MOVE_MAX) || (!dx && !dy))
+    return `Invalid movement: give dx and/or dy as whole pixels, at most ${MOVE_MAX} each.`
+  if (!Number.isInteger(duration) || duration < 0 || duration > 5000)
+    return 'Invalid duration_ms: use a whole number from 0 to 5000.'
+  const win = await focus(bound ? undefined : args.window, bound, guard)
+  if (typeof win === 'string') return win
+  invalidateScreenCoordinates()
+  const frames = Math.max(1, Math.round(duration / MOVE_FRAME_MS))
+  let sentX = 0
+  let sentY = 0
+  for (let i = 1; i <= frames; i++) {
+    checkRun()
+    guard?.()
+    if (foregroundWindow() !== win.hwnd) return 'Windows stopped the movement: focus changed.'
+    const t = i / frames
+    const eased = t * t * (3 - 2 * t)
+    const x = Math.round(dx * eased)
+    const y = Math.round(dy * eased)
+    if ((x !== sentX || y !== sentY) && !mouseInput(0x0001, 0, x - sentX, y - sentY))
+      return 'Windows refused the mouse movement (the app may be running as administrator).'
+    sentX = x
+    sentY = y
+    if (i < frames) await sleep(MOVE_FRAME_MS)
+  }
+  return `Moved the mouse ${dx} px right and ${dy} px down over ${duration} ms in "${win.title}".`
+}
 const VK: Record<string, number> = {
   enter: 0x0d,
   return: 0x0d,

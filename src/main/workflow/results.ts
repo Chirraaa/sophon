@@ -27,7 +27,8 @@ export const MUTATIONS = new Set([
   'input_batch',
   'scroll',
   'press_keys',
-  'type_text'
+  'type_text',
+  'move_mouse'
 ])
 export function resultFailure(text: string): 'denied' | 'failed' | 'uncertain' | undefined {
   if (text.startsWith('Patch not applied:')) return 'failed'
@@ -215,6 +216,7 @@ export function assessResult(
   if (
     (tool === 'type_text' && /^Typed \d+ characters in "/.test(text)) ||
     (tool === 'press_keys' && /^Pressed .+ in "/.test(text)) ||
+    (tool === 'move_mouse' && /^Moved the mouse /.test(text)) ||
     (tool === 'click' && /^Clicked (left|right) at /.test(text)) ||
     (tool === 'input_batch' && /^Ran d+ input steps in "/.test(text)) ||
     (tool === 'scroll' && /^Scrolled (up|down) \d+ steps in "/.test(text)) ||

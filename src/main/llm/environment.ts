@@ -115,6 +115,7 @@ export function environmentPrompt(state: Environment): string {
       'input_batch',
       'type_text',
       'press_keys',
+      'move_mouse',
       'open_app',
       'list_windows'
     )
