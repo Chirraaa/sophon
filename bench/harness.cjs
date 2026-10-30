@@ -3,6 +3,7 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 const assert = require('node:assert/strict')
 const { load, root } = require('../scripts/security/load.cjs')
+const { efficiency } = require('./efficiency.cjs')
 
 const MODEL = {
   provider: 'local',
@@ -394,6 +395,7 @@ function createHarness(task = {}, repetition = 0, modelOverrides = {}) {
         history,
         settings,
         latencyMs: performance.now() - start,
+        efficiency: efficiency(requests),
         usage: requests.reduce(
           (sum, r) => ({
             prompt_tokens:

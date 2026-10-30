@@ -197,7 +197,8 @@ export async function callLLM(
     outputTokens,
     timeoutMs = 120000,
     onText,
-    onProgress
+    onProgress,
+    volatile
   }: {
     visual?: boolean
     allowTools?: boolean
@@ -206,6 +207,8 @@ export async function callLLM(
     timeoutMs?: number
     onText?: (text: string) => void
     onProgress?: (progress: ModelProgress) => void
+    /** Text that changes every call (run state); it travels with the clock, after the stable prefix. */
+    volatile?: string
   } = {}
 ): Promise<ModelReply | null> {
   const s = { ...getSettings().model, ...(outputTokens ? { maxTokens: outputTokens } : {}) }
@@ -258,7 +261,7 @@ export async function callLLM(
           return sent
         })
     ],
-    timeContext(started)
+    [timeContext(started), volatile].filter(Boolean).join('\n\n')
   )
   assertContextFits(normalized, budget.inputBudget)
   const run = currentRun()

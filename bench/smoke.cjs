@@ -207,6 +207,31 @@ async function main() {
   assert(
     JSON.stringify(current.requests[1].body.messages).includes('depends on current information')
   )
+  // Batch and prompt-reuse measures: a scripted step with two reads, then a third request.
+  const measure = await createHarness({
+    id: 'smoke-efficiency',
+    prompt: 'Read the file source.txt twice, then once more, then summarize.',
+    responses: [
+      response('', [
+        call('read_file', { path: 'source.txt' }, 'call-1'),
+        call('read_file', { path: 'source.txt' }, 'call-2')
+      ]),
+      response('', [call('read_file', { path: 'source.txt' }, 'call-3')]),
+      response('Done.')
+    ]
+  }).run()
+  const { efficiency } = measure
+  assert.equal(efficiency.modelCalls, measure.requests.length)
+  assert.equal(efficiency.toolBatches, 2)
+  assert.equal(efficiency.multiCallBatches, 1)
+  assert.equal(efficiency.parallelizableBatches, 1)
+  assert.equal(efficiency.parallelizableCalls, 2)
+  assert(
+    efficiency.prefixReuse > 0.8,
+    'Later requests repeat the earlier prompt (the clock and run state must not sit before the history; ' +
+      'it was 0.49 when they did): ' +
+      efficiency.prefixReuse
+  )
   console.log(
     'PASS 110-task split; scorer positive/negative cases; real chat, contracts, approval denial, atomic batch, mock read/write and proportionate-path nudges; no network or native tools'
   )
