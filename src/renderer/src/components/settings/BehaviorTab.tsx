@@ -42,8 +42,9 @@ function PromptEditor({
           ? 'Your custom instructions replace the built-in role guidance. '
           : 'This is the built-in role guidance. '}
         Built-in guidance updates with the app; custom instructions stay as you saved them. Sophon
-        also adds live tool availability, interface context, reply style, task workflow and coding
-        safeguards, plus relevant guides and enabled memories. Permissions are enforced by the app;
+        always adds its host rules (tool honesty, approvals, untrusted content), your memory
+        settings, live tool availability, interface context, reply style, task workflow and coding
+        safeguards, plus relevant guides and recalled memories. Permissions are enforced by the app;
         changing this text does not grant access or disable patch and verification requirements.
       </Notice>
     </div>
@@ -105,7 +106,7 @@ export function BehaviorTab({ settings }: { settings: AppSettings }): React.JSX.
       <Section
         title="Core instructions"
         collapsible
-        description="Sophon's role, environment awareness, coding workflow, patch policy, verification, research, visuals and memory. Customize this guidance or reset it to the current built-in default."
+        description="Sophon's role, what it can do, when to answer directly or use tools, and how replies are formatted. Customize this guidance or reset it to the current built-in default."
       >
         {defaultPrompt === null ? (
           <p className="py-3 text-xs text-muted-foreground">Loading…</p>
