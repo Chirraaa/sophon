@@ -283,12 +283,23 @@ export async function bindLocalAction(
       'run_npm',
       'run_command'
     ].includes(name) ||
+    (name === 'show_image' && args.path !== undefined) ||
     (name === 'python_calculate' && args.path !== undefined)
   ) {
     if (name === 'python_calculate' && extname(String(args.path)).toLowerCase() !== '.csv')
       throw new Error('Python file input must be a CSV file.')
-    if (name === 'read_file' && !READ_EXTENSIONS.has(extname(String(args.path)).toLowerCase()))
+    if (
+      (name === 'read_file' || name === 'show_image') &&
+      !READ_EXTENSIONS.has(extname(String(args.path)).toLowerCase())
+    )
       throw new Error('This file format is not allowed for workspace reads.')
+    if (
+      name === 'show_image' &&
+      !['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'].includes(
+        extname(String(args.path)).toLowerCase()
+      )
+    )
+      throw new Error('show_image shows picture files only.')
     if (name === 'write_file' && extname(String(args.path)).toLowerCase() === '.csv')
       validateCsv(String(args.content))
     const writing = name === 'write_file' || name === 'edit_file' || name === 'create_directory'
@@ -296,7 +307,7 @@ export async function bindLocalAction(
       String(args.path ?? '.'),
       writing,
       name === 'create_directory',
-      name === 'read_file'
+      name === 'read_file' || name === 'show_image'
     )
     details.destination = path
     const info = await stat(path, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
@@ -321,6 +332,7 @@ export async function bindLocalAction(
     }
     if (
       name === 'read_file' ||
+      name === 'show_image' ||
       name === 'edit_file' ||
       name === 'python_calculate' ||
       (name === 'write_file' && info)
@@ -337,7 +349,7 @@ export async function bindLocalAction(
           String(args.path ?? '.'),
           writing,
           name === 'create_directory',
-          name === 'read_file'
+          name === 'read_file' || name === 'show_image'
         )) !== path
       )
         throw new Error('File target changed.')
@@ -365,7 +377,7 @@ export async function bindLocalAction(
       binding.revalidate()
     }
   }
-  if (name === 'web_fetch')
+  if (name === 'web_fetch' || (name === 'show_image' && args.url !== undefined))
     details.network = 'Public HTTPS GET; no cookies or scripts; up to three public redirects.'
   const heading =
     name === 'act_on_control'

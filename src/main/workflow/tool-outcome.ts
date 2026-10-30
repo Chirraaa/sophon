@@ -20,11 +20,13 @@ export type ToolOutcome = Readonly<{
   text: string
   summary: string
   image?: string
+  // Shown to the user only; the model already has this picture.
+  shownImage?: string
   command?: Readonly<{ exitCode: number | null; stopped: boolean; running: boolean }>
   observation?: Readonly<{ id: string; windowRef: string; expiresAt: number; controls: number }>
 }>
 
-export type LegacyToolResult = string | { text: string; image: string }
+export type LegacyToolResult = string | { text: string; image: string; display?: boolean }
 
 export function toolOutcome(
   status: ToolOutcome['status'],
@@ -110,7 +112,11 @@ export function normalizeToolOutcome(
       : ['uncertain', 'failed'].includes(assessment.status) && MUTATIONS.has(tool)
         ? 'unknown'
         : 'completed',
-    ...(typeof legacy !== 'string' ? { image: legacy.image } : {}),
+    ...(typeof legacy === 'string'
+      ? {}
+      : legacy.display
+        ? { shownImage: legacy.image }
+        : { image: legacy.image }),
     ...(command ? { command } : {})
   })
 }

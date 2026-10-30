@@ -41,7 +41,8 @@ function tools() {
       './interact',
       './automation/controls',
       '../network/search-provider',
-      '../network/public-page'
+      '../network/public-page',
+      '../network/public-image'
     ].map((name) => [name, {}])
   )
   return load('src/main/tools/index.ts', {

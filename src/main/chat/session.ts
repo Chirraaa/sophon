@@ -352,6 +352,7 @@ async function respond(
     emit(false)
   }
   const images: Promise<void>[] = []
+  const captions = new Map<string, string>()
   let textTimer: ReturnType<typeof setTimeout> | undefined
   let progressTimer: ReturnType<typeof setTimeout> | undefined
   let compactionBefore: ContextCompactionNotice | undefined
@@ -423,6 +424,15 @@ async function respond(
       return
     }
     if (event.type === 'tool_start') {
+      const caption = (event.args as { caption?: unknown } | undefined)?.caption
+      if (event.name === 'show_image' && typeof caption === 'string')
+        captions.set(
+          event.id,
+          caption
+            .replace(/[\\/:*?"<>|\r\n]+/g, ' ')
+            .trim()
+            .slice(0, 80)
+        )
       reply.actions.push({
         id: event.id,
         name: event.name,
@@ -470,20 +480,26 @@ async function respond(
             ? 'failed'
             : 'done'
           action.detail = event.result
-          if (event.image)
+          if (event.image) {
+            const shown = action.name === 'show_image'
             images.push(
               storeImage(
                 event.image,
-                action.name === 'read_file' ? 'Image preview.jpg' : 'Screenshot.jpg'
+                shown
+                  ? `${captions.get(action.id) || 'Image'}.jpg`
+                  : action.name === 'read_file'
+                    ? 'Image preview.jpg'
+                    : 'Screenshot.jpg'
               )
                 .then((attachment) => {
-                  reply.attachments!.push(attachment)
+                  reply.attachments!.push(shown ? { ...attachment, shown: true } : attachment)
                   emit()
                 })
                 .catch((error: Error) => {
                   action.detail += `\nPreview unavailable: ${error.message}`
                 })
             )
+          }
         }
       }
     }

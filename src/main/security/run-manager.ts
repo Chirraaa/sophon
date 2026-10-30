@@ -15,6 +15,7 @@ export interface RunContext {
   tools: number
   searches: number
   pages: number
+  images: number
   modelCallLimit?: number
   modelCalls: number
   usage?: RequestUsage
@@ -72,6 +73,7 @@ export function startRun(
     tools: 0,
     searches: 0,
     pages: 0,
+    images: 0,
     modelCallLimit: undefined,
     modelCalls: 0,
     usage: undefined,

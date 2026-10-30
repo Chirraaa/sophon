@@ -235,6 +235,13 @@ export const TOOL_INFO: ToolInfo[] = [
     default: 'ask'
   },
   {
+    name: 'show_image',
+    label: 'Show pictures',
+    description:
+      'Show a public web image, your latest screenshot or a picture from your working folder in the chat. Web images are fetched over public HTTPS without cookies; the image URL goes to its website.',
+    default: 'ask'
+  },
+  {
     name: 'open_app',
     label: 'Open apps',
     description: 'Open installed Windows apps by name using their registered launch identities.',

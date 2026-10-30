@@ -68,6 +68,8 @@ export function Message({
   const you = item.from === 'you'
   const isQuestion = !you && dockQuestions && !!questionsFromReply(item.text)
   const showBubble = !isQuestion && (Boolean(item.text) || item.pending)
+  const shown = you ? [] : (item.attachments ?? []).filter((attachment) => attachment.shown)
+  const hidden = you ? [] : (item.attachments ?? []).filter((attachment) => !attachment.shown)
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
@@ -87,8 +89,8 @@ export function Message({
           }
         />
       )}
-      {!you && (item.actions.length > 0 || !!item.attachments?.length) && (
-        <ActionHistory actions={item.actions} attachments={item.attachments} />
+      {!you && (item.actions.length > 0 || !!hidden.length) && (
+        <ActionHistory actions={item.actions} attachments={hidden} />
       )}
       {!you && <DesktopResults actions={item.actions} />}
       {!you && <MemoryResults actions={item.actions} />}
@@ -98,6 +100,13 @@ export function Message({
       {you && !!item.attachments?.length && (
         <div className="flex max-w-[90%] flex-wrap gap-2">
           {item.attachments.map((attachment) => (
+            <AttachmentView key={attachment.id} attachment={attachment} />
+          ))}
+        </div>
+      )}
+      {!!shown.length && (
+        <div className="flex max-w-full flex-wrap gap-2">
+          {shown.map((attachment) => (
             <AttachmentView key={attachment.id} attachment={attachment} />
           ))}
         </div>
