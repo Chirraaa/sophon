@@ -147,6 +147,19 @@ export const TOOL_INFO: ToolInfo[] = [
     default: 'ask'
   },
   {
+    name: 'timer_set',
+    label: 'Set timers',
+    description:
+      'Start a countdown timer that shows in the app and the shortcut window and alerts you when it ends.',
+    default: 'ask'
+  },
+  {
+    name: 'timer_cancel',
+    label: 'Cancel timers',
+    description: 'Stop a running timer.',
+    default: 'ask'
+  },
+  {
     name: 'edit_file',
     label: 'Edit project files',
     description:

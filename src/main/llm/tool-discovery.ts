@@ -25,6 +25,7 @@ const RELATED: Record<string, string[]> = {
   notes_read: ['notes_edit', 'notes_delete', 'notes_list'],
   notes_edit: ['notes_read'],
   notes_delete: ['notes_read'],
+  timer_set: ['timer_cancel'],
   mcp_catalog: ['mcp_call', 'mcp_read', 'plugins_list'],
   mcp_call: ['mcp_catalog', 'mcp_read', 'plugins_list'],
   open_app: DESKTOP_TOOLS,
@@ -97,6 +98,7 @@ export class ToolDiscovery {
         /\b(notes?|jot|memo)\b/i,
         ['notes_list', 'notes_read', 'notes_create', 'notes_edit', 'notes_delete']
       ],
+      [/\b(timers?|countdown|alarm|remind(?:er)? me in)\b/i, ['timer_set', 'timer_cancel']],
       [/\b(clear|wipe|reset|erase)\b.*\b(chat|conversation)\b/i, ['clear_chat']],
       [/\b(sub-?agents?|agents?|specialists?|delegate|spawn)\b/i, ['consult_specialist']],
       [/\b(volume|mute|audio)\b/i, ['list_audio', 'set_volume']],

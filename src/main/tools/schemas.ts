@@ -3,6 +3,7 @@ import { harnessSchemas } from '../harness/schemas'
 import { pluginSchemas } from '../plugins/schemas'
 import { browserSchemas } from './browser/schemas'
 import { notesSchemas } from './notes-schemas'
+import { timerSchemas } from './timer-schemas'
 import { calendarSchemas } from './calendar-schemas'
 import { memorySchemas } from '../memory/schemas'
 import { CODE_TEXT_MAX_CHARS } from '../../shared/coding-resources'
@@ -119,6 +120,7 @@ export const toolSchemas = [
     }
   },
   ...notesSchemas,
+  ...timerSchemas,
   ...calendarSchemas,
   ...harnessSchemas,
   // Offered by Settings > Memory rather than Permissions; listed here for argument validation.

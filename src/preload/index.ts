@@ -152,6 +152,11 @@ const api: Api = {
   llmModelChoices: () => ipcRenderer.invoke('llm:model-choices'),
   defaultPrompt: () => ipcRenderer.invoke('llm:default-prompt'),
   toolsInfo: () => ipcRenderer.invoke('tools:info'),
+  timers: {
+    list: () => ipcRenderer.invoke('timers:list'),
+    remove: (id) => ipcRenderer.invoke('timers:remove', id),
+    onChange: (cb) => listen('timers:changed', cb)
+  },
   voice: {
     beginDeviceDetection: () => ipcRenderer.invoke('voice:devices-begin'),
     endDeviceDetection: () => ipcRenderer.invoke('voice:devices-end'),

@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Composer } from './Composer'
 import { Message } from './Message'
 import { QuestionCard } from './chat/QuestionCard'
+import { TimerStrip } from './TimerStrip'
 import { questionsFromReply } from '../../../shared/questions'
 import { ApprovalRequests } from './chat/ApprovalCard'
 import { CodingRun } from './chat/CodingRun'
@@ -115,6 +116,7 @@ export function ChatView({
             Personal workspace
           </Badge>
         </div>
+        <TimerStrip className="min-w-0 flex-1 justify-end px-4" />
         <Button
           variant="ghost"
           size="sm"

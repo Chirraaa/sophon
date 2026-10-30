@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen, type WebContents } from 'electron'
+import { app, BrowserWindow, Notification, screen, type WebContents } from 'electron'
 import { join } from 'path'
 import { release } from 'os'
 import { rendererDocument } from '../security/trusted-document'
@@ -20,6 +20,7 @@ import { VoiceSession } from '../voice/session'
 import { clearVisuals } from '../services/visuals'
 import { lockWebRtc } from '../security/chromium-egress'
 import { trustedDocument } from '../security/trusted-document'
+import { describeDuration, type TimerInfo } from '../../shared/timers'
 const recipients = new Set<WebContents>()
 export function broadcast(channel: string, payload: unknown): void {
   for (const contents of recipients)
@@ -464,8 +465,19 @@ export class Desktop {
     if (this.yieldedToGame || this.compact?.isVisible()) return
     if (this.wantsRestDock()) this.showDock()
   }
+  /** A timer reached zero: raise a system notification and flag the bar unless someone is already looking. */
+  timerDone = (timer: TimerInfo): void => {
+    if (this.quitting) return
+    if (Notification.isSupported())
+      new Notification({
+        title: timer.label || 'Timer',
+        body: `Time's up — ${describeDuration(timer.durationMs / 1000)}.`,
+        icon
+      }).show()
+    if (this.shouldAlert()) this.showDock('timer')
+  }
   /** Shows the docked bar without taking focus, optionally flagging a finished task. */
-  showDock = (notice?: 'finished'): void => {
+  showDock = (notice?: 'finished' | 'timer'): void => {
     const win = this.compact && !this.compact.isDestroyed() ? this.compact : this.createCompact()
     this.cancelHide()
     const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea

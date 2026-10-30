@@ -126,6 +126,10 @@ function load(file, dependencies = {}) {
         return load('src/main/chat/clear-request.ts')
       if (!Object.hasOwn(dependencies, name) && name === './notes-schemas')
         return load('src/main/tools/notes-schemas.ts')
+      if (!Object.hasOwn(dependencies, name) && name === './timer-schemas')
+        return load('src/main/tools/timer-schemas.ts', {
+          '../../shared/timers': load('src/shared/timers.ts')
+        })
       if (!Object.hasOwn(dependencies, name) && name === './calendar-schemas')
         return load('src/main/tools/calendar-schemas.ts')
       if (!Object.hasOwn(dependencies, name) && name === '../memory/schemas')

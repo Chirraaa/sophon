@@ -56,6 +56,7 @@ const suites = [
   'streaming',
   'system-control',
   'time',
+  'timers',
   'updates',
   'ui-hints',
   'ui-actions',
