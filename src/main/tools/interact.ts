@@ -93,6 +93,7 @@ export type BatchStep = {
   action?: string
   button?: string
   keys?: string
+  hold_ms?: number
   text?: string
   direction?: string
   amount?: number
@@ -120,7 +121,7 @@ export async function runBatch(
     } else {
       const result =
         step.action === 'press_keys'
-          ? await pressKeys({ keys: step.keys }, guard, win)
+          ? await pressKeys({ keys: step.keys, hold_ms: step.hold_ms }, guard, win)
           : step.action === 'type_text'
             ? await typeText({ text: step.text }, guard, win)
             : await scrollWindow({ direction: step.direction, steps: step.amount }, guard, win)
@@ -184,7 +185,7 @@ function keyCode(value: string): number | null {
   return null
 }
 export async function pressKeys(
-  args: { keys?: string; window?: string },
+  args: { keys?: string; window?: string; hold_ms?: number },
   guard?: () => void,
   bound?: WinInfo
 ): Promise<string> {
@@ -202,6 +203,9 @@ export async function pressKeys(
   ) {
     return 'Use a key or a shortcut such as PageDown, Ctrl+Tab or Ctrl+Plus.'
   }
+  const hold = args.hold_ms
+  if (hold !== undefined && (!Number.isInteger(hold) || hold < 50 || hold > 5000))
+    return 'Invalid hold_ms: use a whole number from 50 to 5000.'
   const win = await focus(bound ? undefined : args.window, bound, guard)
   if (typeof win === 'string') return win
   const held: number[] = []
@@ -211,8 +215,14 @@ export async function pressKeys(
       if (!keyInput(mod)) return 'Windows refused the shortcut.'
       held.push(mod)
     }
-    if (!keyInput(key) || !keyInput(key, true)) return 'Windows refused the shortcut.'
-    return `Pressed ${parts.join('+')} in "${win.title}".`
+    if (!keyInput(key)) return 'Windows refused the shortcut.'
+    // Held keys (camera rotation in games) need the key down for the whole span.
+    try {
+      if (hold) await sleep(hold)
+    } finally {
+      if (!keyInput(key, true)) return 'Windows refused the shortcut.'
+    }
+    return `Pressed ${parts.join('+')}${hold ? ` (held ${hold} ms)` : ''} in "${win.title}".`
   } finally {
     for (const mod of held.reverse()) keyInput(mod, true)
   }
