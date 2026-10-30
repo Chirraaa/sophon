@@ -514,6 +514,7 @@ export const toolSchemas = [
                 y: { type: 'number' },
                 button: { type: 'string', enum: ['left', 'right'] },
                 keys: { type: 'string', description: 'Key or shortcut, e.g. Enter or Ctrl+A.' },
+                hold_ms: { type: 'number', description: 'Hold the key for 50 to 5000 ms.' },
                 text: { type: 'string' },
                 direction: { type: 'string', enum: ['up', 'down'] },
                 amount: { type: 'number', description: 'Scroll steps, 1 to 8; default 3.' }
@@ -573,6 +574,11 @@ export const toolSchemas = [
         type: 'object',
         properties: {
           keys: { type: 'string' },
+          hold_ms: {
+            type: 'number',
+            description:
+              'Hold the key down for this many milliseconds (50 to 5000) instead of tapping it. Use when an app acts only while a key is held, such as rotating a game camera.'
+          },
           window: { type: 'string' },
           capture_after: {
             type: 'boolean',
