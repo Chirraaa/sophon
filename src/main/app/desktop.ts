@@ -237,8 +237,6 @@ export class Desktop {
     })
     this.compact = win
     win.setAlwaysOnTop(true, 'pop-up-menu')
-    // Kept out of screenshots, so captures need not hide it first.
-    win.setContentProtection(true)
     win.on('blur', () => {
       if (
         this.modalDepth ||
