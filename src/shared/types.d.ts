@@ -197,9 +197,11 @@ declare global {
   interface MemoryRecord extends MemoryDraft {
     id: string
     scopeKey: string
-    source: 'user'
+    source: 'user' | 'assistant'
     createdAt: number
     updatedAt: number
+    uses?: number
+    usedAt?: number
   }
   interface CodingResourceState {
     preference: 'auto' | 'conserve' | 'expand'
@@ -362,7 +364,14 @@ declare global {
       style: ReplyStyle
       neverDo: string
     }
-    memory: { enabled: boolean; maxTokens: number }
+    memory: {
+      enabled: boolean
+      maxTokens: number
+      // The assistant may save and forget memories itself.
+      learn: boolean
+      // Finished conversations are digested for later recall.
+      episodes: boolean
+    }
     tools: Record<string, ToolPermission>
     rules: {
       blockedApps: string[]
@@ -475,6 +484,9 @@ declare global {
       list: () => Promise<MemoryRecord[]>
       save: (draft: MemoryDraft) => Promise<MemoryRecord[]>
       delete: (id: string) => Promise<MemoryRecord[]>
+      undo: (change: string) => Promise<MemoryRecord[]>
+      episodes: () => Promise<number>
+      clearEpisodes: () => Promise<void>
     }
     harness: {
       list: () => Promise<{ directory: string; documents: string[] }>

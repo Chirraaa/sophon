@@ -52,6 +52,8 @@ function key(create = true): Buffer {
           : []
       }),
       join(profile, 'memories.json'),
+      join(profile, 'memory-journal.json'),
+      join(profile, 'episodes.json'),
       join(profile, 'notes.json'),
       ...(existsSync(attachmentDirectory)
         ? readdirSync(attachmentDirectory)

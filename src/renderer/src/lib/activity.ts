@@ -25,6 +25,9 @@ const toolActivities: Record<string, string> = {
   delete_directory: 'Deleting a project folder',
   coding_resources: 'Adjusting coding capacity',
   coding_checkpoint: 'Saving task progress',
+  remember: 'Saving a memory',
+  forget: 'Forgetting a memory',
+  recall: 'Searching memory',
   run_command: 'Running a project command',
   run_npm: 'Running project checks'
 }

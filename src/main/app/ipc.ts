@@ -62,7 +62,8 @@ import { autoStartLlama, registerLlamaIpc } from './llama-ipc'
 import { registerPluginsIpc } from '../plugins/ipc'
 import { githubCheckoutAction, githubCheckoutStatus } from '../plugins/github-checkout'
 import type { GithubCheckoutAction } from '../../shared/github-history'
-import { listMemories, saveMemory, deleteMemory } from '../memory/store'
+import { listMemories, saveMemory, deleteMemory, undoMemoryChange } from '../memory/store'
+import { clearEpisodes, listEpisodes } from '../memory/episodes'
 import { inspectHarness, readHarness } from '../harness/store'
 import { openPage, pagePreference } from '../services/pages'
 import {
@@ -140,6 +141,14 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
   ipcMain.handle('memory:delete', (_event, id: string) => {
     if (snapshot().busy) throw new Error('Stop the current task before deleting memories.')
     return deleteMemory(id)
+  })
+  // Undo is offered on the chat card right after the assistant's change, often mid-reply.
+  ipcMain.handle('memory:undo', (_event, change: string) => undoMemoryChange(change))
+  ipcMain.handle('memory:episodes', () => listEpisodes().length)
+  ipcMain.handle('memory:clear-episodes', () => {
+    if (snapshot().busy)
+      throw new Error('Stop the current task before clearing conversation memory.')
+    clearEpisodes()
   })
   ipcMain.handle('clipboard:write-text', (_event, text: string) => clipboard.writeText(text))
   ipcMain.handle('text:edit', (event, action: 'cut' | 'paste' | 'selectAll' | 'undo' | 'redo') => {

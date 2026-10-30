@@ -4,6 +4,7 @@ import { pluginSchemas } from '../plugins/schemas'
 import { browserSchemas } from './browser/schemas'
 import { notesSchemas } from './notes-schemas'
 import { calendarSchemas } from './calendar-schemas'
+import { memorySchemas } from '../memory/schemas'
 import { CODE_TEXT_MAX_CHARS } from '../../shared/coding-resources'
 export { CODE_TEXT_MAX_CHARS, TOOL_ARGUMENT_MAX_CHARS } from '../../shared/coding-resources'
 export const toolSchemas = [
@@ -118,6 +119,8 @@ export const toolSchemas = [
   ...notesSchemas,
   ...calendarSchemas,
   ...harnessSchemas,
+  // Offered by Settings > Memory rather than Permissions; listed here for argument validation.
+  ...memorySchemas,
   {
     type: 'function',
     function: {

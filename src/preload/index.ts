@@ -30,7 +30,10 @@ const api: Api = {
   memory: {
     list: () => ipcRenderer.invoke('memory:list'),
     save: (draft) => ipcRenderer.invoke('memory:save', draft),
-    delete: (id) => ipcRenderer.invoke('memory:delete', id)
+    delete: (id) => ipcRenderer.invoke('memory:delete', id),
+    undo: (change) => ipcRenderer.invoke('memory:undo', change),
+    episodes: () => ipcRenderer.invoke('memory:episodes'),
+    clearEpisodes: () => ipcRenderer.invoke('memory:clear-episodes')
   },
   harness: {
     list: () => ipcRenderer.invoke('harness:list'),
