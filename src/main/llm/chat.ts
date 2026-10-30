@@ -64,7 +64,7 @@ const MAX_SAVED_RESULT = 300
 // Outcomes that stop dependent work until the model or user resolves them.
 const UNRESOLVED = ['denied', 'failed', 'uncertain']
 // Input tools that capture their result; see executeTool.
-const INPUT = ['click', 'input_batch', 'scroll', 'press_keys', 'type_text']
+const INPUT = ['click', 'input_batch', 'scroll', 'press_keys', 'type_text', 'move_mouse']
 const clean = (s: string): string => s.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
 const FOLLOW_UP_NOTE =
   'The user sent this while you were working on the request above. Handle it together with the earlier request; if it changes or cancels part of that request, follow the newer message:\n'

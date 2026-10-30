@@ -110,7 +110,8 @@ export async function bindLocalAction(
       'input_batch',
       'scroll',
       'press_keys',
-      'type_text'
+      'type_text',
+      'move_mouse'
     ].includes(name)
   ) {
     const control = name === 'act_on_control' ? controlTarget(args, run) : undefined
@@ -197,7 +198,11 @@ export async function bindLocalAction(
       )
         throw new Error('The approved window identity changed.')
     }
-    if (['look_at_screen', 'inspect_app', 'scroll', 'press_keys', 'type_text'].includes(name))
+    if (
+      ['look_at_screen', 'inspect_app', 'scroll', 'press_keys', 'type_text', 'move_mouse'].includes(
+        name
+      )
+    )
       args.window = win.title
     else if (!['act_on_control', 'click', 'input_batch'].includes(name)) args.title = win.title
     revalidate = async (): Promise<void> => {

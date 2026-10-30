@@ -322,6 +322,12 @@ export const TOOL_INFO: ToolInfo[] = [
     default: 'ask'
   },
   {
+    name: 'move_mouse',
+    label: 'Move mouse',
+    description: 'Move the mouse smoothly by a relative distance, such as to turn a game camera.',
+    default: 'ask'
+  },
+  {
     name: 'press_keys',
     label: 'Press keys',
     description: 'Navigate pages, tabs, zoom and other shortcuts in a window.',

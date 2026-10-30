@@ -597,6 +597,30 @@ export const toolSchemas = [
   {
     type: 'function',
     function: {
+      name: 'move_mouse',
+      description:
+        'Move the mouse by a relative distance in the active or named app, smoothly over time. Use it to turn a game camera or look around, where the pointer is locked and only movement counts. Positive dx is right, positive dy is down. The distance in pixels is not an angle: it depends on the game sensitivity, so start small and check the result. Does not click; use click with hold_ms or press_keys for that.',
+      parameters: {
+        type: 'object',
+        properties: {
+          dx: { type: 'number', description: 'Whole pixels to the right (negative: left).' },
+          dy: { type: 'number', description: 'Whole pixels down (negative: up).' },
+          duration_ms: {
+            type: 'number',
+            description: 'Time to spread the movement over, 0 to 5000; default 300.'
+          },
+          window: { type: 'string' },
+          capture_after: {
+            type: 'boolean',
+            description: CAPTURE_AFTER
+          }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'press_keys',
       description:
         'Press a key or shortcut in the active or named app. Examples: PageDown, Ctrl+Tab, Ctrl+Plus, Ctrl+Minus, Ctrl+F.',
