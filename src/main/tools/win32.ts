@@ -32,6 +32,7 @@ const PostMessageW = user32.func(
 )
 const SetCursorPos = user32.func('bool __stdcall SetCursorPos(int x, int y)')
 const SendInput = user32.func('uint32 __stdcall SendInput(uint32 count, void *inputs, int size)')
+const MapVirtualKeyW = user32.func('uint32 __stdcall MapVirtualKeyW(uint32 code, uint32 mapType)')
 const DwmGetWindowAttribute = dwmapi.func(
   'int __stdcall DwmGetWindowAttribute(intptr hwnd, uint32 attr, _Out_ int32_t *value, uint32 size)'
 )
@@ -157,12 +158,17 @@ function submitInput(type: number, fill: (data: Buffer) => void): boolean {
   fill(input.subarray(DATA_OFFSET))
   return SendInput(1, input, INPUT_SIZE) === 1
 }
+// Games read scan codes (DirectInput / Raw Input) and ignore the virtual-key field, so send both.
 export function keyInput(key: number, up = false, unicode = false): boolean {
   return submitInput(1, (data) => {
-    data.writeUInt16LE(unicode ? 0 : key, 0)
-    data.writeUInt16LE(unicode ? key : 0, 2)
+    const scan = unicode ? 0 : MapVirtualKeyW(key, 0)
     const extended = !unicode && key >= 0x21 && key <= 0x2e
-    data.writeUInt32LE((up ? 0x0002 : 0) | (unicode ? 0x0004 : 0) | (extended ? 0x0001 : 0), 4)
+    data.writeUInt16LE(unicode ? 0 : key, 0)
+    data.writeUInt16LE(unicode ? key : scan, 2)
+    data.writeUInt32LE(
+      (up ? 0x0002 : 0) | (unicode ? 0x0004 : 0) | (scan ? 0x0008 : 0) | (extended ? 0x0001 : 0),
+      4
+    )
   })
 }
 export function mouseInput(flags: number, wheel = 0): boolean {
