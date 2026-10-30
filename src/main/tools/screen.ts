@@ -43,6 +43,65 @@ let lastCapture: {
 export function invalidateScreenCoordinates(): void {
   if (lastCapture) lastCapture.clickable = false
 }
+// The window this task last captured, even after input made its coordinates stale.
+// Input to that window is visual work, so its result is captured automatically.
+export function capturedWindow(): number | null {
+  if (!lastCapture || lastCapture.runId !== (currentRun()?.id ?? '')) return null
+  return lastCapture.window?.hwnd ?? null
+}
+const PROBE_WIDTH = 320
+async function probe(win: WinInfo): Promise<Buffer | null> {
+  const display = monitorOf(win)
+  const sources = await desktopCapturer.getSources({
+    types: ['screen'],
+    thumbnailSize: {
+      width: PROBE_WIDTH,
+      height: Math.round((PROBE_WIDTH * display.full.height) / display.full.width)
+    }
+  })
+  const thumbnail = sources.find((s) => s.display_id === String(display.id))?.thumbnail
+  if (!thumbnail || thumbnail.isEmpty()) return null
+  const full = thumbnail.getSize()
+  const sx = full.width / display.full.width
+  const sy = full.height / display.full.height
+  const left = Math.max(0, Math.round((win.x - display.full.x) * sx))
+  const top = Math.max(0, Math.round((win.y - display.full.y) * sy))
+  const width = Math.min(full.width - left, Math.round(win.width * sx))
+  const height = Math.min(full.height - top, Math.round(win.height * sy))
+  if (width < 1 || height < 1) return null
+  return thumbnail.crop({ x: left, y: top, width, height }).toBitmap()
+}
+// A blinking caret or spinner changes a few probe pixels; anything larger is
+// still moving.
+function still(a: Buffer, b: Buffer): boolean {
+  if (a.length !== b.length) return false
+  let changed = 0
+  for (let i = 0; i < a.length; i += 4)
+    if (
+      Math.abs(a[i] - b[i]) > 16 ||
+      Math.abs(a[i + 1] - b[i + 1]) > 16 ||
+      Math.abs(a[i + 2] - b[i + 2]) > 16
+    )
+      changed++
+  return changed <= Math.max(2, a.length / 4 / 500)
+}
+// Wait until a window stops changing after input, so the capture that follows
+// shows the result rather than a transition. Windows that never settle, such as
+// video or games, are captured after about a second. Probes stay in memory.
+export async function settle(win: WinInfo, guard?: () => void): Promise<void> {
+  const started = performance.now()
+  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+  await sleep(100)
+  let previous: Buffer | null = null
+  while (performance.now() - started < 1100) {
+    checkRun()
+    guard?.()
+    const frame = await probe(win)
+    if (!frame || (previous && still(previous, frame))) return
+    previous = frame
+    await sleep(60)
+  }
+}
 // Draw numbered boxes for desktop-coordinate rectangles on the latest capture.
 // Returns the marked image and the labels that landed inside it; the centre of
 // each drawn box becomes clickable by its label until the next capture or input.
