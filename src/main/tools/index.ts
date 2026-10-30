@@ -148,6 +148,11 @@ export async function executeTool(
     assertRun(run)
     return executeNotesTool(name, parameters)
   }
+  if (name.startsWith('timer_')) {
+    const { executeTimerTool } = await import('./timers')
+    assertRun(run)
+    return executeTimerTool(name, parameters)
+  }
   if (name === 'run_npm')
     return commandOutcome(
       await runNpm(parameters as { path?: string; args: string[] }, run, onOutput),

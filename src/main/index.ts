@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { loadSettings, getSettings, onSettingsChange } from './settings'
 import { loadSession, onSession, onSessionText } from './chat/session'
+import { onTimerDone, onTimersChange } from './services/timers'
 import { rememberExternalWindow } from './tools/windows'
 import { Desktop, broadcast } from './app/desktop'
 import { Shortcuts } from './app/shortcuts'
@@ -131,6 +132,8 @@ if (!app.requestSingleInstanceLock()) {
       })
       onSession((state) => broadcast('session:update', state))
       onSessionText((update) => broadcast('session:text', update))
+      onTimersChange((timers) => broadcast('timers:changed', timers))
+      onTimerDone(windows.timerDone)
       windows.createMain()
       windows.createCompact()
       if (process.argv.includes('--hidden')) windows.syncRest()

@@ -30,6 +30,7 @@ import { useChatScroll } from '@/hooks/useChatScroll'
 import { useCompactBackdrop } from '@/hooks/useCompactBackdrop'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { BrandIcon } from '@/components/BrandIcon'
+import { TimerBarClock, TimerStrip } from '@/components/TimerStrip'
 export default function CompactApp(): React.JSX.Element {
   useSettings()
   useCompactBackdrop()
@@ -45,7 +46,7 @@ export default function CompactApp(): React.JSX.Element {
   const [hiddenTasks, setHiddenTasks] = useState<Set<string>>(() => new Set())
   const [taskCollapsed, setTaskCollapsed] = useState<boolean | null>(null)
   const [docked, setDocked] = useState(false)
-  const [notice, setNotice] = useState<'finished' | null>(null)
+  const [notice, setNotice] = useState<'finished' | 'timer' | null>(null)
   const [wasBusy, setWasBusy] = useState(busy)
   if (wasBusy !== busy) {
     setWasBusy(busy)
@@ -76,6 +77,7 @@ export default function CompactApp(): React.JSX.Element {
   // A docked window rests as a slim bar and opens fully on hover, focus, or
   // whenever something needs the user's attention.
   const barMode = docked && !hovered && !focused && !waiting
+  const noticeText = notice === 'timer' ? 'Timer finished' : notice ? 'Task finished' : null
   const pending = items.findLast((item) => item.pending)
   const status = coding
     ? codingView(coding)
@@ -278,7 +280,7 @@ export default function CompactApp(): React.JSX.Element {
         {barMode && (
           <Button
             variant="ghost"
-            aria-label={`Sophon: ${notice ? 'Task finished' : status.label}. Show full window`}
+            aria-label={`Sophon: ${noticeText ?? status.label}. Show full window`}
             aria-expanded={false}
             onClick={enter}
             className={`glass-solid mx-auto flex h-8 w-[320px] max-w-full items-center justify-start gap-2 rounded-t-none rounded-b-[14px] px-3 text-[11px] font-normal ${notice ? 'ring-1 ring-success/60' : ''}`}
@@ -292,12 +294,13 @@ export default function CompactApp(): React.JSX.Element {
             <span
               className={`truncate ${notice ? 'font-medium text-foreground' : 'text-muted-foreground'}`}
             >
-              {notice ? 'Task finished' : status.label}
+              {noticeText ?? status.label}
             </span>
             <span className="sr-only" role="status">
-              {notice ? 'Task finished' : ''}
+              {noticeText ?? ''}
             </span>
-            <span className="ml-auto flex shrink-0 items-center">
+            <span className="ml-auto flex shrink-0 items-center gap-2">
+              <TimerBarClock />
               {status.attention ? (
                 <span className="size-1.5 rounded-full bg-amber-500" aria-hidden />
               ) : busy ? (
@@ -491,6 +494,7 @@ export default function CompactApp(): React.JSX.Element {
                 </Button>
               </div>
             </header>
+            <TimerStrip className="px-3 pb-2" />
             {collapsed ? (
               <VoiceActivity voice={voice} />
             ) : (

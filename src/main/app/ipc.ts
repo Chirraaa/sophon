@@ -57,6 +57,7 @@ import {
 } from '../services/attachments'
 import { hardwareInfo } from '../services/hardware'
 import { broadcast, type Desktop } from './desktop'
+import { listTimers, removeTimer } from '../services/timers'
 import type { Shortcuts } from './shortcuts'
 import { registerSettingsIpc } from './settings-ipc'
 import { autoStartLlama, registerLlamaIpc } from './llama-ipc'
@@ -297,6 +298,8 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
   ipcMain.handle('llm:model-choices', () => listModelChoices())
   ipcMain.handle('llm:default-prompt', getDefaultPrompt)
   ipcMain.handle('tools:info', () => TOOL_INFO)
+  ipcMain.handle('timers:list', () => listTimers())
+  ipcMain.handle('timers:remove', (_event, id: string) => void removeTimer(id))
   ipcMain.handle('hardware:get', hardwareInfo)
   ipcMain.handle('attachments:pick', (event) => {
     return desktop.keepOpen(() => pickAttachments(owner(event)))
