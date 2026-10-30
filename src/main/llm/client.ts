@@ -22,7 +22,7 @@ import {
 import { modelKey } from '../security/model-credentials'
 import { chatgptAccessToken, chatgptAccountScope, chatgptStatus } from '../security/chatgpt-auth'
 import { performance } from 'node:perf_hooks'
-import { timeContext } from './time'
+import { timeContext, withClock } from './time'
 
 const taskClocks = new WeakMap<object, number>()
 async function request(
@@ -260,40 +260,40 @@ export async function callLLM(
     started = clockRun.startedAt ?? taskClocks.get(clockRun)!
   }
 
-  const system = [
-    ...messages.filter((message) => message.role === 'system'),
-    { role: 'system' as const, content: timeContext(started) }
-  ]
-  const normalized: Msg[] = [
-    ...(system.length
-      ? [
-          {
-            role: 'system' as const,
-            content: system
-              .map((message) => {
-                if (typeof message.content !== 'string')
-                  throw new Error('System instructions must be text.')
-                return message.content
-              })
-              .join('\n\n')
-          }
-        ]
-      : []),
-    ...messages
-      .filter((message) => message.role !== 'system')
-      .map((message) => {
-        if (
-          !message.responseState ||
-          ((responses || claude) &&
-            message.responseState.model === model &&
-            message.responseState.scope === scope)
-        )
-          return message
-        const sent = { ...message }
-        delete sent.responseState
-        return sent
-      })
-  ]
+  const system = messages.filter((message) => message.role === 'system')
+  const normalized: Msg[] = withClock(
+    [
+      ...(system.length
+        ? [
+            {
+              role: 'system' as const,
+              content: system
+                .map((message) => {
+                  if (typeof message.content !== 'string')
+                    throw new Error('System instructions must be text.')
+                  return message.content
+                })
+                .join('\n\n')
+            }
+          ]
+        : []),
+      ...messages
+        .filter((message) => message.role !== 'system')
+        .map((message) => {
+          if (
+            !message.responseState ||
+            ((responses || claude) &&
+              message.responseState.model === model &&
+              message.responseState.scope === scope)
+          )
+            return message
+          const sent = { ...message }
+          delete sent.responseState
+          return sent
+        })
+    ],
+    timeContext(started)
+  )
   assertContextFits(normalized, budget.inputBudget)
   const run = currentRun()
   if (run) {

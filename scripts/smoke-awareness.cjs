@@ -153,8 +153,10 @@ function reset(next) {
   }
 }
 function measured(request) {
-  const messages = structuredClone(request.messages)
-  messages[0].content += '\n\n' + clock.timeContext(run.startedAt, new Date('2026-10-26T12:00:00Z'))
+  const messages = clock.withClock(
+    structuredClone(request.messages),
+    clock.timeContext(run.startedAt, new Date('2026-10-26T12:00:00Z'))
+  )
   return context.measureContext(messages, request.options.tools, settings.model, false, {
     id: 'fixture',
     contextWindow: 32000
@@ -178,6 +180,13 @@ async function main() {
   )
   for (const tool of schema.toolSchemas) staged.load([tool.function.name], schema.toolSchemas)
   assert(staged.select(schema.toolSchemas).length <= 9, 'Optional working set stays bounded')
+  const before = staged.select(schema.toolSchemas).map((t) => t.function.name)
+  staged.used(before.at(-1))
+  assert.deepEqual(
+    staged.select(schema.toolSchemas).map((t) => t.function.name),
+    before,
+    'Using a loaded tool keeps the schema order stable for prompt caching'
+  )
   staged.load(['inspect_app'], schema.toolSchemas)
   assert(staged.select(schema.toolSchemas).some((t) => t.function.name === 'act_on_control'))
   assert(staged.select(schema.toolSchemas).some((t) => t.function.name === 'list_windows'))
