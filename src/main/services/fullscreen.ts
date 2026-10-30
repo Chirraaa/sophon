@@ -1,7 +1,7 @@
 import { screen } from 'electron'
 import { exclusiveFullscreen, foregroundWindow, getProcess, getRect } from '../tools/win32'
 
-export type FullscreenApp = { hwnd: number; displayId: number; exclusive: boolean }
+export type FullscreenApp = { hwnd: number; exe: string; displayId: number; exclusive: boolean }
 
 // The foreground app when it fills a whole monitor: a fullscreen or borderless
 // game or video. Maximized windows stop at the taskbar and do not count.
@@ -26,5 +26,5 @@ export function fullscreenApp(): FullscreenApp | null {
     bounds.y + bounds.height < d.y + d.height
   )
     return null
-  return { hwnd, displayId: display.id, exclusive: exclusiveFullscreen() }
+  return { hwnd, exe, displayId: display.id, exclusive: exclusiveFullscreen() }
 }
