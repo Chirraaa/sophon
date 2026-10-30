@@ -279,6 +279,8 @@ declare global {
     name: string
     mimeType: string
     size: number
+    // The assistant chose to show this picture; it appears inline in the reply.
+    shown?: boolean
   }
   interface GithubContext {
     serverId: string

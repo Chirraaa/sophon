@@ -365,7 +365,7 @@ export async function bindLocalAction(
       binding.revalidate()
     }
   }
-  if (name === 'web_fetch')
+  if (name === 'web_fetch' || (name === 'show_image' && args.url !== undefined))
     details.network = 'Public HTTPS GET; no cookies or scripts; up to three public redirects.'
   const heading =
     name === 'act_on_control'

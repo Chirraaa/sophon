@@ -50,6 +50,14 @@ export function capturedWindow(): number | null {
   if (!lastCapture || lastCapture.runId !== (currentRun()?.id ?? '')) return null
   return lastCapture.window?.hwnd ?? null
 }
+// The unmarked image of this task's latest capture, for showing to the user.
+export function latestScreenshot(): { image: string; label: string } | null {
+  if (!lastCapture || lastCapture.runId !== (currentRun()?.id ?? '')) return null
+  return {
+    image: `data:image/jpeg;base64,${lastCapture.encoded}`,
+    label: lastCapture.window ? `"${lastCapture.window.title}"` : 'the screen'
+  }
+}
 const PROBE_WIDTH = 320
 async function probe(win: WinInfo): Promise<Buffer | null> {
   const display = monitorOf(win)

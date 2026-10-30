@@ -31,6 +31,7 @@ const RELATED: Record<string, string[]> = {
   inspect_app: DESKTOP_TOOLS,
   act_on_control: DESKTOP_TOOLS,
   look_at_screen: ['click', 'input_batch', 'scroll', 'press_keys', 'type_text', ...DESKTOP_TOOLS],
+  show_image: ['web_fetch', 'look_at_screen'],
   click: ['input_batch', 'look_at_screen', 'inspect_app', 'list_windows'],
   input_batch: ['look_at_screen', 'inspect_app', 'list_windows'],
   type_text: ['inspect_app', 'press_keys', 'list_windows']
@@ -44,6 +45,11 @@ export class ToolDiscovery {
 
   constructor(query: string) {
     const groups: [RegExp, string[]][] = [
+      // First, so the broader desktop and web groups cannot fill every slot before it.
+      [
+        /\b(show|display|send|share)\b.*\b(pictures?|images?|photos?|screenshots?|logos?)\b|\b(pictures?|images?|photos?)\b.*\b(of|from)\b/i,
+        ['show_image', 'web_search', 'web_fetch', 'look_at_screen']
+      ],
       [
         /\b(discord|spotify|slack|notion|teams|outlook|calendar|gmail|jira|confluence|github)\b/i,
         [
