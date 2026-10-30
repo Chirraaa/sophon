@@ -7,6 +7,8 @@ import { calendarSchemas } from './calendar-schemas'
 import { memorySchemas } from '../memory/schemas'
 import { CODE_TEXT_MAX_CHARS } from '../../shared/coding-resources'
 export { CODE_TEXT_MAX_CHARS, TOOL_ARGUMENT_MAX_CHARS } from '../../shared/coding-resources'
+const CAPTURE_AFTER =
+  'Default: a click, or input to the window last captured, returns a fresh image once the window settles. Set false for an intermediate step when more input follows; set true to capture after keyboard input on the accessibility route.'
 export const toolSchemas = [
   ...browserSchemas,
   {
@@ -456,7 +458,7 @@ export const toolSchemas = [
     function: {
       name: 'click',
       description:
-        'Click a numbered mark, or x,y pixels, from the most recent look_at_screen image. Prefer mark when the target is marked. Input invalidates those coordinates and marks. Prefer capture_after when visual verification is needed: with look_at_screen Always allow, the click returns a fresh image in this call. Otherwise inspect separately. A click being accepted is not proof of success.',
+        'Click a numbered mark, or x,y pixels, from the most recent look_at_screen image. Prefer mark when the target is marked. Input invalidates those coordinates and marks. With look_at_screen Always allow, the click returns a fresh image of the window once it settles, so no separate look_at_screen is needed. A click being accepted is not proof of success.',
       parameters: {
         type: 'object',
         properties: {
@@ -468,11 +470,14 @@ export const toolSchemas = [
           x: { type: 'number' },
           y: { type: 'number' },
           button: { type: 'string', enum: ['left', 'right'] },
-          capture_after: { type: 'boolean' },
+          capture_after: {
+            type: 'boolean',
+            description: CAPTURE_AFTER
+          },
           readback_region: {
             type: 'object',
             description:
-              'Optional crop for capture_after, in full overview image pixels. Omit if the click may change the window layout.',
+              'Optional crop for the post-click capture, in full overview image pixels. Omit if the click may change the window layout.',
             properties: {
               x: { type: 'number' },
               y: { type: 'number' },
@@ -496,7 +501,11 @@ export const toolSchemas = [
         properties: {
           direction: { type: 'string', enum: ['up', 'down'] },
           steps: { type: 'number', description: '1 to 8; default 3' },
-          window: { type: 'string' }
+          window: { type: 'string' },
+          capture_after: {
+            type: 'boolean',
+            description: CAPTURE_AFTER
+          }
         },
         required: ['direction']
       }
@@ -510,7 +519,14 @@ export const toolSchemas = [
         'Press a key or shortcut in the active or named app. Examples: PageDown, Ctrl+Tab, Ctrl+Plus, Ctrl+Minus, Ctrl+F.',
       parameters: {
         type: 'object',
-        properties: { keys: { type: 'string' }, window: { type: 'string' } },
+        properties: {
+          keys: { type: 'string' },
+          window: { type: 'string' },
+          capture_after: {
+            type: 'boolean',
+            description: CAPTURE_AFTER
+          }
+        },
         required: ['keys']
       }
     }
@@ -522,7 +538,14 @@ export const toolSchemas = [
       description: 'Type text into the focused control of the active or named app.',
       parameters: {
         type: 'object',
-        properties: { text: { type: 'string' }, window: { type: 'string' } },
+        properties: {
+          text: { type: 'string' },
+          window: { type: 'string' },
+          capture_after: {
+            type: 'boolean',
+            description: CAPTURE_AFTER
+          }
+        },
         required: ['text']
       }
     }

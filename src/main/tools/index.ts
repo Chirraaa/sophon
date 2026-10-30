@@ -41,8 +41,10 @@ import {
 } from './windows'
 import {
   captureScreen,
+  capturedWindow,
   invalidateScreenCoordinates,
   markCapture,
+  settle,
   type CapturedScreen,
   type CaptureArgs
 } from './screen'
@@ -50,6 +52,7 @@ import { clickScreen, focusWindow, pressKeys, scrollWindow, typeText } from './i
 import { inspectApp, actOnControl, observationBounds } from './automation/controls'
 import { commandOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
 import { MUTATIONS, resultFailure } from '../workflow/results'
+export const INPUT_TOOLS = ['click', 'scroll', 'press_keys', 'type_text']
 export const activeToolSchemas = (): typeof toolSchemas =>
   toolSchemas.filter(
     (t) =>
@@ -311,24 +314,31 @@ export async function executeTool(
         }
       }
     }
+    // Input returns its own result image, saving the model a separate look. A click
+    // is visual work by definition; keys, text and scrolling are when the task last
+    // captured this window, and stay text-only on the accessibility route.
     if (
-      name === 'click' &&
-      parameters.capture_after === true &&
+      INPUT_TOOLS.includes(name) &&
+      scope.window &&
       typeof result === 'string' &&
-      !resultFailure(result)
+      !resultFailure(result) &&
+      (parameters.capture_after ?? (name === 'click' || capturedWindow() === scope.window.hwnd))
     ) {
       if (toolPermission('look_at_screen') !== 'allow' || !canUseTool(run, 'look_at_screen'))
-        return toolOutcome(
-          'reported',
-          result +
-            '\nAutomatic capture skipped: look_at_screen requires its own permission. Inspect the requested effect separately.'
-        )
+        return parameters.capture_after === true
+          ? toolOutcome(
+              'reported',
+              result +
+                '\nAutomatic capture skipped: look_at_screen requires its own permission. Inspect the requested effect separately.'
+            )
+          : result
       try {
         scope.guard?.()
         const window = listWindows().find((win) => win.hwnd === scope.window?.hwnd)
         if (!window) throw new Error('Original window closed.')
+        await settle(window, scope.guard)
         const captured = await captureScreen(
-          { region: parameters.readback_region as CaptureArgs['region'] },
+          { region: parameters.readback_region as CaptureArgs['region'], if_changed: true },
           scope.guard,
           window
         )
@@ -336,7 +346,7 @@ export async function executeTool(
         return toolOutcome(
           'reported',
           result +
-            '\nInput acceptance is not proof of success. Post-action observation:\n' +
+            '\nInput acceptance is not proof of success. Post-action observation, captured after the window settled; do not call look_at_screen again unless this is insufficient:\n' +
             (typeof captured === 'string' ? captured : captured.text),
           typeof captured === 'string' ? {} : { image: captured.image }
         )
@@ -345,7 +355,7 @@ export async function executeTool(
         return toolOutcome(
           'reported',
           result +
-            '\nPost-action capture was unavailable. Inspect the original app before continuing; do not repeat the click.'
+            '\nPost-action capture was unavailable. Inspect the original app before continuing; do not repeat the input.'
         )
       }
     }

@@ -63,6 +63,8 @@ import {
 const MAX_SAVED_RESULT = 300
 // Outcomes that stop dependent work until the model or user resolves them.
 const UNRESOLVED = ['denied', 'failed', 'uncertain']
+// Input tools that capture their result; see executeTool.
+const INPUT = ['click', 'scroll', 'press_keys', 'type_text']
 const clean = (s: string): string => s.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
 
 // Repair hints for the tools in a rejected batch only; a small model handles
@@ -1279,6 +1281,17 @@ export async function chat(
             capacity.maxReadChars
           )
         }
+        // Within one batch only the last input captures its result; the model sees
+        // the screen after the whole sequence, not after every keystroke.
+        if (
+          INPUT.includes(call.function.name) &&
+          args.capture_after === undefined &&
+          args.readback_region === undefined &&
+          calls
+            .slice(index + 1)
+            .some((next) => [...INPUT, 'look_at_screen'].includes(next.function.name))
+        )
+          args.capture_after = false
         workflow.beforeAction(actionId, call.function.name, args)
         onEvent?.({ type: 'tool_start', id: actionId, name: call.function.name, args })
         const result = await runTool(call.function.name, args, actionId, onEvent)
