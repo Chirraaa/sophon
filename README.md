@@ -8,7 +8,7 @@ Sophon talks to a local model (LM Studio or any OpenAI-compatible server) by def
 
 Sophon is built to help small local models deliver stronger, more consistent results through careful orchestration, context management, tool controls, and verification; development and testing have included Qwen3.5 4B Q4_0.
 
-**Project status:** Sophon is a work in progress. Bugs, rough edges, and incomplete features may be present. If you find a bug, please report it with steps to reproduce and any relevant error messages or logs. Feedback and contributions are welcome.
+**Project status:** Sophon is a work in progress. Bugs, rough edges, and incomplete features may be present. Have fun with it, and if you notice a bug or anything odd, please open an issue with steps to reproduce and any relevant error messages or logs. Feedback and contributions are welcome.
 
 **AI use:** I use AI tools to help develop Sophon at a practical pace, including exploring ideas, writing code, and debugging. I review and test changes, but AI-assisted work can still contain mistakes.
 
@@ -22,15 +22,17 @@ Sophon is built to help small local models deliver stronger, more consistent res
 
 - **Local-first models**: LM Studio or another loopback `/v1` server by default, or let Sophon run your own `llama-server` (llama.cpp) with the context size, GPU, memory, thinking and other options you choose; OpenAI Responses, ChatGPT plan sign-in, or any HTTPS Chat Completions provider are opt-in.
 - **App interaction**: connected MCP tools, managed Edge/Chrome browser DOM, Windows UI Automation (`inspect_app` / `act_on_control`), then screenshots and coordinates. The model chooses an available route and verifies effects. See [routes and setup](docs/APP_INTERACTION.md).
-- **Desktop control**: window management, screenshots, clicks, typing, audio and Wi-Fi/Bluetooth toggles.
+- **Desktop control**: window management, screenshots, clicks (with optional hold), smooth relative mouse movement, scrolling, typing and key presses (sent as scan codes, with optional hold, so games receive them), audio and Wi-Fi/Bluetooth toggles. Known steps can be batched into one `input_batch` call, input returns a settled screenshot of the window so the model can check the result, and `look_at_screen` can number the window's controls so the model clicks a mark instead of guessing coordinates.
+- **Personal organiser**: Outlook / Microsoft 365 calendar events, local notes, and countdown timers shown in the app and the shortcut window. See [Notes and timers](docs/NOTES_AND_TIMERS.md), [Calendar](docs/CALENDAR.md) and [Microsoft accounts](docs/MICROSOFT_ACCOUNTS.md).
 - **Agentic coding**: inspect → patch (`edit_file`) → check → repair loop, host-owned verification, patch previews, `run_command` / `run_npm` with exact-command approval.
 - **Web research**: Exa (no key), DuckDuckGo, or Brave; bounded public-page reader with PDF support. Off until you enable it.
-- **Interactive visuals**: HTML/SVG/Mermaid rendered inline in a sandboxed iframe with a small React kit.
+- **Interactive visuals and images**: HTML/SVG/Mermaid rendered inline in a sandboxed iframe with a small React kit, plus `show_image` for public web images, workspace pictures and screenshots.
 - **Voice input**: push-to-talk, transcribed locally with whisper.cpp and the Whisper Base model, chosen intentionally for its lighter resource use.
-- **Memory & procedural harness**: encrypted user memories, plus propose → probe → compose Markdown skills with a trial/active lifecycle.
+- **Memory & procedural harness**: encrypted memories that Sophon can save (`remember`), correct, `forget` and `recall` from past chats, with an undo card for every change, plus propose → probe → compose Markdown skills with a trial/active lifecycle. See [Memory harness](MEMORY_HARNESS.md).
 - **Plugins & MCP**: import skill packages, connect stdio/HTTP MCP servers; GitHub workspace with device-flow sign-in.
-- **Specialist agents**: Researcher, Visual Explainer, Tutor, Reviewer on the same loaded model.
-- **Quick command**: global shortcut (`Ctrl+Alt+Space`) opens a compact overlay; `Ctrl+Alt+V` for voice.
+- **Subagents**: `consult_specialist` runs Simple, Researcher, Visual Explainer, Tutor or Reviewer profiles on the same loaded model, in parallel when batched, each with its own context window.
+- **Messages mid-task**: send another message (typed or by voice) while Sophon is working and the running task reads it at its next step.
+- **Quick command and dock**: global shortcut (`Ctrl+Alt+Space`) opens a compact bar; `Ctrl+Alt+V` for voice. The bar stays over borderless and fullscreen games without taking focus, and can alert you from the top of the screen when a task finishes or needs approval (Settings → General). It stays visible in screenshots and streams and steps aside only while Sophon captures the screen.
 
 ## Architecture
 
@@ -63,6 +65,7 @@ flowchart TB
 
     subgraph TOOLS["Tools"]
       DESK["Windows & UI Automation<br/>screenshots · input"]
+      ORG["Calendar · notes · timers"]
       FILES["Workspace files<br/>locked native handles"]
       CMD["run_command · run_npm<br/>job-object contained"]
       WEB["Web search / fetch<br/>DNS-pinned, public only"]
@@ -114,45 +117,48 @@ npm run setup:voice   # optional: builds pinned whisper.cpp (needs VS C++ tools 
 npm run dev
 ```
 
-On first launch, open **Settings → Model** to pick your provider and model, **Settings → Files** to choose a working folder, and **Settings → Permissions** to decide what Sophon may do. New profiles start with every tool on *Ask first*; web access is disabled until enabled.
+On first launch, open **Settings → Model** to pick your provider and model, **Settings → Files** to choose a working folder, and **Settings → Permissions** to decide what Sophon may do. New profiles start with every tool on _Ask first_; web access is disabled until enabled.
 
 > Match **Settings → Model → Context window** to your server's loaded context size; Sophon budgets history, tools and reply space from it.
 
 ### Scripts
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Development with hot reload |
-| `npm run build` | Typecheck + production build |
-| `npm run lint` / `npm run typecheck` | Static checks |
-| `npm test` | Offline regression suites (no model or account needed) |
-| `npm run smoke:*` | Targeted checks (security, coding, workflow, UI, voice…) |
-| `npm run build:win` | Signed Windows installer (requires a code-signing certificate) |
-| `npm run build:win:unsigned` | Unsigned Windows installer for local testing or releases without a signing certificate (only English Chromium resources are bundled; Whisper Base stays included) |
+| Command                              | Purpose                                                                                                                                                           |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                        | Development with hot reload                                                                                                                                       |
+| `npm run build`                      | Typecheck + production build                                                                                                                                      |
+| `npm run lint` / `npm run typecheck` | Static checks                                                                                                                                                     |
+| `npm test`                           | Offline regression suites (no model or account needed)                                                                                                            |
+| `npm run smoke:*`                    | Targeted checks (security, coding, workflow, UI, voice…)                                                                                                          |
+| `npm run build:win`                  | Signed Windows installer (requires a code-signing certificate)                                                                                                    |
+| `npm run build:win:unsigned`         | Unsigned Windows installer for local testing or releases without a signing certificate (only English Chromium resources are bundled; Whisper Base stays included) |
 
 ## Project layout
 
-| Path | Responsibility |
-| --- | --- |
-| `src/main/app` | Windows, tray, shortcuts, IPC registration |
-| `src/main/llm` | Model client, providers, prompt, context packing, tool loop |
-| `src/main/workflow` | Evidence tracking, coding session, verification, budgets |
-| `src/main/tools` | Desktop, file, command and device tools |
-| `src/main/security` | Policy, run manager, IPC contracts, workspace handles, credentials |
-| `src/main/network` | Bounded model/search/page transports and URL policy |
-| `src/main/harness`, `memory` | Procedural skills and encrypted memories |
-| `src/main/plugins` | Plugin import, MCP runtime, GitHub integration |
-| `src/main/voice` | Whisper process and recording session |
-| `src/renderer` | React UI (shadcn / Base UI components) |
-| `src/shared` | Types and contracts shared across processes |
+| Path                         | Responsibility                                                      |
+| ---------------------------- | ------------------------------------------------------------------- |
+| `src/main/app`               | Windows, tray, shortcuts, IPC registration                          |
+| `src/main/llm`               | Model client, providers, prompt, context packing, tool loop         |
+| `src/main/workflow`          | Evidence tracking, coding session, verification, budgets            |
+| `src/main/tools`             | Desktop, file, command, calendar, notes, timer and device tools     |
+| `src/main/services`          | Calendar, notes, timers, screen glow, fullscreen detection, updates |
+| `src/main/security`          | Policy, run manager, IPC contracts, workspace handles, credentials  |
+| `src/main/network`           | Bounded model/search/page transports and URL policy                 |
+| `src/main/harness`, `memory` | Procedural skills, encrypted memories and conversation recall       |
+| `src/main/plugins`           | Plugin import, MCP runtime, GitHub integration                      |
+| `src/main/voice`             | Whisper process and recording session                               |
+| `src/renderer`               | React UI (shadcn / Base UI components)                              |
+| `src/shared`                 | Types and contracts shared across processes                         |
 
 ## Docs
 
 - [Security implementation record](SECURITY_IMPLEMENTATION.md)
 - [Coding harness](CODING_HARNESS.md) · [Coding workflow](docs/CODING_WORKFLOW.md)
 - [Memory harness](MEMORY_HARNESS.md) · [Evolving harness](EVOLVING_HARNESS.md)
-- [Agent / specialist design](AGENT_SYSTEM_DESIGN.md)
+- [Agent / subagent design](AGENT_SYSTEM_DESIGN.md)
 - [Desktop interaction](DESKTOP_INTERACTIONS.md)
+- [App interaction routes](docs/APP_INTERACTION.md)
+- [Calendar](docs/CALENDAR.md) · [Notes and timers](docs/NOTES_AND_TIMERS.md) · [Microsoft accounts](docs/MICROSOFT_ACCOUNTS.md)
 - [Plugins & MCP](docs/PLUGINS_AND_MCP.md) · [GitHub workspace](docs/GITHUB_WORKSPACE.md)
 - [Release & update publishing](docs/updates.md)
 

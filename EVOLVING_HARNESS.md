@@ -121,8 +121,9 @@ automatically create a permanent personal preference.
 Each specialist receives only its assignment, selected excerpts and corresponding
 Markdown guidance, without conversation history or personal memories. Results are
 bounded, fallible evidence. Only Researcher has enabled web tools. Specialists
-cannot recursively delegate or gain permissions. Calls stay sequential on the same
-loaded model: parallel calls are not assumed to speed up a single 4B model in VRAM.
+cannot recursively delegate or gain permissions. Calls batched in one step run
+together on the same loaded model and share its call budget; whether that speeds
+up a single small model depends on the server's parallel slots.
 
 ## Default generation settings
 

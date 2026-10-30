@@ -40,19 +40,19 @@ string adapters are a migration boundary, not a second completion authority.
 `chat.ts` coordinates actions through the runtime rather than maintaining its own
 desktop identity map or separately updating three mutation histories.
 
-| Component                                                     | Responsibility                                                                        |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `src/main/chat/session.ts`                                    | Conversation events, streaming updates, persistence and run lifetime                  |
-| `src/main/security/run-manager.ts`                            | One active run, cancellation, policy revocation, shared model-call and action budgets |
-| `src/main/llm/chat.ts`                                        | Context assembly, inference/tool iteration, optional consultations and completion     |
-| `src/main/llm/client.ts` and `providers.ts`                   | Shared inference transport, provider formats, streaming and usage                     |
-| `src/main/llm/context.ts`, `compaction.ts` and `retention.ts` | Context budgeting, summaries and checkpoint-based retention                           |
-| `src/main/llm/tool-discovery.ts`                              | Load relevant schemas from the policy-filtered capability catalog                     |
-| `src/main/llm/run-tool.ts`                                    | Shared assistant action gate and approval lifecycle                                   |
-| `src/main/tools/index.ts`                                     | Dispatch tools after authorization and argument validation                            |
-| `src/main/workflow`                                           | Evidence, coding checkpoints, project verification and bounded repairs                |
-| `src/main/llm/specialists.ts`                                 | Optional sequential consultations using the same model, client and run budget         |
-| `src/main/memory` and `harness`                               | Personal recall and separately managed procedural guidance                            |
+| Component                                                     | Responsibility                                                                             |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `src/main/chat/session.ts`                                    | Conversation events, streaming updates, persistence and run lifetime                       |
+| `src/main/security/run-manager.ts`                            | One active run, cancellation, policy revocation, shared model-call and action budgets      |
+| `src/main/llm/chat.ts`                                        | Context assembly, inference/tool iteration, optional consultations and completion          |
+| `src/main/llm/client.ts` and `providers.ts`                   | Shared inference transport, provider formats, streaming and usage                          |
+| `src/main/llm/context.ts`, `compaction.ts` and `retention.ts` | Context budgeting, summaries and checkpoint-based retention                                |
+| `src/main/llm/tool-discovery.ts`                              | Load relevant schemas from the policy-filtered capability catalog                          |
+| `src/main/llm/run-tool.ts`                                    | Shared assistant action gate and approval lifecycle                                        |
+| `src/main/tools/index.ts`                                     | Dispatch tools after authorization and argument validation                                 |
+| `src/main/workflow`                                           | Evidence, coding checkpoints, project verification and bounded repairs                     |
+| `src/main/llm/specialists.ts`                                 | Optional consultations (parallel when batched) using the same model, client and run budget |
+| `src/main/memory` and `harness`                               | Personal recall and separately managed procedural guidance                                 |
 
 ## Request lifecycle
 
@@ -139,6 +139,25 @@ through the normal tool gate and shared action budget. No mutation is replayed.
 Denied, unavailable, empty or mismatched read-backs stop recovery. Fresh controls
 let the model choose a supported next step without an extra discovery/inference
 round-trip; they do not promote the original action's evidence to verified.
+
+## Input, screenshots and queued messages
+
+Desktop input tools (`click`, `move_mouse`, `scroll`, `press_keys`, `type_text`
+and the `input_batch` wrapper for known steps) bind to the window the task last
+captured. Keys are sent as scan codes and can be held for a set time so games
+receive them; `click` accepts `hold_ms`. After input to that window the result
+includes a settled screenshot (`capture_after: false` opts out), and within a
+batch only the last input captures. `look_at_screen` with `marks: true` draws
+numbered boxes on accessible controls so `click` can take a mark that resolves
+to coordinates before the normal checks. A window nothing covers is cut from a
+monitor capture. Sophon's own visible windows, including the shortcut bar, are
+hidden only if they sit in view while it captures; the screen-observation glow
+is excluded from capture.
+
+A message sent while a run is active is queued, not rejected. The run reads it at
+its next step, and a message that arrives with the final answer keeps the task
+going. Messages the task ends before reading start the next task; stopping leaves
+them "Not sent".
 
 ## Coding within the same loop
 
