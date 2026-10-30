@@ -113,6 +113,18 @@ export function controlTarget(
     }
   }
 }
+// Desktop rectangles of an observation's controls, labelled by their cN number so
+// a screenshot mark and the act_on_control reference always agree.
+export function observationBounds(
+  id: string
+): { label: number; bounds: { x: number; y: number; width: number; height: number } }[] {
+  const snapshot = observations.get(id)
+  if (!snapshot) return []
+  return [...snapshot.controls].map(([ref, c]) => ({
+    label: Number(ref.slice(1)),
+    bounds: { x: c.bounds[0], y: c.bounds[1], width: c.bounds[2], height: c.bounds[3] }
+  }))
+}
 export async function inspectApp(
   args: Record<string, unknown>,
   run: RunContext,

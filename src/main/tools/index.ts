@@ -42,11 +42,12 @@ import {
 import {
   captureScreen,
   invalidateScreenCoordinates,
+  markCapture,
   type CapturedScreen,
   type CaptureArgs
 } from './screen'
 import { clickScreen, focusWindow, pressKeys, scrollWindow, typeText } from './interact'
-import { inspectApp, actOnControl } from './automation/controls'
+import { inspectApp, actOnControl, observationBounds } from './automation/controls'
 import { commandOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
 import { MUTATIONS, resultFailure } from '../workflow/results'
 export const activeToolSchemas = (): typeof toolSchemas =>
@@ -265,6 +266,48 @@ export async function executeTool(
     const result = await handler(parameters, scope)
     if (scope.window && scope.pid !== undefined && ['type_text', 'press_keys'].includes(name))
       rememberEditedWindow(scope.window, scope.pid)
+    if (name === 'look_at_screen' && parameters.marks === true && typeof result !== 'string') {
+      const captured = result as CapturedScreen
+      if (toolPermission('inspect_app') !== 'allow' || !canUseTool(run, 'inspect_app'))
+        return {
+          ...captured,
+          text:
+            captured.text +
+            '\nMarks were skipped: they read app controls, which requires inspect_app to be Always allow.'
+        }
+      try {
+        scope.guard?.()
+        const window = listWindows().find((win) => win.hwnd === scope.window?.hwnd)
+        if (!window) throw new Error('Original window closed.')
+        const inspected = await inspectApp({}, run, { ...scope, window })
+        assertRun(run)
+        const marked =
+          inspected.status === 'observed' && inspected.observation
+            ? markCapture(observationBounds(inspected.observation.id))
+            : null
+        if (!marked?.labels.length)
+          return toolOutcome(
+            'observed',
+            captured.text +
+              '\nNo accessible controls could be marked in this window; choose click coordinates from the image.\n' +
+              inspected.text,
+            { image: captured.image }
+          )
+        return toolOutcome(
+          'observed',
+          captured.text +
+            `\nNumbered marks are drawn on ${marked.labels.length} controls. Mark N is control cN in the observation below: prefer act_on_control with that reference, or click with {"mark": N} for its centre. Unmarked areas still take x,y coordinates.\n` +
+            inspected.text,
+          { image: marked.image, observation: inspected.observation }
+        )
+      } catch {
+        assertRun(run)
+        return {
+          ...captured,
+          text: captured.text + '\nMarks were unavailable; choose click coordinates from the image.'
+        }
+      }
+    }
     if (
       name === 'click' &&
       parameters.capture_after === true &&

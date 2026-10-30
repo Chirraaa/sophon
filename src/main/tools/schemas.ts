@@ -386,6 +386,11 @@ export const toolSchemas = [
             description:
               'Optional: compare a fresh capture against the preceding capture of the same window/region. If identical, return text and fresh coordinates instead of a duplicate image. Use only while that preceding image remains available.'
           },
+          marks: {
+            type: 'boolean',
+            description:
+              'Optional: draw numbered boxes on the accessible controls and return their observation in the same call. Mark N is control cN: act on it with act_on_control, or click {"mark": N}. Needs inspect_app Always allow. Not with if_changed.'
+          },
           region: {
             type: 'object',
             description:
@@ -448,10 +453,15 @@ export const toolSchemas = [
     function: {
       name: 'click',
       description:
-        'Click at x,y pixels measured from the most recent look_at_screen image. Input invalidates those coordinates. Prefer capture_after when visual verification is needed: with look_at_screen Always allow, the click returns a fresh image in this call. Otherwise inspect separately. A click being accepted is not proof of success.',
+        'Click a numbered mark, or x,y pixels, from the most recent look_at_screen image. Prefer mark when the target is marked. Input invalidates those coordinates and marks. Prefer capture_after when visual verification is needed: with look_at_screen Always allow, the click returns a fresh image in this call. Otherwise inspect separately. A click being accepted is not proof of success.',
       parameters: {
         type: 'object',
         properties: {
+          mark: {
+            type: 'number',
+            description:
+              'Number of a box drawn by look_at_screen marks; clicks its centre. Use instead of x,y.'
+          },
           x: { type: 'number' },
           y: { type: 'number' },
           button: { type: 'string', enum: ['left', 'right'] },
@@ -468,8 +478,7 @@ export const toolSchemas = [
             },
             required: ['x', 'y', 'width', 'height']
           }
-        },
-        required: ['x', 'y']
+        }
       }
     }
   },

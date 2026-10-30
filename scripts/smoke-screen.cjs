@@ -189,10 +189,15 @@ class Image {
   toJPEG() {
     return Buffer.from(pixels)
   }
+  toBitmap() {
+    return Buffer.alloc(this.width * this.height * 4)
+  }
 }
 const capture = load('src/main/tools/screen.ts', {
+  './marks': load('src/main/tools/marks.ts'),
   electron: {
     BrowserWindow: { getAllWindows: () => [] },
+    nativeImage: { createFromBitmap: (bitmap) => ({ toJPEG: () => bitmap }) },
     desktopCapturer: {
       getSources: async (options) => {
         sourceCalls++
@@ -252,6 +257,26 @@ async function main() {
   assert.match(result.text, /1280×720/)
   assert.deepEqual(capture.captureCoordinates(640, 360), { x: -960, y: 640, window: win })
   assert.equal(capture.captureCoordinates(1280, 0), null)
+  // Marks map desktop rectangles into the 1280×720 overview of a 1920×1080 window
+  // at (-1920, 100): scale 2/3. Off-window targets are dropped, not clamped in.
+  const marked = capture.markCapture([
+    { label: 3, bounds: { x: -1620, y: 250, width: 300, height: 60 } },
+    { label: 4, bounds: { x: 500, y: 250, width: 300, height: 60 } }
+  ])
+  assert.deepEqual(marked.labels, [3])
+  assert.deepEqual(capture.markPoint(3), { x: 300, y: 120 })
+  assert.equal(capture.markPoint(4), null)
+  const bitmap = Buffer.from(marked.image.split(',')[1], 'base64')
+  const pixel = (x, y) => [...bitmap.subarray((y * 1280 + x) * 4, (y * 1280 + x) * 4 + 4)]
+  assert.deepEqual(pixel(200, 100), [0x3d, 0x7a, 0x00, 0xff], 'Tag uses the mark colour')
+  assert.deepEqual(pixel(202, 102), [0xff, 0xff, 0xff, 0xff], 'Digit pixels are white')
+  assert.deepEqual(pixel(399, 139), [0x3d, 0x7a, 0x00, 0xff], 'Box outline reaches the corner')
+  assert.deepEqual(pixel(300, 120), [0, 0, 0, 0], 'Box interior stays untouched')
+  assert.deepEqual(
+    capture.captureCoordinates(300, 120),
+    { x: -1470, y: 280, window: win },
+    'A mark centre resolves to the control centre on the desktop'
+  )
   const unchanged = await capture.captureScreen({ window: 'Fixture', if_changed: true })
   assert.equal(typeof unchanged, 'string')
   assert.match(unchanged, /pixel-identical/)
@@ -263,6 +288,7 @@ async function main() {
     null,
     'Input invalidates coordinates before another click'
   )
+  assert.equal(capture.markPoint(3), null, 'Input invalidates marks too')
   await interact.clickScreen({ x: 640, y: 360 })
   assert.equal(inputCount, 2, 'No second click from stale coordinates')
   assert.match(

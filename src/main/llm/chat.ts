@@ -1364,7 +1364,7 @@ export async function chat(
           turn.push({
             role: 'system',
             content:
-              'The click was not executed because its screenshot coordinates were unavailable, stale, or outside the image. This is not a permission denial. Use look_at_screen for the original intended window, wait for its image, then choose fresh coordinates within the reported image dimensions. Do not reuse the failed coordinates or guess a different window. Use list_windows if the intended target needs resolving. Keep all permissions and constraints.'
+              'The click was not executed because its screenshot coordinates or mark were unavailable, stale, or outside the image. This is not a permission denial. Use look_at_screen for the original intended window, wait for its image, then choose a fresh mark or coordinates within the reported image dimensions. Do not reuse the failed coordinates or mark, or guess a different window. Use list_windows if the intended target needs resolving. Keep all permissions and constraints.'
           })
           break
         }

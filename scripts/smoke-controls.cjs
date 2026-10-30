@@ -118,7 +118,8 @@ const policy = load('src/main/security/policy.ts', {
   './run-manager': runs
 })
 let captures = 0,
-  invalidatedCaptures = 0
+  invalidatedCaptures = 0,
+  markedTargets = null
 const tools = load('src/main/tools/index.ts', {
   '../settings': { getSettings: () => settings },
   '../harness/store': {},
@@ -153,6 +154,10 @@ const tools = load('src/main/tools/index.ts', {
       captures++
       assert.equal(window.hwnd, 2)
       return { text: 'Fresh fixture image', image: 'data:image/png;base64,fixture' }
+    },
+    markCapture: (targets) => {
+      markedTargets = targets
+      return { image: 'data:image/jpeg;base64,marked', labels: targets.map((t) => t.label) }
     }
   },
   './interact': { clickScreen: async () => 'Clicked left at (1, 1).' },
@@ -335,6 +340,69 @@ async function main() {
     assert.equal(Boolean(clicked.image), permission === 'allow')
   }
   settings.tools.look_at_screen = 'ask'
+  // Set-of-Marks: one call returns the marked image plus a live observation whose
+  // cN references match the drawn numbers. It never widens inspect_app's grant.
+  const target = { window: windows.listWindows().find((w) => w.hwnd === 2) }
+  const inspectGrant = settings.tools.inspect_app
+  settings.tools.inspect_app = 'ask'
+  const workerBefore = workerCalls.length
+  let looked = await tools.executeTool('look_at_screen', { marks: true }, run, target)
+  assert.match(looked.text, /Marks were skipped/)
+  assert.equal(looked.image, 'data:image/png;base64,fixture', 'Unmarked image still returns')
+  assert.equal(workerCalls.length, workerBefore, 'No control read without inspect_app allow')
+  settings.tools.inspect_app = 'allow'
+  looked = await tools.executeTool('look_at_screen', { marks: true }, run, target)
+  assert.equal(looked.status, 'observed')
+  assert.equal(looked.image, 'data:image/jpeg;base64,marked')
+  assert(/^obs-[\da-f]{12}$/.test(looked.observation.id), 'Marks register a live observation')
+  assert.match(looked.text, /Mark N is control cN/)
+  assert.deepEqual(
+    markedTargets.map((t) => t.label),
+    [1],
+    'Mark numbers are the observation control numbers'
+  )
+  assert.deepEqual(markedTargets[0].bounds, {
+    x: sample.bounds[0],
+    y: sample.bounds[1],
+    width: sample.bounds[2],
+    height: sample.bounds[3]
+  })
+  assert(controls.controlTarget({ ...args, observation: looked.observation.id }, run))
+  settings.tools.inspect_app = inspectGrant
+  assert.throws(() => contracts.validateToolArguments('click', { mark: 2, x: 1, y: 1 }), /not both/)
+  assert.throws(() => contracts.validateToolArguments('click', {}), /x and y/)
+  assert.throws(() => contracts.validateToolArguments('click', { mark: 1.5 }), /mark/)
+  assert.throws(
+    () => contracts.validateToolArguments('look_at_screen', { marks: true, if_changed: true }),
+    /if_changed/
+  )
+  assert.deepEqual(contracts.validateToolArguments('click', { mark: 3 }), { mark: 3 })
+  const markedLocal = load('src/main/security/local-action.ts', {
+    '../network/search-provider': {},
+    '../tools/openApp': {},
+    '../tools/windows': windows,
+    '../tools/win32': native,
+    '../permissions': permissions,
+    '../tools/automation/controls': controls,
+    '../tools/files': {},
+    '../tools/screen': {
+      markPoint: (label) => (label === 3 ? { x: 5, y: 6 } : null),
+      captureCoordinates: (x, y) => ({ x: x + 100, y: y + 100, window: target.window })
+    },
+    'fs/promises': {},
+    path,
+    './run-manager': runs,
+    './workspace-policy': {}
+  })
+  const markArgs = { mark: 3, button: 'left' }
+  const markBinding = await markedLocal.bindLocalAction('click', markArgs, run)
+  assert.deepEqual(markArgs, { button: 'left', x: 5, y: 6 }, 'A mark becomes image coordinates')
+  assert.equal(markBinding.scope.window.hwnd, 2)
+  assert.deepEqual(contracts.validateToolArguments('click', markArgs), markArgs)
+  await assert.rejects(
+    markedLocal.bindLocalAction('click', { mark: 9 }, run),
+    (error) => error.code === 'SCREENSHOT_REQUIRED'
+  )
   next = unwrap(await execute('inspect_app', { window: refs[1] }))
   result = { status: 'uncertain', message: 'Changed after the action' }
   assert.match(
