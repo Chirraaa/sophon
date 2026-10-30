@@ -1,4 +1,6 @@
 import { app, session, Menu, dialog, nativeTheme } from 'electron'
+import { existsSync, renameSync } from 'node:fs'
+import { join } from 'node:path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { loadSettings, getSettings, onSettingsChange } from './settings'
 import { loadSession, onSession, onSessionText } from './chat/session'
@@ -19,6 +21,14 @@ import { closeBrowsers } from './tools/browser/runtime'
 import { UpdateService } from './services/updates'
 import { GithubUpdater } from './services/update-transport'
 import { snapshot } from './chat/session'
+// Earlier builds stored data under the package name; carry it over to the Sophon folder.
+try {
+  const legacy = join(app.getPath('appData'), 'voice-agent')
+  if (existsSync(legacy) && !existsSync(app.getPath('userData')))
+    renameSync(legacy, app.getPath('userData'))
+} catch {
+  // Leave the old folder in place if it is locked; the app starts with fresh data.
+}
 app.commandLine.appendSwitch('site-per-process')
 app.commandLine.appendSwitch(
   'host-resolver-rules',

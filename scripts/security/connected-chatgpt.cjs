@@ -7,7 +7,7 @@ const crypto = require('node:crypto')
 async function connectedChatgpt({ load, manager, transport, profile, scratch }) {
   const { app, safeStorage, shell } = require('electron')
   if (!app) throw new Error('Connected ChatGPT tests require Electron.')
-  const credentialProfile = profile || path.join(app.getPath('appData'), 'voice-agent')
+  const credentialProfile = profile || path.join(app.getPath('appData'), 'sophon')
   // Windows safeStorage uses the profile's encryption context. A disposable
   // Electron profile cannot decrypt the application's existing credential file.
   app.setPath('userData', credentialProfile)

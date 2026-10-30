@@ -25,11 +25,11 @@ if (live) {
   fs.mkdirSync(path.dirname(copiedRegistry), { recursive: true })
 
   fs.copyFileSync(
-    path.join(app.getPath('appData'), 'voice-agent', 'Local State'),
+    path.join(app.getPath('appData'), 'sophon', 'Local State'),
     path.join(app.getPath('userData'), 'Local State')
   )
   fs.copyFileSync(
-    path.join(app.getPath('appData'), 'voice-agent', 'plugins', 'registry.enc'),
+    path.join(app.getPath('appData'), 'sophon', 'plugins', 'registry.enc'),
     copiedRegistry
   )
   app.on('will-quit', () => {
