@@ -294,6 +294,26 @@ export const toolSchemas = [
   {
     type: 'function',
     function: {
+      name: 'show_image',
+      description:
+        'Show the user a picture inline in the chat, below your reply. Give a public HTTPS image URL (PNG, JPEG, WebP, GIF or BMP, up to 8 MB; animations show their first frame) set screenshot: true to show your latest look_at_screen capture, or give a picture path inside the working folder. Use it when the user asks to see something, not for every capture. Only use image URLs from the user or returned by web_fetch or web_search; never invent one. At most six web images per task. Say in your reply what the picture shows.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'Public HTTPS image URL, at most 2000 characters.' },
+          screenshot: {
+            type: 'boolean',
+            description: 'Show the latest screenshot instead of a web image.'
+          },
+          path: { type: 'string', description: 'Relative path of an image in the working folder.' },
+          caption: { type: 'string', description: 'Short title shown with the picture.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'open_app',
       description:
         'Open an installed Windows Start menu app by name or an app- reference from list_apps. Exact names are preferred; unique partial names work. Ambiguous matches return choices: ask the user instead of guessing. No paths, commands or launch arguments. If unverified, inspect windows before claiming success or retrying.',

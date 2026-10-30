@@ -50,6 +50,7 @@ const suites = [
   'screen-glow',
   'security',
   'settings',
+  'show-image',
   'specialists',
   'streaming',
   'system-control',

@@ -146,6 +146,7 @@ const tools = load('src/main/tools/index.ts', {
   '../security/tool-contracts': contracts,
   '../network/search-provider': {},
   '../network/public-page': {},
+  '../network/public-image': {},
   './openApp': {},
   './app-catalog': {},
   './windows': windows,

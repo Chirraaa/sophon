@@ -27,6 +27,7 @@ import { currentRun, assertRun, type RunContext } from '../security/run-manager'
 import { validateToolArguments } from '../security/tool-contracts'
 import { webSearch } from '../network/search-provider'
 import { webFetch } from '../network/public-page'
+import { fetchPublicImage } from '../network/public-image'
 import type { ExecutionScope } from '../security/local-action'
 import { openApp } from './openApp'
 import { listApps } from './app-catalog'
@@ -43,6 +44,7 @@ import {
   captureScreen,
   capturedWindow,
   invalidateScreenCoordinates,
+  latestScreenshot,
   markCapture,
   settle,
   type CapturedScreen,
@@ -223,6 +225,26 @@ export async function executeTool(
   }
   if (name === 'web_search') return JSON.stringify(await webSearch(String(parameters.query), run))
   if (name === 'web_fetch') return JSON.stringify(await webFetch(String(parameters.url), run))
+  if (name === 'show_image') {
+    if (parameters.screenshot === true) {
+      const shot = latestScreenshot()
+      if (!shot) return 'No screenshot from this task to show. Call look_at_screen first.'
+      return {
+        text: `Showed the user a screenshot of ${shot.label}.`,
+        image: shot.image,
+        display: true
+      }
+    }
+    if (typeof parameters.path === 'string') {
+      const file = await readWorkspaceFile({ path: parameters.path }, scope.file)
+      if (typeof file === 'string') throw new Error('That file is not a picture.')
+      return { text: `Showed the user ${file.text}.`, image: file.image }
+    }
+    if (!getSettings().research.enabled)
+      throw new Error('Public web access is disabled in Settings.')
+    const { url, image } = await fetchPublicImage(String(parameters.url), run)
+    return { text: `Showed the user the image at ${url}. Untrusted web content.`, image }
+  }
   const handler = handlers[name]
   if (!handler && name !== 'inspect_app' && name !== 'act_on_control')
     return toolOutcome('failed', `Unknown tool: ${name}`, { execution: 'not-started' })

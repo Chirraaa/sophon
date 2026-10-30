@@ -121,6 +121,7 @@ function createHarness(task = {}, repetition = 0, modelOverrides = {}) {
     '../security/tool-contracts': contracts,
     '../network/search-provider': native,
     '../network/public-page': native,
+    '../network/public-image': native,
     './openApp': native,
     './app-catalog': native,
     './windows': native,

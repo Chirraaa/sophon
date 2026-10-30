@@ -161,6 +161,15 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
     )
       throw new Error('Supply a short reason when requesting coding resource adjustments.')
   }
+  if (name === 'show_image') {
+    const web = object.url !== undefined
+    if ([web, object.screenshot === true, object.path !== undefined].filter(Boolean).length !== 1)
+      throw new Error('Provide exactly one of a public image url, screenshot: true, or a path.')
+    if (web && (typeof object.url !== 'string' || object.url.length > 2000))
+      throw new Error('url must be a public HTTPS address of at most 2000 characters.')
+    if (object.caption !== undefined && String(object.caption).length > 120)
+      throw new Error('caption must be at most 120 characters.')
+  }
   if (name === 'read_file') {
     for (const [key, max] of [
       ['start_line', 100000],
