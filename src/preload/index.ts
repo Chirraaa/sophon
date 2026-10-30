@@ -170,6 +170,7 @@ const api: Api = {
   },
   compact: {
     hide: () => ipcRenderer.send('compact:hide'),
+    dismiss: () => ipcRenderer.send('compact:dismiss'),
     setDocked: (docked) => ipcRenderer.send('compact:dock', docked),
     setTaskVisible: (visible) => ipcRenderer.send('compact:task-visible', visible),
     workArea: () => ipcRenderer.invoke('compact:work-area'),

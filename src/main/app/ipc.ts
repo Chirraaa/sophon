@@ -364,6 +364,7 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
       desktop.dockCompact(docked)
   })
   ipcMain.on('compact:hide', desktop.hideCompact)
+  ipcMain.on('compact:dismiss', desktop.dismissCompact)
   ipcMain.on('compact:open-main', () => {
     desktop.showMain()
     desktop.hideCompact()

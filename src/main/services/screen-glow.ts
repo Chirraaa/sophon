@@ -1,5 +1,6 @@
 import { BrowserWindow, screen } from 'electron'
 import { getSettings, onSettingsChange } from '../settings'
+import { fullscreenApp } from './fullscreen'
 
 let active: { window: BrowserWindow; dispose: () => void } | null = null
 
@@ -14,6 +15,10 @@ export function showScreenGlow(displayId: number, signal: AbortSignal): void {
   const settings = getSettings()
   const display = screen.getAllDisplays().find((item) => item.id === displayId)
   if (!settings.screenGlow.enabled || signal.aborted || !display) return
+  // A topmost window would throw an exclusive fullscreen game out of its display
+  // mode; over a borderless one the glow stays still so it never repaints per frame.
+  const game = fullscreenApp()
+  if (game?.exclusive) return
   let win: BrowserWindow | undefined
   try {
     win = new BrowserWindow({
@@ -42,7 +47,7 @@ export function showScreenGlow(displayId: number, signal: AbortSignal): void {
     window.setContentProtection(true)
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', (event) => event.preventDefault())
-    const still = settings.motion === 'reduced'
+    const still = settings.motion === 'reduced' || game?.displayId === display.id
     const color = settings.screenGlow.color
     const html = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>
       html,body { margin:0; width:100%; height:100%; overflow:hidden; background:transparent; pointer-events:none }
