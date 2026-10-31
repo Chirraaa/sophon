@@ -522,7 +522,7 @@ export const toolSchemas = [
     function: {
       name: 'input_batch',
       description:
-        'Run several click, press_keys, type_text and scroll steps in one call, in order, in the window of the latest look_at_screen image. Use it whenever the whole sequence is already known and each step does not change what the next one targets, for example setting a counter by pressing + three times, filling several fields, or ticking several boxes. Every click mark or x,y refers to that one image, so do not batch steps that open a dialog, move the layout, or reveal the next target; look first for those. The batch stops at the first step that fails and one fresh image of the window is returned at the end, so no separate look_at_screen is needed.',
+        'Run any mix of click, move_mouse, press_keys, type_text, scroll and wait steps in one call, in order, in one window (the window of the latest look_at_screen image when the batch clicks; otherwise the active or last used app). Use it whenever the whole sequence is already known and each step does not change what the next one targets, for example setting a counter by pressing + three times, filling several fields, ticking several boxes, or in a game turning the camera, walking forward and clicking. Every click mark or x,y refers to that one image, so do not batch clicks after steps that open a dialog, move the layout, or reveal the next target; look first for those. move_mouse is relative and does not change where later clicks land. The batch stops at the first step that fails and one fresh image of the window is returned at the end, so no separate look_at_screen is needed.',
       parameters: {
         type: 'object',
         properties: {
@@ -531,11 +531,14 @@ export const toolSchemas = [
             minItems: 1,
             maxItems: 20,
             description:
-              'Ordered steps. click needs mark or x,y; press_keys needs keys; type_text needs text; scroll needs direction. Repeat a click step to click the same control several times.',
+              'Ordered steps. click needs mark or x,y; move_mouse needs dx and/or dy; press_keys needs keys; type_text needs text; scroll needs direction; wait needs ms. Repeat a step to do it several times.',
             items: {
               type: 'object',
               properties: {
-                action: { type: 'string', enum: ['click', 'press_keys', 'type_text', 'scroll'] },
+                action: {
+                  type: 'string',
+                  enum: ['click', 'move_mouse', 'press_keys', 'type_text', 'scroll', 'wait']
+                },
                 mark: { type: 'number', description: 'Mark number from look_at_screen marks.' },
                 x: { type: 'number' },
                 y: { type: 'number' },
@@ -547,10 +550,32 @@ export const toolSchemas = [
                 },
                 text: { type: 'string' },
                 direction: { type: 'string', enum: ['up', 'down'] },
-                amount: { type: 'number', description: 'Scroll steps, 1 to 8; default 3.' }
+                amount: { type: 'number', description: 'Scroll steps, 1 to 8; default 3.' },
+                dx: {
+                  type: 'number',
+                  description: 'move_mouse: whole pixels right (negative: left).'
+                },
+                dy: {
+                  type: 'number',
+                  description: 'move_mouse: whole pixels down (negative: up).'
+                },
+                duration_ms: {
+                  type: 'number',
+                  description:
+                    'move_mouse: time to spread the movement over, 0 to 5000; default 300.'
+                },
+                ms: {
+                  type: 'number',
+                  description: 'wait: pause before the next step, 10 to 5000 ms.'
+                }
               },
               required: ['action']
             }
+          },
+          window: {
+            type: 'string',
+            description:
+              'Window title or app for a batch without clicks. Omit for the active app; clicks always use the window of the latest screenshot.'
           },
           capture_after: {
             type: 'boolean',
@@ -599,7 +624,7 @@ export const toolSchemas = [
     function: {
       name: 'move_mouse',
       description:
-        'Move the mouse by a relative distance in the active or named app, smoothly over time. Use it to turn a game camera or look around, where the pointer is locked and only movement counts. Positive dx is right, positive dy is down. The distance in pixels is not an angle: it depends on the game sensitivity, so start small and check the result. Does not click; use click with hold_ms or press_keys for that.',
+        'Move the mouse by a relative distance in the active or named app, smoothly over time. Use it to turn a game camera or look around, where the pointer is locked and only movement counts. Positive dx is right, positive dy is down. The distance in pixels is not an angle: it depends on the game sensitivity, so start small and check the result. Does not click; use click with hold_ms or press_keys for that, or combine movement, keys and clicks in one input_batch.',
       parameters: {
         type: 'object',
         properties: {

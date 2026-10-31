@@ -102,10 +102,42 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
   }
   if (name === 'input_batch') {
     let typed = 0
+    let timed = 0
+    const whole = (value: unknown, min: number, max: number): boolean =>
+      Number.isInteger(value) && Number(value) >= min && Number(value) <= max
+    const STEP_FIELDS: Record<string, string[]> = {
+      click: ['mark', 'x', 'y', 'button', 'hold_ms'],
+      move_mouse: ['dx', 'dy', 'duration_ms'],
+      press_keys: ['keys', 'hold_ms'],
+      type_text: ['text'],
+      scroll: ['direction', 'amount'],
+      wait: ['ms']
+    }
     for (const [i, raw] of (object.steps as Record<string, unknown>[]).entries()) {
       const at = `Step ${i + 1}`
       const has = (key: string): boolean => raw[key] !== undefined
-      if (raw.action === 'click') {
+      const stray = Object.keys(raw).find(
+        (key) => key !== 'action' && !STEP_FIELDS[String(raw.action)]?.includes(key)
+      )
+      if (stray) throw new Error(`${at}: ${stray} does not apply to ${raw.action}.`)
+      if (has('hold_ms')) {
+        if (!whole(raw.hold_ms, 50, 5000))
+          throw new Error(`${at}: hold_ms must be a whole number from 50 to 5000.`)
+        timed += Number(raw.hold_ms)
+      }
+      if (raw.action === 'move_mouse') {
+        const dx = raw.dx ?? 0
+        const dy = raw.dy ?? 0
+        if (!whole(dx, -5000, 5000) || !whole(dy, -5000, 5000) || (!dx && !dy))
+          throw new Error(`${at}: move_mouse needs whole-pixel dx and/or dy, at most 5000 each.`)
+        if (has('duration_ms') && !whole(raw.duration_ms, 0, 5000))
+          throw new Error(`${at}: duration_ms must be a whole number from 0 to 5000.`)
+        timed += Number(raw.duration_ms ?? 300)
+      } else if (raw.action === 'wait') {
+        if (!whole(raw.ms, 10, 5000))
+          throw new Error(`${at}: wait needs ms, a whole number from 10 to 5000.`)
+        timed += Number(raw.ms)
+      } else if (raw.action === 'click') {
         if (has('mark') === (has('x') || has('y')))
           throw new Error(`${at}: click a mark or x,y coordinates, not both or neither.`)
         if (!has('mark') && !(has('x') && has('y'))) throw new Error(`${at}: provide x and y.`)
@@ -123,6 +155,10 @@ export function validateToolArguments(name: string, args: unknown): Record<strin
       } else if (!has('direction')) throw new Error(`${at}: scroll needs a direction.`)
     }
     if (typed > 2000) throw new Error('A batch may type at most 2000 characters in total.')
+    if (timed > 20000)
+      throw new Error(
+        'A batch may spend at most 20 seconds in total on holds, mouse movement and waits.'
+      )
   }
   if (name === 'look_at_screen' && object.marks === true && object.if_changed === true)
     throw new Error('marks cannot be combined with if_changed.')

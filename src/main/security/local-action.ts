@@ -156,6 +156,13 @@ export async function bindLocalAction(
       scope.points = batchPoints.map((p) => (p ? { x: p.x, y: p.y } : null))
     }
     const batchWindow = batchPoints.find(Boolean)?.window
+    if (batchWindow && typeof args.window === 'string') {
+      const named = targetWindow(args.window)
+      if (named?.hwnd !== batchWindow.hwnd)
+        throw new Error(
+          'A batch may only target one window: its clicks are in the latest screenshot, not the named window. No step was executed.'
+        )
+    }
     if (name === 'click' && !point?.window)
       throw Object.assign(
         new Error(

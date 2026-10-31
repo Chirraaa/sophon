@@ -1,6 +1,6 @@
 {
   "name": "sophon",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "license": "PolyForm-Noncommercial-1.0.0",
   "description": "A local Windows assistant with explicit task permissions",
   "main": "./out/main/index.js",
