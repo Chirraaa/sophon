@@ -402,6 +402,9 @@ declare global {
       cursors: boolean
       // How the real pointer travels to a click: a short natural glide, faster, or instant.
       pointer: 'natural' | 'fast' | 'instant'
+      // How agents send clicks, scrolling and typing: straight to the app's window with only
+      // Sophon's cursor moving (browsers and Electron apps), or with the real pointer.
+      input: 'background' | 'pointer'
     }
     closeToTray: boolean
     dockNotify: boolean
