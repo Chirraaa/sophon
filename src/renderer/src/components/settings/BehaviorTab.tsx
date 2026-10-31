@@ -148,7 +148,7 @@ export function BehaviorTab({ settings }: { settings: AppSettings }): React.JSX.
                 {a.cursorsInRecordings && (
                   <div className="mb-3">
                     <Notice tone="warn">
-                      Agents' own screenshots will now include their cursors and name labels, which
+                      The agent&apos;s screenshots will now include its cursor and name label, which
                       can distract them or make them react to the overlay. Turn this off again when
                       you are done recording.
                     </Notice>
