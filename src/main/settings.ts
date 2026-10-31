@@ -11,7 +11,7 @@ import {
   constants
 } from 'fs'
 import { randomUUID } from 'crypto'
-import { validateShortcut } from '../shared/shortcut-contract'
+import { SHORTCUT_CONFLICT, sameShortcut, validateShortcut } from '../shared/shortcut-contract'
 import { DEFAULT_MODEL_TUNING } from '../shared/model-tuning'
 import { TOOL_INFO, defaultToolPermissions } from './tools/registry'
 import { modelEndpoint } from './network/endpoint'
@@ -316,7 +316,7 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
       modelPath: DEFAULT_SETTINGS.voice.modelPath
     }
   }
-  if (out.hotkeys.summon.toLowerCase() === out.hotkeys.talk.toLowerCase()) {
+  if (sameShortcut(out.hotkeys.summon, out.hotkeys.talk)) {
     out.hotkeys = { ...DEFAULT_SETTINGS.hotkeys }
   }
   return out
@@ -483,9 +483,11 @@ export function draftSettings(patch: SettingsPatch): AppSettings {
   if (patch.hotkeys?.summon !== undefined) validateShortcut(patch.hotkeys.summon)
   if (patch.hotkeys?.talk !== undefined) validateShortcut(patch.hotkeys.talk)
   if (
-    (patch.hotkeys?.summon ?? current.hotkeys.summon).toLowerCase() ===
-    (patch.hotkeys?.talk ?? current.hotkeys.talk).toLowerCase()
+    sameShortcut(
+      patch.hotkeys?.summon ?? current.hotkeys.summon,
+      patch.hotkeys?.talk ?? current.hotkeys.talk
+    )
   )
-    throw new Error('Choose different shortcuts.')
+    throw new Error(SHORTCUT_CONFLICT)
   return sanitize(merge(current, patch), current)
 }

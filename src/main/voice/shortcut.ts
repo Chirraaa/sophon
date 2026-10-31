@@ -33,17 +33,32 @@ const KEYS: Record<string, number> = {
   "'": 0xde,
   '[': 0xdb,
   ']': 0xdd,
-  '`': 0xc0
+  '`': 0xc0,
+  capslock: 0x14,
+  numlock: 0x90,
+  scrolllock: 0x91,
+  printscreen: 0x2c,
+  nummult: 0x6a,
+  numadd: 0x6b,
+  numsub: 0x6d,
+  numdec: 0x6e,
+  numdiv: 0x6f,
+  volumemute: 0xad,
+  volumedown: 0xae,
+  volumeup: 0xaf,
+  medianexttrack: 0xb0,
+  mediaprevioustrack: 0xb1,
+  mediastop: 0xb2,
+  mediaplaypause: 0xb3
 }
 export function shortcutKeys(accelerator: string): number[] {
   return accelerator.split('+').map((part) => {
     const key = part.toLowerCase()
     if (/^[a-z0-9]$/.test(key)) return key.toUpperCase().charCodeAt(0)
     if (/^f([1-9]|1[0-9]|2[0-4])$/.test(key)) return 0x70 + Number(key.slice(1)) - 1
+    if (/^num[0-9]$/.test(key)) return 0x60 + Number(key.slice(3))
     if (KEYS[key] !== undefined) return KEYS[key]
-    throw new Error(
-      'Choose a shortcut with Ctrl, Alt, Shift, Windows, letters, numbers or navigation keys.'
-    )
+    throw new Error('Choose one key, optionally combined with Ctrl, Alt, Shift or Windows.')
   })
 }
 export function waitForRelease(accelerator: string, released: () => void): () => void {
