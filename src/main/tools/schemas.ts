@@ -42,18 +42,9 @@ export const toolSchemas = [
       parameters: {
         type: 'object',
         properties: {
-          names: {
-            type: 'array',
-            items: { type: 'string', maxLength: 80 },
-            maxItems: 8,
-            uniqueItems: true
-          },
-          unload: {
-            type: 'array',
-            items: { type: 'string', maxLength: 80 },
-            maxItems: 16,
-            uniqueItems: true
-          }
+          // Duplicates and overlong lists are trimmed when loading instead of failing the call.
+          names: { type: 'array', items: { type: 'string', maxLength: 80 }, maxItems: 64 },
+          unload: { type: 'array', items: { type: 'string', maxLength: 80 }, maxItems: 64 }
         },
         required: ['names']
       }
