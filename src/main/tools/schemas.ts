@@ -261,14 +261,53 @@ export const toolSchemas = [
     function: {
       name: 'stop_agent',
       description:
-        'Stop a running agent in this chat, for example when the user cancels that part. Actions it already took stay done.',
+        'Stop a running agent in this chat, for example when the user cancels that part, and optionally close its thread. Actions it already took stay done. With close true, the thread of a finished agent is removed from the chat (its answer card stays); agent "finished" closes every finished agent. Close threads when the user asks, or when an agent is done and its result no longer needed.',
       parameters: {
         type: 'object',
         properties: {
-          agent: { type: 'string', maxLength: 16 },
+          agent: {
+            type: 'string',
+            maxLength: 16,
+            description: 'Handle (a1, a2…) or "finished" with close.'
+          },
+          close: {
+            type: 'boolean',
+            description: 'Also close the thread once the agent has ended.'
+          },
           reason: { type: 'string', maxLength: 300 }
         },
         required: ['agent']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'show_cursor',
+      description:
+        'Move only YOUR OWN labelled on-screen agent cursor, in a circle or along a path, as a demonstration. It never moves the real mouse pointer, presses keys or touches any window, and takes no turn, so several agents can do it at once. Use this (not move_mouse) when asked to show or demonstrate agent cursors. Coordinates are screen pixels; with no points it draws a circle (default: centre of the main screen, radius 200). Returns when the motion has finished.',
+      parameters: {
+        type: 'object',
+        properties: {
+          x: { type: 'number', description: 'Circle centre x (default: screen centre).' },
+          y: { type: 'number', description: 'Circle centre y (default: screen centre).' },
+          radius: { type: 'number', description: 'Circle radius, 10–2000; default 200.' },
+          laps: { type: 'number', description: 'Circle laps, 1–10; default 1.' },
+          duration_ms: {
+            type: 'number',
+            description: 'Time per lap (or for the whole path), 300–20000; default 3000.'
+          },
+          points: {
+            type: 'array',
+            maxItems: 64,
+            description: 'Instead of a circle: path points to follow in order.',
+            items: {
+              type: 'object',
+              properties: { x: { type: 'number' }, y: { type: 'number' } },
+              required: ['x', 'y']
+            }
+          }
+        }
       }
     }
   },

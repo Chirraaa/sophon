@@ -291,7 +291,11 @@ async function sessionAgents() {
   // Task A starts in a clean chat.
   const mainDone = session.send('Build my bakery landing page')
   await until(() => session.snapshot().busy && mainRun, 'main task running')
-  assert.deepEqual(seen[0].tools, ['spawn_agent'], 'Alone, the main task can only start agents')
+  assert.deepEqual(
+    seen[0].tools,
+    ['spawn_agent', 'show_cursor'],
+    'Alone, the main task can start agents and show its cursor'
+  )
 
   // Minutes later, a change to task A without cancelling it: a router agent relays it.
   await session.send('Actually make the colour scheme green')
@@ -497,6 +501,16 @@ async function cursorOverlay() {
     overlay.scripts.at(-1),
     /"op":"remove","id":"c1"/,
     'A cursor leaves the monitor it left'
+  )
+  const demo = { ...other, signal: new AbortController().signal }
+  const shown = await cursors.showCursor(demo, { x: 500, y: 400, radius: 100, duration_ms: 300 })
+  assert.match(shown, /real mouse pointer .* not touched/)
+  const trace = overlay.scripts.filter((script) => script.includes('"op":"trace"')).at(-1)
+  assert(trace && trace.includes('"id":"c2"'), 'show_cursor draws a trace for its own cursor only')
+  assert.equal(
+    JSON.parse(/apply\((.*)\)$/.exec(trace)[1]).list[0].points.length,
+    73,
+    'A circle is one smooth trace, not separate pointer moves'
   )
   game = { exclusive: true, displayId: 1 }
   const before = windows.length

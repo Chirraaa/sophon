@@ -8,7 +8,8 @@ const INTERNAL_ACTION_LABELS: Record<string, string> = {
   spawn_agent: 'Start an agent',
   message_agent: 'Message an agent',
   check_agents: 'Check on agents',
-  stop_agent: 'Stop an agent'
+  stop_agent: 'Stop or close an agent',
+  show_cursor: 'Show agent cursor'
 }
 
 export function fallbackActionLabel(name: string): string {

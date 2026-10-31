@@ -271,7 +271,7 @@ function load(file, dependencies = {}) {
       if (!Object.hasOwn(dependencies, name) && name === '../chat/agents')
         return {
           AGENT_INSTRUCTIONS: '',
-          AGENT_TOOLS: ['spawn_agent', 'message_agent', 'check_agents', 'stop_agent'],
+          AGENT_TOOLS: ['spawn_agent', 'message_agent', 'check_agents', 'stop_agent', 'show_cursor'],
           agentRolePrompt: () => '',
           agentRoster: () => undefined,
           agentToolNames: () => [],

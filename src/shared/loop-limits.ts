@@ -25,5 +25,6 @@ export const isBookkeepingTool = (name: string): boolean =>
     'spawn_agent',
     'message_agent',
     'check_agents',
-    'stop_agent'
+    'stop_agent',
+    'show_cursor'
   ].includes(name)
