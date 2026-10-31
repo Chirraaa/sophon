@@ -131,13 +131,15 @@ async function pointerClick(
   const run = currentRun()
   if (run) cursorPulse(run)
   if (!mouseInput(flags[0])) return refused
-  // Mining or attacking in a game needs the button down for the whole span.
+  // Mining or attacking in a game needs the button down for the whole span. The button is
+  // always released, even if the wait is interrupted.
+  let released: boolean
   try {
     if (hold) await sleep(hold)
   } finally {
-    if (!mouseInput(flags[1])) return refused
+    released = mouseInput(flags[1])
   }
-  return null
+  return released ? null : refused
 }
 export type BatchStep = {
   action?: string
@@ -338,12 +340,15 @@ export async function pressKeys(
     }
     if (!keyInput(key)) return 'Windows refused the shortcut.'
     // Held keys (camera rotation in games) need the key down for the whole span. Games
-    // poll key state once per frame, so even a tap must stay down for a few frames.
+    // poll key state once per frame, so even a tap must stay down for a few frames. The key
+    // is always released, even if the wait is interrupted.
+    let released: boolean
     try {
       await sleep(hold ?? TAP_MS)
     } finally {
-      if (!keyInput(key, true)) return 'Windows refused the shortcut.'
+      released = keyInput(key, true)
     }
+    if (!released) return 'Windows refused the shortcut.'
     return `Pressed ${parts.join('+')}${hold ? ` (held ${hold} ms)` : ''} in "${win.title}".`
   } finally {
     for (const mod of held.reverse()) keyInput(mod, true)
