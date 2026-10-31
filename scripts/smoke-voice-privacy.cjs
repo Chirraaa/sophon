@@ -21,7 +21,7 @@ const { VoiceSession } = load('src/main/voice/session.ts', {
       return () => {}
     }
   },
-  './audio': { validateRecording: (audio) => audio, MAX_RECORDING_SECONDS: 30 },
+  './audio': { validateRecording: (audio) => audio },
   './whisper': {
     validateWhisperPaths: () => validations++,
     WhisperServer: class {

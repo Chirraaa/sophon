@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import type { WebContents } from 'electron'
 import { getSettings, onSettingsChange } from '../settings'
-import { validateRecording, MAX_RECORDING_SECONDS } from './audio'
+import { validateRecording } from './audio'
 import { validateWhisperPaths, WhisperServer } from './whisper'
 type Hooks = {
   publish: (state: VoiceSnapshot) => void
@@ -84,7 +84,6 @@ export class VoiceSession {
       this.stop()
       return
     }
-    this.timer = setTimeout(() => this.stop(), MAX_RECORDING_SECONDS * 1000)
   }
   stop(): void {
     if (this.state.phase === 'starting') {
