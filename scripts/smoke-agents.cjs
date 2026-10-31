@@ -521,7 +521,126 @@ async function cursorOverlay() {
   )
 }
 
+// Screenshots of an uncovered windowed app are copied straight from the screen; fullscreen
+// apps, blank copies and covered windows use the monitor capture.
+async function directScreenshots() {
+  class Image {
+    constructor(width, height, from = 'monitor') {
+      Object.assign(this, { width, height, from })
+    }
+    getSize() {
+      return { width: this.width, height: this.height }
+    }
+    isEmpty() {
+      return false
+    }
+    resize({ width }) {
+      return new Image(width, Math.round((this.height * width) / this.width), this.from)
+    }
+    crop(rect) {
+      return new Image(rect.width, rect.height, this.from)
+    }
+    toJPEG() {
+      return Buffer.from(this.from)
+    }
+    toBitmap() {
+      return Buffer.alloc(this.width * this.height * 4)
+    }
+  }
+  const win = {
+    hwnd: 7,
+    title: 'Notes',
+    exe: 'notes.exe',
+    state: 'normal',
+    x: 100,
+    y: 100,
+    width: 800,
+    height: 600
+  }
+  const display = { id: 1, index: 1, full: { x: 0, y: 0, width: 1920, height: 1080 } }
+  let monitorCalls = 0
+  let copies = 0
+  let fullscreen = null
+  let blank = false
+  let covered = false
+  const run = { id: 'shots', startedAt: performance.now(), signal: new AbortController().signal }
+  const screen = load('src/main/tools/screen.ts', {
+    './marks': load('src/main/tools/marks.ts'),
+    electron: {
+      BrowserWindow: { getAllWindows: () => [] },
+      screen: {},
+      nativeImage: {
+        createFromBitmap: (bits, size) => {
+          assert.equal(bits.length, size.width * size.height * 4)
+          return new Image(size.width, size.height, 'direct')
+        }
+      },
+      desktopCapturer: {
+        getSources: async (options) => {
+          monitorCalls++
+          return [
+            {
+              id: 'screen:1:0',
+              display_id: '1',
+              thumbnail: new Image(options.thumbnailSize.width, options.thumbnailSize.height)
+            }
+          ]
+        }
+      }
+    },
+    '../permissions': { protectedWindowRule: () => null },
+    '../security/run-manager': {
+      currentRun: () => run,
+      assertRun: () => {},
+      onRunFinished: () => () => {}
+    },
+    './win32': {
+      getProcess: () => ({ pid: 42 }),
+      enumTopLevelWindows: () => [],
+      screenSample: () => null,
+      screenPixels: (rect) => {
+        copies++
+        const bits = Buffer.alloc(rect.width * rect.height * 4, blank ? 0 : 200)
+        return { bits, width: rect.width, height: rect.height }
+      }
+    },
+    '../services/fullscreen': { fullscreenApp: () => fullscreen },
+    '../services/screen-glow': { hideScreenGlow: () => {}, showScreenGlow: () => {} },
+    './windows': {
+      activeWindow: () => win,
+      findWindow: () => win,
+      listWindows: () =>
+        covered ? [{ ...win, hwnd: 8, title: 'Cover', x: 50, y: 50 }, win] : [win],
+      monitorOf: () => display,
+      monitors: () => [display],
+      resolveMonitor: () => display
+    }
+  })
+  const shoot = async () => {
+    const result = await screen.captureScreen({}, undefined, win)
+    assert.equal(typeof result, 'object', String(result))
+    return Buffer.from(result.image.split(',')[1], 'base64').toString()
+  }
+  assert.equal(await shoot(), 'direct', 'An uncovered window is copied directly')
+  assert.equal(monitorCalls, 0, 'No monitor capture for an uncovered window')
+  assert(screen.captureCoordinates(400, 300), 'A direct copy is clickable like any capture')
+  fullscreen = { hwnd: 7, exclusive: false }
+  assert.equal(await shoot(), 'monitor', 'A fullscreen app uses the monitor capture')
+  fullscreen = null
+  blank = true
+  assert.equal(await shoot(), 'monitor', 'A blank copy falls back to the monitor capture')
+  blank = false
+  covered = true
+  const callsBefore = copies
+  await screen.captureScreen({}, undefined, win).catch(() => {})
+  assert.equal(copies, callsBefore, 'A covered window is never copied from the screen')
+  console.log(
+    'PASS direct screenshots: uncovered windows copied directly and clickable; fullscreen apps, blank copies and covered windows use the monitor capture'
+  )
+}
+
 async function main() {
+  await directScreenshots()
   await cursorOverlay()
   await runManager()
   await arbiterTurns()

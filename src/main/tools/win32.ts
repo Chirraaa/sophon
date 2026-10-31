@@ -177,6 +177,28 @@ export function screenSample(
   if (rect.width < 1 || rect.height < 1) return null
   const w = Math.max(1, Math.min(width, rect.width))
   const h = Math.max(1, Math.round((w * rect.height) / rect.width))
+  return copyScreen(rect, w, h, 0x00cc0020)
+}
+// A screen rectangle at full resolution as opaque 32-bit BGRA, for a screenshot of a window
+// nothing covers. Includes layered windows; capture-excluded ones (Sophon's overlays) stay out.
+export function screenPixels(rect: {
+  x: number
+  y: number
+  width: number
+  height: number
+}): { bits: Buffer; width: number; height: number } | null {
+  if (rect.width < 1 || rect.height < 1 || rect.width * rect.height > 8192 * 8192) return null
+  const bits = copyScreen(rect, rect.width, rect.height, 0x40cc0020)
+  if (!bits) return null
+  for (let i = 3; i < bits.length; i += 4) bits[i] = 255
+  return { bits, width: rect.width, height: rect.height }
+}
+function copyScreen(
+  rect: { x: number; y: number; width: number; height: number },
+  w: number,
+  h: number,
+  rop: number
+): Buffer | null {
   const screenDc = Number(GetDC(0))
   if (!screenDc) return null
   const memory = Number(CreateCompatibleDC(screenDc))
@@ -185,9 +207,7 @@ export function screenSample(
   try {
     if (!bitmap) return null
     SetStretchBltMode(memory, 4)
-    if (
-      !StretchBlt(memory, 0, 0, w, h, screenDc, rect.x, rect.y, rect.width, rect.height, 0x00cc0020)
-    )
+    if (!StretchBlt(memory, 0, 0, w, h, screenDc, rect.x, rect.y, rect.width, rect.height, rop))
       return null
     const info = Buffer.alloc(44)
     info.writeUInt32LE(40, 0)
