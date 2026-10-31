@@ -437,6 +437,33 @@ async function main() {
     /if_changed/
   )
   assert.deepEqual(contracts.validateToolArguments('click', { mark: 3 }), { mark: 3 })
+  const mixed = {
+    steps: [
+      { action: 'move_mouse', dx: 120, dy: -40, duration_ms: 200 },
+      { action: 'press_keys', keys: 'W', hold_ms: 800 },
+      { action: 'wait', ms: 250 },
+      { action: 'click', mark: 2 },
+      { action: 'type_text', text: 'hi' },
+      { action: 'scroll', direction: 'down' }
+    ],
+    window: 'Game'
+  }
+  assert.deepEqual(contracts.validateToolArguments('input_batch', mixed), mixed)
+  const batch = (step) => () => contracts.validateToolArguments('input_batch', { steps: [step] })
+  assert.throws(batch({ action: 'move_mouse' }), /dx and\/or dy/)
+  assert.throws(batch({ action: 'move_mouse', dx: 1.5 }), /dx and\/or dy/)
+  assert.throws(batch({ action: 'move_mouse', dx: 5, duration_ms: 9000 }), /duration_ms/)
+  assert.throws(batch({ action: 'move_mouse', x: 5, y: 5 }), /x does not apply to move_mouse/)
+  assert.throws(batch({ action: 'wait' }), /wait needs ms/)
+  assert.throws(batch({ action: 'wait', ms: 6000 }), /wait needs ms/)
+  assert.throws(batch({ action: 'press_keys', keys: 'A', hold_ms: 10 }), /hold_ms/)
+  assert.throws(
+    () =>
+      contracts.validateToolArguments('input_batch', {
+        steps: Array.from({ length: 5 }, () => ({ action: 'wait', ms: 5000 }))
+      }),
+    /20 seconds/
+  )
   const markedLocal = load('src/main/security/local-action.ts', {
     '../network/search-provider': {},
     '../tools/openApp': {},
