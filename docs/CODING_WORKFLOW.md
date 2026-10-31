@@ -28,7 +28,8 @@ flowchart TD
 `run_command` runs a PowerShell command in an existing workspace-relative folder.
 It supports installed tools such as Git, Java/javac, Maven/Gradle, C/C++ compilers,
 Make, CMake, CTest and Ninja. Each invocation shows the exact command and folder
-for one-use approval. Output is streamed and capped. The timeout defaults to 120
+for one-use approval; a `check` command the user approved can re-run during the same
+task without asking again (see [Proof harness](../PROOF_HARNESS.md)). Output is streamed and capped. The timeout defaults to 120
 seconds and can be set from 1 to 600 seconds. Stop and timeout terminate the
 process tree. Commands run with normal Windows account and network access;
 the working directory is not an execution sandbox. Existing blocked tools and

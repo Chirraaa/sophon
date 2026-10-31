@@ -1,4 +1,13 @@
 import { replyActivity } from './activity'
+import {
+  activeProbes,
+  claimStatus,
+  probeStatus,
+  probeWitness,
+  type ClaimKind,
+  type ClaimStatus,
+  type ProbeStatus
+} from '../../../shared/proof'
 
 export function previewData(preview?: string): Record<string, unknown> | undefined {
   try {
@@ -179,4 +188,55 @@ export function shortcutCodingItem(items: ChatItem[]): ChatItem | undefined {
   if (latest?.pending || latest?.from === 'you')
     return items.findLast((item) => item.from === 'agent' && !!item.workflow?.codingSession)
   return latestCodingItem(items)
+}
+
+export type ProofRow = {
+  id: string
+  text: string
+  kind: ClaimKind
+  falsifier: boolean
+  status: ClaimStatus
+  withdrawn?: string
+  probes: { id: string; status: ProbeStatus; witness?: string; signals: string[] }[]
+}
+
+// The verification contract as the coding card shows it: claims, their probes and whether
+// each claim is witnessed (failed before the change, passes after), held, or still open.
+export function proofView(
+  item: ChatItem
+): { rows: ProofRow[]; proven: number; total: number; falsification: string } | undefined {
+  const proof = item.workflow?.proof
+  if (!proof?.claims.length) return undefined
+  const revision = item.workflow?.mutationRevision ?? 0
+  const probes = activeProbes(proof)
+  const rows = proof.claims.map((claim) => ({
+    id: claim.id,
+    text: claim.text,
+    kind: claim.kind,
+    falsifier: claim.source === 'falsifier',
+    status: claimStatus(claim, proof, revision),
+    withdrawn: claim.withdrawn,
+    probes: probes
+      .filter((probe) => probe.claim === claim.id)
+      .map((probe) => {
+        const witness = probeWitness(probe)
+        const last = probe.history.at(-1)
+        return {
+          id: probe.id,
+          status: probeStatus(probe, revision),
+          witness: witness ? `Failed at r${witness.red}, passes at r${witness.green}` : undefined,
+          signals: last && !last.passed ? last.signals.slice(0, 3) : []
+        }
+      })
+  }))
+  const counted = rows.filter((row) => !['withdrawn', 'manual'].includes(row.status))
+  const f = proof.falsification
+  return {
+    rows,
+    proven: counted.filter((row) => ['witnessed', 'held'].includes(row.status)).length,
+    total: counted.length,
+    falsification: f.rounds
+      ? `Falsifier: ${f.admitted} of ${f.admitted + f.survived} probes broke the change`
+      : ''
+  }
 }

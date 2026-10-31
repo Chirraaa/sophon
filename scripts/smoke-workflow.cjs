@@ -345,7 +345,20 @@ async function review() {
   ])
   toolResult = 'Failed to open Notepad'
   assert.match(await chat('Open Notepad', event, []), /Stopped after a failed action/)
-  assert.equal(executions.length, 3, 'General failure recovery is bounded to two attempts')
+  assert.equal(executions.length, 2, 'Repeating an identical failed call ends recovery')
+  // Distinct attempts keep diagnosing beyond the old two-attempt cap.
+  reset([
+    ...['notepad', 'notepad.exe', 'Notepad', 'notepad2'].map((name, index) =>
+      tool('open_app', { name }, 'call-' + index)
+    ),
+    answer('Notepad could not be opened under any of those names.')
+  ])
+  toolResult = 'Failed to open Notepad'
+  assert.equal(
+    await chat('Open Notepad', event, []),
+    'Notepad could not be opened under any of those names.'
+  )
+  assert.equal(executions.length, 4, 'Distinct failed attempts keep recovering')
   reset([
     answer('Opened Notepad.'),
     tool('open_app', { name: 'notepad' }),
@@ -685,8 +698,9 @@ async function review() {
   failUntil = Infinity
   checked.length = 0
   reset([tool('write_file', write), answer('Done.'), answer('Done.'), answer('Done.')])
-  assert.match(await chat('Fix the React code', event, []), /Repair limit reached/)
-  assert.equal(builds, 3)
+  assert.match(await chat('Fix the React code', event, []), /completion was claimed 2 times/)
+  assert.equal(builds, 1, 'A check that failed on unchanged code is not re-run')
+  assert(JSON.stringify(captured).includes('no code has changed since'))
   assert.equal(latest.outcome, 'needs_review')
   denied = true
   checked.length = 0

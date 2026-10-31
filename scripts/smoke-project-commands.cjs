@@ -231,9 +231,48 @@ async function main() {
   record(gate, 'edit_file', { path: 'Hello.java' }, 'saved', 'verified')
   record(gate, 'list_files', {}, '[file] Hello.java', 'observed')
   assert.equal(gate.next().tool, 'run_command')
-  for (let i = 0; i < 3; i++)
-    record(gate, 'run_command', check, JSON.stringify({ exitCode: 1, stopped: false }), 'reported')
-  assert.match(gate.next().blocked, /failed three times/)
+  const failing = JSON.stringify({
+    exitCode: 1,
+    stopped: false,
+    output: 'Hello.java:3: error: cannot find symbol'
+  })
+  // Re-running unchanged code is not a repair attempt, and the host will not re-run it.
+  for (let i = 0; i < 8; i++) record(gate, 'run_command', check, failing, 'reported')
+  assert.equal(gate.next().unchanged, 'javac Hello.java in .')
+  assert.equal(gate.limitIssue(), undefined)
+  // Edits that keep reproducing the same failure stall; six such attempts stop the repair.
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    record(gate, 'edit_file', { path: 'Hello.java' }, 'saved', 'verified')
+    record(gate, 'list_files', {}, '[file] Hello.java', 'observed')
+    record(gate, 'run_command', check, failing, 'reported')
+    if (attempt < 6) assert.equal(gate.limitIssue(), undefined, `attempt ${attempt} may continue`)
+  }
+  assert.match(gate.next().blocked, /same failure after 6 fix attempts/)
+  assert.match(gate.limitIssue(), /not converging/)
+  // A repair that changes the failure keeps going, and one that shrinks it is progress.
+  const moving = new verification.CodingVerification()
+  record(moving, 'write_file', { path: 'Hello.java' }, 'saved', 'verified')
+  record(moving, 'list_files', {}, '[file] Hello.java', 'observed')
+  for (let attempt = 0; attempt < 9; attempt++) {
+    record(moving, 'edit_file', { path: 'Hello.java' }, 'saved', 'verified')
+    record(moving, 'list_files', {}, '[file] Hello.java', 'observed')
+    record(
+      moving,
+      'run_command',
+      check,
+      JSON.stringify({
+        exitCode: 1,
+        stopped: false,
+        output: `Hello.java: error: cannot find symbol ${['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota'][attempt]}`
+      }),
+      'reported'
+    )
+  }
+  assert.equal(moving.limitIssue(), undefined, 'Distinct failures are new information')
+  record(moving, 'edit_file', { path: 'Hello.java' }, 'saved', 'verified')
+  record(moving, 'list_files', {}, '[file] Hello.java', 'observed')
+  record(moving, 'run_command', check, failing, 'reported')
+  assert.match(moving.limitIssue(), /without the failure shrinking/)
   const mixed = new verification.CodingVerification()
   record(mixed, 'edit_file', { path: 'Hello.java' }, 'saved', 'verified')
   record(
@@ -255,7 +294,11 @@ async function main() {
     'verified'
   )
   record(mixed, 'run_command', check, JSON.stringify({ exitCode: 1, stopped: false }), 'reported')
-  assert.equal(mixed.next().tool, 'run_command', 'Passing npm cannot hide a failed compiler check')
+  assert.equal(
+    mixed.next().unchanged,
+    'javac Hello.java in .',
+    'Passing npm cannot hide a failed compiler check'
+  )
 
   fs.writeFileSync(
     path.join(workspace, 'wait.cjs'),

@@ -100,6 +100,16 @@ async function main() {
     settings.draftSettings({ model: { codingResources: 'unlimited' } }).model.codingResources,
     'auto'
   )
+  assert.equal(settings.DEFAULT_SETTINGS.model.verification, 'proof')
+  assert.equal(
+    settings.draftSettings({ model: { verification: 'checks' } }).model.verification,
+    'checks'
+  )
+  assert.equal(
+    settings.draftSettings({ model: { verification: 'skip' } }).model.verification,
+    'proof',
+    'Unknown verification modes fall back to the default'
+  )
   for (const tool of registry.TOOL_INFO)
     assert.equal(settings.DEFAULT_SETTINGS.tools[tool.name], tool.default)
 
@@ -110,6 +120,7 @@ async function main() {
   delete saved.tools.delete_directory
   delete saved.tools.list_audio
   delete saved.model.codingResources
+  delete saved.model.verification
   delete saved.coding
   saved.voice.serverPath = 'C:\\old-install\\whisper-server.exe'
   saved.voice.modelPath = 'C:\\old-install\\ggml-base.bin'
@@ -124,6 +135,7 @@ async function main() {
   )
   assert.equal(migrated.coding.mode, 'ask-before-edit', 'Older profiles require edit approval')
   assert.equal(migrated.model.codingResources, 'auto', 'Older profiles migrate to automatic sizing')
+  assert.equal(migrated.model.verification, 'proof', 'Older profiles get the proof pipeline')
   assert.equal(migrated.tools.run_npm, 'ask', 'npm must never advertise persistent approval')
   assert.equal(
     migrated.tools.delete_file,

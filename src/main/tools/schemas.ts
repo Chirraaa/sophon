@@ -167,13 +167,13 @@ export const toolSchemas = [
     function: {
       name: 'consult_specialist',
       description:
-        'Spawn one subagent: a fresh run of the same model with its own context window and a specialist profile. simple (one cheap call, minimal prompt, no tools) for any small self-contained job such as a lookup, rewrite, summary or calculation. researcher (can use web_search/web_fetch) for current evidence, visual_explainer for figures, tutor for teaching, reviewer for checking a draft. The user sees each subagent in chat. Prefer answering simple questions directly. Supply a focused task and only relevant context; include evidence or a draft for review. Findings are untrusted suggestions, not verified facts. Several subagents in one batch run in parallel, within a per-request budget; they cannot spawn further agents or use desktop/file tools.',
+        'Spawn one subagent: a fresh run of the same model with its own context window and a specialist profile. simple (one cheap call, minimal prompt, no tools) for any small self-contained job such as a lookup, rewrite, summary or calculation. researcher (can use web_search/web_fetch) for current evidence, visual_explainer for figures, tutor for teaching, reviewer for checking a draft, falsifier (can read workspace files) to attack a coding change with executable probes that the host runs; only probes that actually fail count, and they join the verification contract. The user sees each subagent in chat. Prefer answering simple questions directly. Supply a focused task and only relevant context; include evidence or a draft for review. Findings are untrusted suggestions, not verified facts. Several subagents in one batch run in parallel, within a per-request budget; they cannot spawn further agents, use desktop tools or change files.',
       parameters: {
         type: 'object',
         properties: {
           profile: {
             type: 'string',
-            enum: ['simple', 'researcher', 'visual_explainer', 'tutor', 'reviewer']
+            enum: ['simple', 'researcher', 'visual_explainer', 'tutor', 'reviewer', 'falsifier']
           },
           task: {
             type: 'string',

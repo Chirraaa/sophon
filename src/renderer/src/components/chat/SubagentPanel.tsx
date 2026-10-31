@@ -11,7 +11,8 @@ const LABELS: Record<SpecialistId, string> = {
   researcher: 'Researcher',
   visual_explainer: 'Visual Explainer',
   tutor: 'Tutor',
-  reviewer: 'Reviewer'
+  reviewer: 'Reviewer',
+  falsifier: 'Falsifier'
 }
 
 const STATUS_TEXT: Record<SpecialistRun['status'], string> = {

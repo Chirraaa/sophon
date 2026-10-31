@@ -11,6 +11,7 @@ import {
   Code2,
   FileCode2,
   ListChecks,
+  ShieldCheck,
   Terminal,
   TriangleAlert
 } from 'lucide-react'
@@ -25,7 +26,7 @@ import {
   DialogTrigger
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { codingChecks, codingFiles, codingView } from '@/lib/coding'
+import { codingChecks, codingFiles, codingView, proofView } from '@/lib/coding'
 import { cn } from '@/lib/utils'
 import { PatchPreview } from './PatchPreview'
 import { Hint } from '../ui/tooltip'
@@ -50,6 +51,7 @@ export function CodingRun({
   const view = codingView(item)
   const files = codingFiles(item)
   const checks = codingChecks(item)
+  const proof = proofView(item)
   const fileCount = new Set(files.map((file) => file.path)).size
   const show = (value: string): void => {
     setTab(value)
@@ -174,6 +176,17 @@ export function CodingRun({
                   <Terminal className="size-3.5" />
                   Checks {checks.length > 0 && `(${checks.length})`}
                 </Button>
+                {proof && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 px-2 text-[11px]"
+                    onClick={() => show('proof')}
+                  >
+                    <ShieldCheck className="size-3.5" />
+                    Proof {proof.proven}/{proof.total}
+                  </Button>
+                )}
                 {onResume && (
                   <Button
                     size="sm"
@@ -217,6 +230,11 @@ export function CodingRun({
             <TabsTrigger value="checks" className="text-xs">
               Checks
             </TabsTrigger>
+            {proof && (
+              <TabsTrigger value="proof" className="text-xs">
+                Proof {proof.proven}/{proof.total}
+              </TabsTrigger>
+            )}
           </TabsList>
           <ScrollArea
             className="min-h-0"
@@ -387,6 +405,88 @@ export function CodingRun({
                 </p>
               )}
             </TabsContent>
+            {proof && (
+              <TabsContent value="proof" className="space-y-2 pb-1">
+                {proof.rows.map((row) => (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      'rounded-xl border border-border p-3 text-xs',
+                      row.status === 'open' && 'border-warning/30 bg-warning/5'
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      {['witnessed', 'held'].includes(row.status) ? (
+                        <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" />
+                      ) : row.status === 'open' ? (
+                        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+                      ) : (
+                        <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground/60" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="selectable leading-5">{row.text}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                          <Badge variant="outline" className="text-[9px]">
+                            {row.falsifier
+                              ? 'Falsifier'
+                              : { behavior: 'Behavior', guard: 'Guard', manual: 'Manual' }[
+                                  row.kind
+                                ]}
+                          </Badge>
+                          {
+                            {
+                              witnessed: 'Witnessed: failed before the change, passes now',
+                              unwitnessed: 'Passes, but never seen failing',
+                              held: 'Holds',
+                              open: 'Not proven yet',
+                              unprobed: 'No probe',
+                              manual: 'Needs a manual check',
+                              withdrawn: `Withdrawn: ${row.withdrawn ?? ''}`
+                            }[row.status]
+                          }
+                        </p>
+                        {row.probes.map((probe) => (
+                          <div key={probe.id} className="mt-2 text-[10px] text-muted-foreground">
+                            <span className="font-mono">{probe.id}</span>{' '}
+                            <span
+                              className={cn(
+                                probe.status === 'green' && 'text-success',
+                                probe.status === 'red' && 'text-warning'
+                              )}
+                            >
+                              {
+                                {
+                                  green: 'passes',
+                                  red: 'fails',
+                                  stale: 'needs a fresh run',
+                                  unrun: 'not run yet',
+                                  unapproved: 'not approved'
+                                }[probe.status]
+                              }
+                            </span>
+                            {probe.witness && <span> · {probe.witness}</span>}
+                            {probe.signals.map((signal) => (
+                              <p key={signal} className="selectable mt-1 break-words font-mono">
+                                {signal}
+                              </p>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {proof.falsification && (
+                  <p className="text-[10px] leading-5 text-muted-foreground">
+                    {proof.falsification}
+                  </p>
+                )}
+                <p className="text-[10px] leading-5 text-muted-foreground">
+                  A claim is witnessed when its probe failed before a change and passes after it,
+                  with the probe and its test files unchanged. Probes run with your account access.
+                </p>
+              </TabsContent>
+            )}
           </ScrollArea>
         </Tabs>
         {item.actions.some((action) => action.status === 'waiting') && (
