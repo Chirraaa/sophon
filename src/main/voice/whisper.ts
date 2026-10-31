@@ -200,7 +200,10 @@ export class WhisperServer {
         Number(new URL(base).port),
         this.inferencePath,
         this.child.pid,
-        AbortSignal.any([signal, AbortSignal.timeout(60000)]),
+        AbortSignal.any([
+          signal,
+          AbortSignal.timeout(Math.max(60000, (audio.byteLength / 32000) * 2000))
+        ]),
         body,
         `multipart/form-data; boundary=${boundary}`
       )

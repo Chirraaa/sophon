@@ -17,7 +17,7 @@ const oneOf =
   (v) =>
     values.includes(v)
 const number: Validator = (v) => typeof v === 'number' && Number.isFinite(v)
-const audio: Validator = (v) => v instanceof Uint8Array && v.byteLength <= 2000000
+const audio: Validator = (v) => v instanceof Uint8Array
 function settingsPatch(value: unknown, template: unknown = getSettings(), depth = 0): boolean {
   if (depth > 4 || !plainObject(value) || !plainObject(template)) return false
   return Object.entries(value).every(([key, item]) => {
