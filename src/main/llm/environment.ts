@@ -24,6 +24,8 @@ export type RunState = {
   consultations?: number
   hostUI?: InterfacePresence
   context?: { usedTokens: number; budgetTokens: number | null; compactions: number }
+  // Coding runs: model calls earned so far by verified progress, and their ceiling.
+  budget?: { earned: number; ceiling: number }
 }
 
 export function runStatePrompt(state: RunState): string {
@@ -37,7 +39,15 @@ export function runStatePrompt(state: RunState): string {
         ...(state.consultations !== undefined ? { subagents: state.consultations } : {})
       },
       ...(state.context ? { context: state.context } : {}),
-      ...(state.hostUI ? { hostUI: state.hostUI } : {})
+      ...(state.hostUI ? { hostUI: state.hostUI } : {}),
+      ...(state.budget
+        ? {
+            budget: {
+              ...state.budget,
+              rule: 'calls, actions and time grow when a failing check or probe shrinks or turns green; repeating a failure earns nothing'
+            }
+          }
+        : {})
     }) +
     (state.context?.budgetTokens && state.context.usedTokens > state.context.budgetTokens * 0.6
       ? ' Context is filling: prefer targeted reads and narrow inspections, and unload schemas you no longer need with discover_tools.'
@@ -83,7 +93,7 @@ export function environmentPrompt(state: Environment): string {
       ? 'Index tools without a loaded schema are still usable: call discover_tools with their exact names first ([] lists descriptions). Pass unload to drop loaded schemas you no longer need and keep context lean. Skip discovery for conversation and questions you can answer directly. Discovery never changes permissions.'
       : '',
     names.includes('consult_specialist') && !state.tools.includes('consult_specialist')
-      ? 'SUBAGENTS: you can spawn subagents. consult_specialist starts a focused same-model subagent (researcher with web access, tutor, visual_explainer, reviewer) in its own context window, so its work does not fill yours. They run one at a time while you wait, within the RUN STATE budget; none run in the background or touch the desktop or files. The user sees each subagent in chat. When asked whether you can spawn agents, say yes and describe exactly this. Load it with discover_tools for difficult research, teaching, figures or draft review; answer simple requests yourself.'
+      ? 'SUBAGENTS: you can spawn subagents. consult_specialist starts a focused same-model subagent (researcher with web access, tutor, visual_explainer, reviewer, falsifier with read-only workspace access) in its own context window, so its work does not fill yours. They run one at a time while you wait, within the RUN STATE budget; none run in the background, touch the desktop or change files. The user sees each subagent in chat. When asked whether you can spawn agents, say yes and describe exactly this. Load it with discover_tools for difficult research, teaching, figures or draft review; answer simple requests yourself.'
       : '',
     'Tool availability is policy, not proof that dependencies or vision work; report specific errors.',
     `${state.workspaceSelected ? 'A working folder is selected.' : 'No working folder is selected; file tools require Settings > Files.'} You cannot see your own UI or the desktop unless an image or inspection result is supplied. Never operate your own approval controls. Stop cancels the run. There is no mode to switch.`,
@@ -105,7 +115,7 @@ export function environmentPrompt(state: Environment): string {
       ? 'For consequential ambiguity, load ask_questions for native cards instead of ending with a prose questionnaire; otherwise state a useful assumption and proceed.'
       : '',
     has('write_file', 'edit_file', 'create_directory', 'delete_file', 'delete_directory', 'run_npm')
-      ? `File creation/edits: ${state.codingMode === 'auto' ? 'Auto under tool policy' : 'Ask before edit, including Always allow tools'}. Project commands, npm and deletions always require one-use approval. Use edit_file for existing code. Read package.json before npm; report actual exit results. Scripts can exceed workspace boundaries under the approved Windows account. run_npm action stop uses the original project path and args.`
+      ? `File creation/edits: ${state.codingMode === 'auto' ? 'Auto under tool policy' : 'Ask before edit, including Always allow tools'}. Project commands, npm and deletions require one-use approval; a verification check or contract probe the user already approved re-runs during this task without asking again. Use edit_file for existing code. Read package.json before npm; report actual exit results. Scripts can exceed workspace boundaries under the approved Windows account. run_npm action stop uses the original project path and args.`
       : '',
     has(
       'inspect_app',

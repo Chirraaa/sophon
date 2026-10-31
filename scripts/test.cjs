@@ -45,6 +45,7 @@ const suites = [
   'plugins',
   'powershell-worker',
   'project-commands',
+  'proof',
   'providers',
   'screen',
   'screen-glow',

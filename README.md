@@ -25,6 +25,7 @@ Sophon is built to help small local models deliver stronger, more consistent res
 - **Desktop control**: window management, screenshots, clicks (with optional hold), smooth relative mouse movement, scrolling, typing and key presses (sent as scan codes, with optional hold, so games receive them), audio and Wi-Fi/Bluetooth toggles. Known steps, including any mix of clicks, mouse movement, keys, typing, scrolling and short waits, can be batched into one `input_batch` call, input returns a settled screenshot of the window so the model can check the result, and `look_at_screen` can number the window's controls so the model clicks a mark instead of guessing coordinates.
 - **Personal organiser**: Outlook / Microsoft 365 calendar events, local notes, and countdown timers shown in the app and the shortcut window. See [Notes and timers](docs/NOTES_AND_TIMERS.md), [Calendar](docs/CALENDAR.md) and [Microsoft accounts](docs/MICROSOFT_ACCOUNTS.md).
 - **Agentic coding**: inspect → patch (`edit_file`) → check → repair loop, host-owned verification, patch previews, `run_command` / `run_npm` with exact-command approval.
+- **Proof harness**: the agent states falsifiable claims with executable probes before editing; the host records each probe's red/green history and reports a claim as witnessed only when its probe failed before the change and passes after it. A falsifier subagent attacks the change with probes that count only if they actually fail, and budgets grow while failures shrink instead of stopping at fixed retry counts. See [Proof harness](PROOF_HARNESS.md).
 - **Web research**: Exa (no key), DuckDuckGo, or Brave; bounded public-page reader with PDF support. Off until you enable it.
 - **Interactive visuals and images**: HTML/SVG/Mermaid rendered inline in a sandboxed iframe with a small React kit, plus `show_image` for public web images, workspace pictures and screenshots.
 - **Voice input**: push-to-talk, transcribed locally with whisper.cpp and the Whisper Base model, chosen intentionally for its lighter resource use.
@@ -99,7 +100,7 @@ flowchart TB
 
 ### Design principles
 
-- **Permissions are enforced in code**: tool schemas are filtered per request, then re-authorized at execution. Commands, deletions and MCP calls always need one-use approval.
+- **Permissions are enforced in code**: tool schemas are filtered per request, then re-authorized at execution. Commands, deletions and MCP calls need one-use approval; an exact verification check the user approved can re-run during the same task without asking again.
 - **Everything the model reads is untrusted**: files, web pages, screenshots, memories, tool output are enveloped and cannot grant permission.
 - **Defense in depth**: sandboxed renderers with a strict CSP and a deny-all Chromium proxy, contract-checked IPC, native handle locking for workspace files, encrypted storage via OS-protected keys, job-object–limited workers.
 - **Honest verification**: accepted input ≠ success. Tools read back state where possible; unverifiable outcomes are reported as such.

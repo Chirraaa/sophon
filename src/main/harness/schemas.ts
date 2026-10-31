@@ -18,6 +18,91 @@ export const harnessSchemas = [
   {
     type: 'function',
     function: {
+      name: 'verification_contract',
+      description:
+        'State what "done" means as falsifiable claims, each tested by executable probes, before you edit. claims: behavior (the change must make it true), guard (must stay true, such as existing tests or typecheck) or manual (cannot be automated; reported as unverified). probes: exactly one of command (one PowerShell check command) or script ({language: node|python, source}); a probe exits 0 when its claim holds. Node scripts are ES modules run from the probe folder; import workspace code with await import(workspace("src/x.js")). Script probes are stored by the app, not in the project. files lists test files a probe depends on. The user approves new probes once; after that the host re-runs them freely (run_probes) at no approval cost. The host runs new probes immediately: a behavior probe should FAIL now and pass after your change; that red-to-green transition with unchanged probe and test files is a witness. A probe that already passes cannot witness the change. Call again to add or redefine probes (redefining resets its history) or withdraw a claim/probe with a reason; amendments appear in the final proof. Submit alone, not mixed with other calls.',
+      parameters: {
+        type: 'object',
+        properties: {
+          claims: {
+            type: 'array',
+            maxItems: 16,
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', pattern: '^[a-z][a-z0-9-]{0,31}$' },
+                text: { type: 'string', maxLength: 300 },
+                kind: { type: 'string', enum: ['behavior', 'guard', 'manual'] }
+              },
+              required: ['id', 'text', 'kind']
+            }
+          },
+          probes: {
+            type: 'array',
+            maxItems: 16,
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', pattern: '^[a-z][a-z0-9-]{0,31}$' },
+                claim: { type: 'string', pattern: '^[a-z][a-z0-9-]{0,31}$' },
+                command: { type: 'string', maxLength: 2000 },
+                script: {
+                  type: 'object',
+                  properties: {
+                    language: { type: 'string', enum: ['node', 'python'] },
+                    source: { type: 'string', maxLength: 6000 }
+                  },
+                  required: ['language', 'source']
+                },
+                path: { type: 'string', maxLength: 400 },
+                files: {
+                  type: 'array',
+                  maxItems: 8,
+                  items: { type: 'string', maxLength: 400 }
+                },
+                timeout_seconds: { type: 'number' }
+              },
+              required: ['id', 'claim']
+            }
+          },
+          withdraw: {
+            type: 'array',
+            maxItems: 16,
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', maxLength: 32 },
+                reason: { type: 'string', maxLength: 300 }
+              },
+              required: ['id', 'reason']
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'run_probes',
+      description:
+        'Re-run approved verification probes on the current code without asking the user again. Omit ids to run every probe whose last result is stale (code changed since) or missing; pass ids to run specific probes. Returns each probe as green, red (with normalized diagnostics) or unapproved, plus witness status. Use it after each fix instead of guessing; it does not count against the action budget.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ids: {
+            type: 'array',
+            maxItems: 16,
+            uniqueItems: true,
+            items: { type: 'string', maxLength: 32 }
+          }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'coding_checkpoint',
       description:
         'Maintain the coding plan and checkpoint. Inspect the workspace first. Supply plan, docs (installed versions and documentation evidence or explicit limits), and tasks on the first call. Task IDs are stable; dependencies must refer to earlier tasks. Map each task to available tools, skill (or none), and profile (main or an available specialist). Use pending, active, implemented; only the application can mark verified after checks. Preserve completed tasks when updating the plan. Checkpoint after each small task with decisions and next steps. lesson is a reusable candidate with evidence, never automatic permission to publish. Saves PLAN.md, TASKS.md, DOCS.md, STATE.md, DECISIONS.md and TRACE.md in the app coding-runs directory; does not edit project files.',

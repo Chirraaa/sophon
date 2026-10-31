@@ -340,7 +340,7 @@ export async function bindLocalAction(
     }
     if (name === 'run_command') {
       if (!info?.isDirectory()) throw new Error('Choose an existing project folder.')
-      details.execution = `Run this exact PowerShell command with your Windows account access, including network and files outside this folder. This is not a sandbox. Stop or the ${args.timeout_seconds ?? 120}-second timeout terminates the process tree. Approval applies to this invocation only.`
+      details.execution = `Run this exact PowerShell command with your Windows account access, including network and files outside this folder. This is not a sandbox. Stop or the ${args.timeout_seconds ?? 120}-second timeout terminates the process tree. Unless stated below, approval applies to this invocation only.`
     }
     if (
       name === 'read_file' ||

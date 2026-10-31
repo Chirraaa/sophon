@@ -61,7 +61,8 @@ export function replyActivity(item: ChatItem): string {
       researcher: 'Consulting the researcher…',
       visual_explainer: 'Preparing a visual explanation…',
       tutor: 'Consulting the tutor…',
-      reviewer: 'Consulting the reviewer…'
+      reviewer: 'Consulting the reviewer…',
+      falsifier: 'Trying to break the change…'
     }[specialist.profile]
   }
   if (VISUAL_FENCE.test(item.text)) return 'Building visual…'

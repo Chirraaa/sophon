@@ -425,6 +425,23 @@ export function ModelTab({ settings }: { settings: AppSettings }): React.JSX.Ele
               }
             />
           </Row>
+          <Row
+            label="Verification"
+            hint="Proof: before editing, the agent states checkable claims with small probes. A probe that fails before a change and passes after it proves the change worked, and a falsifier subagent then tries to break it. Uses more model calls; you approve each new probe once. Project checks: only the project's own build and tests run."
+          >
+            <SelectField
+              value={m.verification ?? 'proof'}
+              options={[
+                { value: 'proof', label: 'Proof' },
+                { value: 'checks', label: 'Project checks' }
+              ]}
+              onChange={(verification) =>
+                void save({
+                  model: { verification: verification as AppSettings['model']['verification'] }
+                })
+              }
+            />
+          </Row>
           {hosted && provider !== 'compatible' && (
             <Row
               label="Reasoning effort"

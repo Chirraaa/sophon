@@ -13,11 +13,24 @@ import { readHarnessProposal } from '../harness/store'
 import { normalizeToolOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
 import { MUTATIONS } from '../workflow/results'
 import { recordTiming } from '../workflow/timing'
+import { addGrant, grantKey, hasGrant } from '../security/grants'
+
+export type RunToolOptions = {
+  // Approving this check also lets the same exact check re-run during this task.
+  reusable?: boolean
+  // Host-run verification probes draw on their own budget instead of the action budget.
+  budget?: 'action' | 'probe'
+}
+
+const REUSE_NOTE =
+  '\n\nApproving also lets Sophon re-run this exact check during this task without asking again. Any other command still asks.'
+
 export async function runTool(
   name: string,
   args: unknown,
   actionId: string,
-  onEvent?: (e: ChatEvent) => void
+  onEvent?: (e: ChatEvent) => void,
+  options: RunToolOptions = {}
 ): Promise<ToolOutcome> {
   const run = currentRun()
   hideScreenGlow()
@@ -26,7 +39,7 @@ export async function runTool(
   try {
     const parameters = validateToolArguments(name, args)
     authorizeTool(run, name)
-    consumeToolBudget(run, name)
+    consumeToolBudget(run, name, options.budget)
     const bound = await bindLocalAction(name, parameters, run)
     const reviewProposal =
       name === 'harness_manage' &&
@@ -37,6 +50,8 @@ export async function runTool(
       : undefined
     if (proposal !== undefined)
       bound.preview += '\n\nApprove this exact procedural candidate for trial use:\n' + proposal
+    const reusable = options.reusable === true && !!grantKey(name, parameters)
+    if (reusable) bound.preview += REUSE_NOTE
     onEvent?.({ type: 'tool_preview', id: actionId, preview: bound.preview })
 
     const fingerprint = JSON.stringify(parameters)
@@ -57,7 +72,9 @@ export async function runTool(
     const needsApproval = codingEdit
       ? codingMode === 'ask-before-edit'
       : toolPermission(name) !== 'allow'
-    if (needsApproval || oneUse || reviewProposal) {
+    // The user already approved this exact check earlier in this task.
+    const granted = !codingEdit && !reviewProposal && hasGrant(run, name, parameters)
+    if ((needsApproval || oneUse || reviewProposal) && !granted) {
       const canAlwaysAllow =
         !codingEdit && !oneUse && !reviewProposal && toolPermission(name) === 'ask'
       const approval = requestApproval(
@@ -81,12 +98,13 @@ export async function runTool(
         )
       }
       if (proposal !== undefined) bound.scope.approvedProposal = proposal
+      if (reusable) addGrant(run, name, parameters)
     }
     authorizeTool(run, name)
     await bound.revalidate()
     if (JSON.stringify(parameters) !== fingerprint) throw new Error('Action arguments changed.')
     assertRun(run)
-    securityEvent('tool_allowed', run.id, name)
+    securityEvent(granted ? 'tool_allowed_by_grant' : 'tool_allowed', run.id, name)
     executing = true
     const started = performance.now()
     let result: Awaited<ReturnType<typeof executeTool>>
@@ -177,4 +195,38 @@ export async function runTool(
       code: name === 'act_on_control' ? 'control-uncertain' : 'execution-error'
     })
   }
+}
+
+// One approval card for a set of exact verification checks (a contract's probes). Each
+// entry passes policy first; on approval each becomes a grant for the rest of this task.
+export async function approveChecks(
+  actionId: string,
+  checks: { name: string; args: Record<string, unknown> }[],
+  preview: string,
+  onEvent?: (e: ChatEvent) => void
+): Promise<boolean> {
+  const run = currentRun()
+  if (!run) return false
+  const pending = checks.filter((check) => !hasGrant(run, check.name, check.args))
+  if (!pending.length) return true
+  for (const check of pending) {
+    authorizeTool(run, check.name)
+    if (!grantKey(check.name, validateToolArguments(check.name, check.args)))
+      throw new Error('Only verification checks can be approved for reuse.')
+  }
+  onEvent?.({ type: 'tool_preview', id: actionId, preview })
+  const approval = requestApproval(actionId, run.signal)
+  onEvent?.({ type: 'tool_wait', id: actionId, canAlwaysAllow: false })
+  const waited = performance.now()
+  const decision = await approval
+  recordTiming(run, 'approval', performance.now() - waited)
+  assertRun(run)
+  onEvent?.({ type: 'tool_resume', id: actionId })
+  if (decision !== 'once' && decision !== 'always') {
+    securityEvent('tool_denied', run.id, 'run_command')
+    return false
+  }
+  for (const check of pending) addGrant(run, check.name, check.args)
+  securityEvent('tool_allowed', run.id, 'run_command')
+  return true
 }

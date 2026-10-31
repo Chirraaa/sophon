@@ -167,16 +167,19 @@ async function main() {
     /^```sophon-questions/
   )
   assert.deepEqual(executed, [], 'Invalid clarification repairs must not execute actions')
+  const pairedQuestions = {
+    tool_calls: [
+      call('write_file', { path: 'new.txt', content: 'unsafe batch' }),
+      call('ask_questions', { questions })
+    ]
+  }
+  assert.match(
+    await runChat([pairedQuestions, { tool_calls: [call('ask_questions', { questions })] }]),
+    /^```sophon-questions/
+  )
+  assert.deepEqual(executed, [], 'An action paired with questions must not execute first')
   await assert.rejects(
-    () =>
-      runChat([
-        {
-          tool_calls: [
-            call('write_file', { path: 'new.txt', content: 'unsafe batch' }),
-            call('ask_questions', { questions })
-          ]
-        }
-      ]),
+    () => runChat([pairedQuestions, pairedQuestions, pairedQuestions, pairedQuestions]),
     /separately/
   )
   assert.deepEqual(executed, [], 'An action paired with questions must not execute first')
@@ -186,7 +189,8 @@ async function main() {
     'researcher',
     'visual_explainer',
     'tutor',
-    'reviewer'
+    'reviewer',
+    'falsifier'
   ])
   assert.equal(specialists.specialistLimits(4096).consultations, 4)
   assert.equal(specialists.specialistLimits(16384).consultations, 8)
@@ -472,8 +476,20 @@ async function main() {
   assert.equal(events.filter((event) => event.type === 'specialist').at(-1).run.status, 'done')
   toolResult = 'PUBLIC_EVIDENCE https://example.org/source'
   settings.model.specialists = false
-  await assert.rejects(runChat([consult('tutor')]), /unavailable/)
+  assert.equal(
+    await runChat([consult('tutor'), { content: 'Answered without a subagent.' }]),
+    'Answered without a subagent.'
+  )
   assert(!requests[0].options.tools.some((tool) => tool.function.name === 'consult_specialist'))
+  assert(
+    requests[1].messages.some(
+      (message) => message.role === 'tool' && /Not executed: .*unavailable/.test(message.content)
+    )
+  )
+  await assert.rejects(
+    runChat([consult('tutor'), consult('tutor'), consult('tutor'), consult('tutor')]),
+    /unavailable/
+  )
   settings.model.specialists = true
   settings.model.maxSteps = 3
   await runChat([consult('researcher'), { content: 'Short report' }, { content: 'Answer' }])
