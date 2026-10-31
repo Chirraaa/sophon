@@ -260,6 +260,13 @@ function load(file, dependencies = {}) {
         file === 'src/main/tools/interact.ts'
       )
         return { getSettings: () => ({ agents: { pointer: 'instant' } }) }
+      // Screen fixtures have no fullscreen app in front.
+      if (
+        !Object.hasOwn(dependencies, name) &&
+        name === '../services/fullscreen' &&
+        file === 'src/main/tools/screen.ts'
+      )
+        return { fullscreenApp: () => null }
       // Chat fixtures that do not exercise parallel agents see none available.
       if (!Object.hasOwn(dependencies, name) && name === '../chat/agents')
         return {
