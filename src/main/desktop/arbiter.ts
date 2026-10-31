@@ -3,7 +3,8 @@ import { onRunFinished, runById, type RunContext } from '../security/run-manager
 // Windows has one pointer, one keyboard focus and one foreground window. Parallel agents
 // share them in turns: each input action (a click, keys, a batch, focusing or moving a
 // window) holds a short input lease, granted first come first served. Between actions any
-// agent can take the next turn. Accessibility actions and screenshots need no lease.
+// agent can take the next turn. Accessibility actions, screenshots and background input
+// (window messages to browsers and Electron apps, see background-input.ts) need no lease.
 //
 // An agent that acts in a window also claims it for a while, so two agents never drive
 // the same app at once (one typing a message into a chat another is navigating away).
@@ -187,6 +188,22 @@ export async function withDesktop<T>(
       claims.set(options.hwnd, { run, at: Date.now() })
     if (options.input) release(run)
     else notify()
+  }
+}
+
+// Holds the input lease around real pointer or keyboard input. An action that started as
+// background input (no lease) takes its turn here if it has to fall back to real input; an
+// action that already holds the lease just nests.
+export async function withInputTurn<T>(
+  run: RunContext | undefined,
+  fn: () => Promise<T>
+): Promise<T> {
+  if (!run) return fn()
+  await acquire(run)
+  try {
+    return await fn()
+  } finally {
+    release(run)
   }
 }
 

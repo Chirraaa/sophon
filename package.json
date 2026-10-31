@@ -8,6 +8,7 @@
   "scripts": {
     "smoke:browser": "node scripts/smoke-browser.cjs",
     "smoke:browser:native": "node scripts/smoke-browser-native.cjs",
+    "smoke:background-input:native": "node scripts/smoke-background-input-native.cjs",
     "smoke:updates": "node scripts/smoke-updates.cjs",
     "smoke:updates:ui": "electron scripts/smoke-updates-ui.cjs --hidden",
     "test": "node scripts/test.cjs",

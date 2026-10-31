@@ -27,15 +27,15 @@ const IGNORED_TITLES = new Set(['Program Manager'])
 type Identity = { hwnd: number; pid: number; exe: string }
 // Window references belong to one run. Parallel agents each keep their own set, so one
 // agent listing windows never expires another agent's references.
-const perRun = new Map<
-  string,
-  { references: Map<string, Identity>; editedTitles: Map<string, Identity & { title: string }> }
->()
-onRunFinished((run) => perRun.delete(run.id))
-function runState(): {
+type RunWindows = {
   references: Map<string, Identity>
   editedTitles: Map<string, Identity & { title: string }>
-} {
+  // The window this task last worked in.
+  working?: Identity
+}
+const perRun = new Map<string, RunWindows>()
+onRunFinished((run) => perRun.delete(run.id))
+function runState(): RunWindows {
   const id = currentRun()?.id ?? ''
   // Outside a run nothing is remembered, as before.
   if (!id) return { references: new Map(), editedTitles: new Map() }
@@ -187,8 +187,28 @@ export function restoreExternalWindow(): boolean {
   if (isMinimized(target.hwnd)) showWindow(target.hwnd, SW_RESTORE)
   return bringToFront(target.hwnd)
 }
+// Remembers the window this task last worked in. Background input leaves another app in
+// front, so keys, text and captures without a named window must go back to this one rather
+// than to whatever the user is using. Also keeps parallel agents in their own windows.
+export function rememberWorkingWindow(w: WinInfo): void {
+  if (!currentRun()) return
+  runState().working = { hwnd: w.hwnd, pid: getProcess(w.hwnd).pid, exe: w.exe }
+}
+// The window a task acts on when none is named: the one it last worked in while that is
+// still open, else the window in front (or the app that was in front before Sophon).
 export function activeWindow(): WinInfo | null {
   const windows = listWindows()
+  const working = currentRun() ? runState().working : undefined
+  const resumed =
+    working &&
+    windows.find(
+      (w) =>
+        w.hwnd === working.hwnd &&
+        w.exe === working.exe &&
+        w.state !== 'minimized' &&
+        getProcess(w.hwnd).pid === working.pid
+    )
+  if (resumed) return resumed
   const current = foregroundWindow()
   return (
     windows.find((w) => w.hwnd === current) ??

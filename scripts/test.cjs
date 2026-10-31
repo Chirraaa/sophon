@@ -8,6 +8,7 @@ const suites = [
   'app-routing',
   'apps',
   'awareness',
+  'background-input',
   'browser',
   'calendar',
   'capabilities',

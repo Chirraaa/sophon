@@ -22,7 +22,17 @@ export type CaptureArgs = {
   window?: string
   region?: Rect
   if_changed?: boolean
+  // Internal: the automatic image after an action, at glance size (see GLANCE).
+  glance?: boolean
 }
+// Images are billed by pixel area, not file size. A full look is at most 1280×960; the
+// automatic image after an action, which mostly confirms a result, is at most 1024×768
+// (about a third fewer tokens). A region close-up is captured at higher detail either way.
+const FULL = { width: 1280, height: 960 }
+const GLANCE = { width: 1024, height: 768 }
+// JPEG quality changes the upload size, not the token count; 75 keeps interface text crisp
+// at about two thirds of the bytes of 88. Marks keep a higher quality for their small digits.
+const QUALITY = 75
 export type CapturedScreen = {
   text: string
   image: string
@@ -43,6 +53,8 @@ type Capture = {
   picture: NativeImage
   marks: Map<number, { x: number; y: number }>
   clickable: boolean
+  // The size limits of the overview that region coordinates refer to.
+  overview: typeof FULL
 }
 // Each run keeps its own latest capture, so parallel agents never invalidate or click
 // through each other's screenshots.
@@ -169,7 +181,7 @@ export function markCapture(
   drawMarks(bitmap, image.width, image.height, marks)
   const marked = nativeImage.createFromBitmap(bitmap, image)
   return {
-    image: `data:image/jpeg;base64,${marked.toJPEG(88).toString('base64')}`,
+    image: `data:image/jpeg;base64,${marked.toJPEG(85).toString('base64')}`,
     labels: marks.map((m) => m.label)
   }
 }
@@ -398,11 +410,20 @@ async function capture(
       }
     }
     const rawSize = image.getSize()
-
+    // Region coordinates refer to the overview the model last saw of this window, which may
+    // have been a glance; a new overview is a glance only when asked for one.
+    const sameWindow = previous && previous.window?.hwnd === win?.hwnd
+    const limits = args.region
+      ? sameWindow
+        ? previous.overview
+        : FULL
+      : args.glance
+        ? GLANCE
+        : FULL
     const scale = Math.min(
       1,
-      1280 / rawSize.width,
-      960 / rawSize.height,
+      limits.width / rawSize.width,
+      limits.height / rawSize.height,
       (win ? win.width : display.full.width) / rawSize.width,
       (win ? win.height : display.full.height) / rawSize.height
     )
@@ -457,8 +478,8 @@ async function capture(
     const croppedSize = image.getSize()
     const outputScale = Math.min(
       1,
-      1280 / croppedSize.width,
-      960 / croppedSize.height,
+      limits.width / croppedSize.width,
+      limits.height / croppedSize.height,
       bounds.width / croppedSize.width,
       bounds.height / croppedSize.height
     )
@@ -483,7 +504,7 @@ async function capture(
       )
         return 'Could not capture stable window bounds. Refresh the window and capture again.'
     }
-    const encoded = image.toJPEG(88).toString('base64')
+    const encoded = image.toJPEG(QUALITY).toString('base64')
     const capture: Capture = {
       runId: key,
       at: Date.now(),
@@ -494,7 +515,8 @@ async function capture(
       encoded,
       picture: image,
       marks: new Map(),
-      clickable: true
+      clickable: true,
+      overview: limits
     }
     captures.set(key, capture)
     const label = win ? `"${win.title}" on monitor ${display.index}` : `monitor ${display.index}`
