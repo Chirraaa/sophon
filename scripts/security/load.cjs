@@ -231,6 +231,48 @@ function load(file, dependencies = {}) {
         return load('src/main/security/grants.ts')
       if (!Object.hasOwn(dependencies, name) && name === '../workflow/coding-mutation')
         return load('src/main/workflow/coding-mutation.ts')
+      // Desktop fixtures that do not exercise parallel agents act alone: no waiting for a turn,
+      // no cursor overlay, and the pointer jumps straight to its target.
+      if (!Object.hasOwn(dependencies, name) && name === '../desktop/arbiter')
+        return {
+          withDesktop: (_run, _options, fn) => fn(),
+          WindowBusyError: class WindowBusyError extends Error {}
+        }
+      if (
+        !Object.hasOwn(dependencies, name) &&
+        ['../desktop/cursors', '../../desktop/cursors'].includes(name)
+      )
+        return {
+          cursorMove: () => {},
+          cursorPulse: () => {},
+          cursorState: () => {},
+          cursorRemove: () => {},
+          cursorPosition: () => undefined
+        }
+      if (
+        !Object.hasOwn(dependencies, name) &&
+        ['../../shared/pointer-path', '../shared/pointer-path'].includes(name)
+      )
+        return load('src/shared/pointer-path.ts')
+      if (
+        !Object.hasOwn(dependencies, name) &&
+        name === '../settings' &&
+        file === 'src/main/tools/interact.ts'
+      )
+        return { getSettings: () => ({ agents: { pointer: 'instant' } }) }
+      // Chat fixtures that do not exercise parallel agents see none available.
+      if (!Object.hasOwn(dependencies, name) && name === '../chat/agents')
+        return {
+          AGENT_INSTRUCTIONS: '',
+          AGENT_TOOLS: ['spawn_agent', 'message_agent', 'check_agents', 'stop_agent'],
+          agentRolePrompt: () => '',
+          agentRoster: () => undefined,
+          agentToolNames: () => [],
+          runAgentTool: async () => 'Parallel agents are unavailable in this fixture.'
+        }
+      // The run manager scopes each run to its async call chain (parallel agents).
+      if (!Object.hasOwn(dependencies, name) && name === 'async_hooks')
+        return require('node:async_hooks')
       assert(Object.hasOwn(dependencies, name), `Unexpected dependency in ${file}: ${name}`)
       return dependencies[name]
     },

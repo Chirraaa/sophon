@@ -18,7 +18,8 @@ const runs = {
   },
   consumeToolBudget: () => {
     run.tools++
-  }
+  },
+  onRunFinished: () => () => {}
 }
 let foreground = 0
 let pidOffset = 100

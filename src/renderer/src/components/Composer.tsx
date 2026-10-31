@@ -18,8 +18,10 @@ import { CodingMode } from './CodingMode'
 import { ContextUsage } from './ContextUsage'
 import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSession } from '@/hooks/useSession'
+import { AgentRouteSelect } from './AgentRoute'
+import { routePlaceholder } from '@/lib/agent-route'
 type Props = {
-  onSend: (text: string, attachments: string[]) => Promise<void>
+  onSend: (text: string, attachments: string[], route?: AgentRoute) => Promise<void>
   chatId: string
   focusToken?: number
   autoFocus?: boolean
@@ -39,14 +41,23 @@ export function Composer({
   placeholder = 'Ask anything, or ask me to do something…'
 }: Props): React.JSX.Element {
   const ref = useRef<HTMLTextAreaElement>(null)
-  const { runningChatId, items } = useSession()
-  // Messages sent while this chat works join its task; another chat's task blocks sending.
-  const busy = runningChatId !== null
-  const working = runningChatId === chatId
-  const elsewhere = busy && !working
-  const queued = working ? items.filter((item) => item.followUp === 'queued').length : 0
+  const session = useSession()
+  const { items, agent } = session
+  // This chat (or, in a chat, any of its agents) is working. Other chats' tasks run on their
+  // own and never block sending here.
+  const busy = session.chatId === chatId && session.busy
+  const working = busy
+  const queued = working
+    ? items.filter((item) => item.followUp === 'queued' && !item.sender).length
+    : 0
   const voice = useVoice()
   const settings = useSettings()
+  // While a chat works, a message can be routed by an agent, added to the task, or started
+  // as a new agent. Agent threads always talk to their own agent.
+  const parallel = !!settings?.agents.enabled && (settings?.agents.maxConcurrent ?? 1) > 1
+  const routable = working && !agent && parallel
+  const [route, setRoute] = useState<AgentRoute | null>(null)
+  const chosenRoute: AgentRoute = routable ? (route ?? settings?.agents.route ?? 'auto') : 'steer'
   const modelInfo = useModelInfo(settings)
   const design = useDesignGuide(chatId)
   const [guideOpen, setGuideOpen] = useState(false)
@@ -91,16 +102,17 @@ export function Composer({
   const recording = voice.phase === 'starting' || voice.phase === 'listening'
   const voiceBusy = recording || voice.phase === 'transcribing'
   const hold = settings?.voice.mode !== 'toggle'
-  const draft = useComposer(chatId, elsewhere || voiceBusy, async (text, attachments) => {
+  const draft = useComposer(chatId, voiceBusy, async (text, attachments) => {
     await onSend(
       design.preferences.attached
         ? [text, designBrief(design.preferences)].filter(Boolean).join('\n\n')
         : text,
-      attachments
+      attachments,
+      routable ? chosenRoute : undefined
     )
     if (design.preferences.attached) design.update({ attached: false })
   })
-  const disabled = elsewhere || voiceBusy || draft.loading || draft.sending
+  const disabled = voiceBusy || draft.loading || draft.sending
   // Settings that shape a task stay fixed while one runs.
   const settingsLocked = disabled || busy
   const draftActive = draft.text.length > 0 || draft.attachments.length > 0
@@ -212,7 +224,13 @@ export function Composer({
                 void draft.submit()
               }
             }}
-            placeholder={working ? 'Add to the current request…' : placeholder}
+            placeholder={
+              agent && working
+                ? 'Message this agent…'
+                : working
+                  ? routePlaceholder(chosenRoute)
+                  : placeholder
+            }
             spellCheck={false}
             className="selectable min-h-10 resize-none overflow-hidden rounded-none border-0 bg-transparent! px-1.5 py-2 text-[13px] leading-6 shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
           />
@@ -258,9 +276,12 @@ export function Composer({
               )}
           </div>
           <div className="flex items-center gap-1.5">
+            {routable && (
+              <AgentRouteSelect value={chosenRoute} onChange={setRoute} disabled={draft.sending} />
+            )}
             {settings?.voice.enabled && (
               <VoiceButton
-                disabled={elsewhere || draft.sending || voice.phase === 'transcribing'}
+                disabled={draft.sending || voice.phase === 'transcribing'}
                 recording={recording}
                 hold={hold}
               />
@@ -271,10 +292,18 @@ export function Composer({
                 variant={working && canSend ? 'outline' : 'default'}
                 onClick={() => {
                   setStopError('')
-                  void window.api.stop().catch((error: Error) => setStopError(error.message))
+                  void window.api.stop(chatId).catch((error: Error) => setStopError(error.message))
                 }}
-                aria-label="Stop response"
-                title={queued ? 'Stop response; waiting messages are not sent' : 'Stop response'}
+                aria-label={agent ? 'Stop this agent' : 'Stop response'}
+                title={
+                  agent
+                    ? 'Stop this agent; other agents keep working'
+                    : queued
+                      ? 'Stop the task and its agents; waiting messages are not sent'
+                      : session.agents?.some((item) => item.status === 'running')
+                        ? 'Stop the task and its agents'
+                        : 'Stop response'
+                }
                 className="size-8 rounded-full shadow-sm"
               >
                 <Square className="size-3.5" fill="currentColor" />
@@ -288,11 +317,23 @@ export function Composer({
                   void draft.submit()
                 }}
                 disabled={!canSend}
-                aria-label={working ? 'Add to current request' : 'Send message'}
+                aria-label={
+                  !working
+                    ? 'Send message'
+                    : agent || chosenRoute === 'steer'
+                      ? 'Add to current request'
+                      : chosenRoute === 'parallel'
+                        ? 'Start a new agent'
+                        : 'Send to an agent'
+                }
                 title={
-                  working
-                    ? 'Add to the current request; Sophon reads it at its next step'
-                    : 'Send message'
+                  !working
+                    ? 'Send message'
+                    : agent || chosenRoute === 'steer'
+                      ? 'Add to the current request; Sophon reads it at its next step'
+                      : chosenRoute === 'parallel'
+                        ? 'Start a separate agent for this message'
+                        : 'An agent passes it to the running task or handles it in parallel'
                 }
                 className="size-8 rounded-full shadow-sm disabled:opacity-25"
               >

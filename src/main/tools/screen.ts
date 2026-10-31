@@ -1,8 +1,8 @@
 import { BrowserWindow, desktopCapturer, nativeImage, screen, type NativeImage } from 'electron'
 import { drawMarks, type Mark } from './marks'
 import { protectedWindowRule } from '../permissions'
-import { currentRun, assertRun } from '../security/run-manager'
-import { enumTopLevelWindows, getProcess } from './win32'
+import { currentRun, assertRun, onRunFinished } from '../security/run-manager'
+import { enumTopLevelWindows, getProcess, screenSample } from './win32'
 import { hideScreenGlow, showScreenGlow } from '../services/screen-glow'
 import { recordTiming } from '../workflow/timing'
 const checkRun = (): void => {
@@ -28,7 +28,7 @@ export type CapturedScreen = {
   // Show the picture to the user without sending it to the model again.
   display?: boolean
 }
-let lastCapture: {
+type Capture = {
   runId: string
   at: number
   pid: number
@@ -42,22 +42,29 @@ let lastCapture: {
   picture: NativeImage
   marks: Map<number, { x: number; y: number }>
   clickable: boolean
-} | null = null
+}
+// Each run keeps its own latest capture, so parallel agents never invalidate or click
+// through each other's screenshots.
+const captures = new Map<string, Capture>()
+const runKey = (): string => currentRun()?.id ?? ''
+const mine = (): Capture | undefined => captures.get(runKey())
+onRunFinished((run) => captures.delete(run.id))
 export function invalidateScreenCoordinates(): void {
-  if (lastCapture) lastCapture.clickable = false
+  const capture = mine()
+  if (capture) capture.clickable = false
 }
 // The window this task last captured, even after input made its coordinates stale.
 // Input to that window is visual work, so its result is captured automatically.
 export function capturedWindow(): number | null {
-  if (!lastCapture || lastCapture.runId !== (currentRun()?.id ?? '')) return null
-  return lastCapture.window?.hwnd ?? null
+  return mine()?.window?.hwnd ?? null
 }
 // The unmarked image of this task's latest capture, for showing to the user.
 export function latestScreenshot(): { image: string; label: string } | null {
-  if (!lastCapture || lastCapture.runId !== (currentRun()?.id ?? '')) return null
+  const capture = mine()
+  if (!capture) return null
   return {
-    image: `data:image/jpeg;base64,${lastCapture.encoded}`,
-    label: lastCapture.window ? `"${lastCapture.window.title}"` : 'the screen'
+    image: `data:image/jpeg;base64,${capture.encoded}`,
+    label: capture.window ? `"${capture.window.title}"` : 'the screen'
   }
 }
 const PROBE_WIDTH = 320
@@ -96,21 +103,38 @@ function still(a: Buffer, b: Buffer): boolean {
       changed++
   return changed <= Math.max(2, a.length / 4 / 500)
 }
+// A few-millisecond sample of just the window's rectangle; null when GDI is unavailable.
+function quickProbe(win: WinInfo): Buffer | null {
+  try {
+    return screenSample({ x: win.x, y: win.y, width: win.width, height: win.height }, PROBE_WIDTH)
+  } catch {
+    return null
+  }
+}
 // Wait until a window stops changing after input, so the capture that follows
 // shows the result rather than a transition. Windows that never settle, such as
 // video or games, are captured after about a second. Probes stay in memory.
+// The quick probe allows a tighter cadence; it then needs two still intervals in a row so
+// an app that has not started repainting yet is not mistaken for a settled one.
 export async function settle(win: WinInfo, guard?: () => void): Promise<void> {
   const started = performance.now()
   const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
-  await sleep(100)
+  let quick = quickProbe(win) !== null
+  await sleep(quick ? 80 : 100)
   let previous: Buffer | null = null
+  let calm = 0
   while (performance.now() - started < 1100) {
     checkRun()
     guard?.()
-    const frame = await probe(win)
-    if (!frame || (previous && still(previous, frame))) return
+    let frame = quick ? quickProbe(win) : null
+    if (quick && !frame) quick = false
+    if (!quick) frame = await probe(win)
+    if (!frame) return
+    if (previous && still(previous, frame)) {
+      if (!quick || ++calm >= 2) return
+    } else calm = 0
     previous = frame
-    await sleep(60)
+    await sleep(quick ? 40 : 60)
   }
 }
 // Draw numbered boxes for desktop-coordinate rectangles on the latest capture.
@@ -119,10 +143,11 @@ export async function settle(win: WinInfo, guard?: () => void): Promise<void> {
 export function markCapture(
   targets: { label: number; bounds: Rect }[]
 ): { image: string; labels: number[] } | null {
-  if (!lastCapture?.clickable || lastCapture.runId !== (currentRun()?.id ?? '')) return null
-  const { bounds, image, picture } = lastCapture
+  const capture = mine()
+  if (!capture?.clickable) return null
+  const { bounds, image, picture } = capture
   const marks: Mark[] = []
-  lastCapture.marks.clear()
+  capture.marks.clear()
   for (const { label, bounds: b } of targets) {
     const x = ((b.x - bounds.x) * image.width) / bounds.width
     const y = ((b.y - bounds.y) * image.height) / bounds.height
@@ -134,7 +159,7 @@ export function markCapture(
     const bottom = Math.min(image.height, y + height)
     if (right - left < 4 || bottom - top < 4) continue
     marks.push({ label, x: left, y: top, width: right - left, height: bottom - top })
-    lastCapture.marks.set(label, {
+    capture.marks.set(label, {
       x: Math.floor((left + right) / 2),
       y: Math.floor((top + bottom) / 2)
     })
@@ -148,8 +173,9 @@ export function markCapture(
   }
 }
 export function markPoint(label: number): { x: number; y: number } | null {
-  if (!lastCapture?.clickable || lastCapture.runId !== (currentRun()?.id ?? '')) return null
-  return lastCapture.marks.get(label) ?? null
+  const capture = mine()
+  if (!capture?.clickable) return null
+  return capture.marks.get(label) ?? null
 }
 export function captureCoordinates(
   x: number,
@@ -159,22 +185,22 @@ export function captureCoordinates(
   y: number
   window: WinInfo | null
 } | null {
+  const capture = mine()
   if (
-    !lastCapture ||
-    !lastCapture.clickable ||
-    lastCapture.runId !== (currentRun()?.id ?? '') ||
-    Date.now() - lastCapture.at > 120000 ||
+    !capture ||
+    !capture.clickable ||
+    Date.now() - capture.at > 120000 ||
     !Number.isFinite(x) ||
     !Number.isFinite(y)
   )
     return null
-  const { bounds, image, window } = lastCapture
+  const { bounds, image, window } = capture
   if (window) {
     const now = listWindows().find((w) => w.hwnd === window.hwnd)
     if (
       !now ||
       now.exe !== window.exe ||
-      getProcess(now.hwnd).pid !== lastCapture.pid ||
+      getProcess(now.hwnd).pid !== capture.pid ||
       now.state === 'minimized' ||
       now.x !== window.x ||
       now.y !== window.y ||
@@ -278,8 +304,9 @@ async function capture(
   guard?: () => void,
   bound?: WinInfo
 ): Promise<CapturedScreen | string> {
-  const previous = lastCapture
-  lastCapture = null
+  const key = runKey()
+  const previous = captures.get(key)
+  captures.delete(key)
   hideScreenGlow()
   guard?.()
   const choice = target(args, bound)
@@ -434,8 +461,8 @@ async function capture(
         return 'Could not capture stable window bounds. Refresh the window and capture again.'
     }
     const encoded = image.toJPEG(88).toString('base64')
-    lastCapture = {
-      runId: currentRun()?.id ?? '',
+    const capture: Capture = {
+      runId: key,
       at: Date.now(),
       pid: win ? getProcess(win.hwnd).pid : 0,
       bounds,
@@ -446,15 +473,16 @@ async function capture(
       marks: new Map(),
       clickable: true
     }
+    captures.set(key, capture)
     const label = win ? `"${win.title}" on monitor ${display.index}` : `monitor ${display.index}`
     const run = currentRun()
     if (run) showScreenGlow(display.id, run.signal)
     if (
       args.if_changed &&
       previous &&
-      previous.runId === lastCapture.runId &&
-      previous.pid === lastCapture.pid &&
-      previous.window?.hwnd === lastCapture.window?.hwnd &&
+      previous.runId === capture.runId &&
+      previous.pid === capture.pid &&
+      previous.window?.hwnd === capture.window?.hwnd &&
       JSON.stringify(previous.bounds) === JSON.stringify(bounds) &&
       JSON.stringify(previous.image) === JSON.stringify(imageSize) &&
       previous.encoded === encoded

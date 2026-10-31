@@ -105,9 +105,12 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'visuals:save': { required: [id] },
   'agent:send': {
     required: [text(32000)],
-    optional: [(v) => Array.isArray(v) && v.length <= 4 && v.every(id)]
+    optional: [
+      (v) => Array.isArray(v) && v.length <= 4 && v.every(id),
+      oneOf('auto', 'steer', 'parallel')
+    ]
   },
-  'agent:stop': {},
+  'agent:stop': { optional: [id] },
   'agent:rerun': { required: [id, id, text(32000)] },
   'agent:remove-follow-up': { required: [id, id] },
   'session:get': {},
@@ -187,7 +190,9 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'microsoft:cancel': {},
   'microsoft:select': { required: [id] },
   'microsoft:remove': { required: [id] },
-  'model:set-key': { required: [oneOf('openai', 'compatible', 'anthropic', 'claude'), text(1000), text(4096)] },
+  'model:set-key': {
+    required: [oneOf('openai', 'compatible', 'anthropic', 'claude'), text(1000), text(4096)]
+  },
   'research:set-key': { required: [text(512)] },
   'llama:get': {},
   'llama:set-enabled': { required: [(v) => typeof v === 'boolean'] },

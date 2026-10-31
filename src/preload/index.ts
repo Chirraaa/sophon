@@ -70,7 +70,10 @@ const api: Api = {
   reviewSettingsRecovery: () => ipcRenderer.invoke('settings:review-recovery'),
   removeWorkspace: () => ipcRenderer.invoke('files:revoke'),
   clearSecurityEvents: () => ipcRenderer.invoke('privacy:clear-security-events'),
-  stop: () => ipcRenderer.invoke('agent:stop'),
+  stop: (chatId) =>
+    chatId === undefined
+      ? ipcRenderer.invoke('agent:stop')
+      : ipcRenderer.invoke('agent:stop', chatId),
   llama: {
     get: () => ipcRenderer.invoke('llama:get'),
     setEnabled: (enabled) => ipcRenderer.invoke('llama:set-enabled', enabled),
@@ -114,7 +117,10 @@ const api: Api = {
     release: (id) => ipcRenderer.invoke('visuals:release', id),
     save: (id) => ipcRenderer.invoke('visuals:save', id)
   },
-  send: (text, attachments) => ipcRenderer.invoke('agent:send', text, attachments),
+  send: (text, attachments, route) =>
+    route === undefined
+      ? ipcRenderer.invoke('agent:send', text, attachments)
+      : ipcRenderer.invoke('agent:send', text, attachments ?? [], route),
   rerun: (chatId, itemId, text) => ipcRenderer.invoke('agent:rerun', chatId, itemId, text),
   removeFollowUp: (chatId, itemId) => ipcRenderer.invoke('agent:remove-follow-up', chatId, itemId),
   chats: {

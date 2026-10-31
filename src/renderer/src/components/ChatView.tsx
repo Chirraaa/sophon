@@ -18,6 +18,7 @@ import { questionsFromReply } from '../../../shared/questions'
 import { ApprovalRequests } from './chat/ApprovalCard'
 import { CodingRun } from './chat/CodingRun'
 import { latestCodingItem } from '@/lib/coding'
+import { AgentBar, AgentThreadHeader } from './chat/Agents'
 const WELCOME_PROMPTS = [
   'What would you like to work on?',
   'Where shall we begin?',
@@ -66,7 +67,7 @@ export function ChatView({
   onOpenModel: () => void
   usingChatgpt?: boolean
 }): React.JSX.Element {
-  const { items, busy, chatId, chats, runningChatId, totalItems = items.length } = useSession()
+  const { items, busy, chatId, chats, agent, totalItems = items.length } = useSession()
   const latest = items.at(-1)
   const coding = latestCodingItem(items)
   const questions =
@@ -100,14 +101,14 @@ export function ChatView({
   )
   const welcomeCentered = items.length === 0 && !draftActive[chatId] && !busy
   const githubVisible = githubVisibility[chatId] ?? false
-  const send = (text: string, attachments: string[] = []): Promise<void> =>
-    window.api.send(text, attachments)
+  const send = (text: string, attachments: string[] = [], route?: AgentRoute): Promise<void> =>
+    window.api.send(text, attachments, route)
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-[68px] shrink-0 items-center justify-between border-b border-border px-7">
         <div className="flex items-center gap-2.5">
           <h1 className="max-w-72 truncate text-[13px] font-medium">
-            {chats.find((chat) => chat.id === chatId)?.title || 'Assistant'}
+            {agent?.title ?? (chats.find((chat) => chat.id === chatId)?.title || 'Assistant')}
           </h1>
           <Badge
             variant="outline"
@@ -129,24 +130,8 @@ export function ChatView({
           <GitBranch className="size-4" /> Repository
         </Button>
       </header>
-      {runningChatId && runningChatId !== chatId && (
-        <div
-          role="status"
-          className="flex items-center justify-between gap-3 border-b border-border px-7 py-2 text-xs text-muted-foreground"
-        >
-          <span>
-            Working in {chats.find((chat) => chat.id === runningChatId)?.title ?? 'another chat'}.
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={actionPending}
-            onClick={() => void perform(() => window.api.chats.select(runningChatId))}
-          >
-            Return to request
-          </Button>
-        </div>
-      )}
+      <AgentBar />
+      {agent && <AgentThreadHeader agent={agent} />}
       <p role="status" className="sr-only">
         {latest?.from === 'agent'
           ? latest.pending
@@ -228,11 +213,11 @@ export function ChatView({
                 </Button>
               ) : (
                 <span>
-                  {runningChatId === chatId
-                    ? 'Working on it · send more to add to this request'
-                    : busy
-                      ? 'Sophon is working on it…'
-                      : 'A little help, right where you need it.'}
+                  {busy
+                    ? agent
+                      ? 'This agent is working · messages reach it at its next step'
+                      : 'Working on it · send more to add, change or start something else'
+                    : 'A little help, right where you need it.'}
                 </span>
               )}
               {usingChatgpt && (

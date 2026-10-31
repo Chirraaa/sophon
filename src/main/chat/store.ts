@@ -28,6 +28,25 @@ export function newConversation(): Conversation {
     history: []
   }
 }
+// Agent thread metadata saved in the index; anything malformed loads as an ordinary chat.
+function validAgent(value: unknown): value is AgentMeta {
+  if (!value || typeof value !== 'object') return false
+  const agent = value as AgentMeta
+  return (
+    typeof agent.handle === 'string' &&
+    /^a\d{1,4}$/.test(agent.handle) &&
+    typeof agent.title === 'string' &&
+    agent.title.length <= 80 &&
+    typeof agent.color === 'string' &&
+    /^#[0-9a-f]{6}$/i.test(agent.color) &&
+    ['worker', 'router'].includes(agent.kind) &&
+    typeof agent.task === 'string' &&
+    ['running', 'done', 'failed', 'stopped'].includes(agent.status) &&
+    Number.isFinite(agent.startedAt) &&
+    (agent.spawnedBy === undefined || typeof agent.spawnedBy === 'string') &&
+    (agent.summary === undefined || typeof agent.summary === 'string')
+  )
+}
 function restoreWorkflow(holder: { workflow?: WorkflowState }): void {
   const value = holder.workflow
   if (value && typeof value === 'object' && !Array.isArray(value)) value.mode = 'assistant'
@@ -252,7 +271,12 @@ export function loadConversations(): ConversationStore {
       categoryId: categories.some((category) => category.id === entry.categoryId)
         ? entry.categoryId
         : undefined,
-      mode: 'assistant'
+      mode: 'assistant',
+      ...(typeof entry.parentId === 'string' &&
+      /^[0-9a-f-]{36}$/.test(entry.parentId) &&
+      validAgent(entry.agent)
+        ? { parentId: entry.parentId, agent: { ...entry.agent } }
+        : {})
     } as Conversation
     entries.set(chat, entry)
     attach(chat)
@@ -272,6 +296,8 @@ export function persistConversations(store: ConversationStore): void {
   for (const chat of store.chats) {
     remember(chat)
     const entry = entries.get(chat)!
+    entry.parentId = chat.parentId
+    entry.agent = chat.agent ? { ...chat.agent } : undefined
     entry.title = chat.title
     entry.updatedAt = chat.updatedAt
     entry.categoryId = chat.categoryId

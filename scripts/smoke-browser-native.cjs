@@ -24,7 +24,10 @@ const runtime = load('src/main/tools/browser/runtime.ts', {
       }
     }
   },
-  '../../security/run-manager': { assertRun: (run) => run.signal.throwIfAborted() },
+  '../../security/run-manager': {
+    assertRun: (run) => run.signal.throwIfAborted(),
+    onRunFinished: () => () => {}
+  },
   '../../permissions': {
     toolPermission: () => permission,
     blockedAppRule: (...values) => blocked && values.some((v) => v.includes(blocked)),

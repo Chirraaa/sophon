@@ -4,7 +4,7 @@ import { release } from 'os'
 import { rendererDocument } from '../security/trusted-document'
 import { stopRun, setInterfacePresenceProvider } from '../security/run-manager'
 import { getSettings, onSettingsChange } from '../settings'
-import { onSession, send, snapshot } from '../chat/session'
+import { acceptsMessages, onSession, send, snapshot } from '../chat/session'
 import { rememberExternalWindow, restoreExternalWindow } from '../tools/windows'
 import {
   SW_RESTORE,
@@ -63,11 +63,9 @@ export class Desktop {
   private readonly offSettings: () => void
   readonly voice = new VoiceSession({
     publish: (state) => broadcast('voice:state', state),
-    // Speaking while the open chat works adds to its request; only another chat's task blocks.
-    busy: () => {
-      const state = snapshot()
-      return state.busy && state.runningChatId !== state.chatId
-    },
+    // Speaking while the open chat works adds to or is routed within its work; only a full
+    // set of tasks in other chats blocks.
+    busy: () => !acceptsMessages(),
     send: (text, owner) => send(text, [], this.interaction(owner, 'voice'))
   })
   constructor() {
@@ -140,7 +138,7 @@ export class Desktop {
     win.webContents.on('destroyed', () => this.voice.detached(win.webContents))
     win.webContents.on('will-attach-webview', (event) => event.preventDefault())
     win.webContents.on('will-navigate', (event) => event.preventDefault())
-    win.webContents.on('render-process-gone', stopRun)
+    win.webContents.on('render-process-gone', () => stopRun())
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   }
   createMain(): BrowserWindow {

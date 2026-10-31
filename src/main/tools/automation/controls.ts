@@ -45,9 +45,23 @@ type Observation = {
 }
 const observations = new Map<string, Observation>()
 const MAX_AGE = 120000
-function prune(run: RunContext): void {
+// Up to four live observations per run. Parallel agents keep their own, so one agent's
+// inspection or action never expires another agent's references; stopped runs drop theirs.
+const PER_RUN = 4
+function prune(): void {
   for (const [id, value] of observations)
-    if (value.runId !== run.id || Date.now() - value.at > MAX_AGE) observations.delete(id)
+    if (Date.now() - value.at > MAX_AGE) observations.delete(id)
+}
+// Before storing a new observation: keep this run's newest three.
+function makeRoom(run: RunContext): void {
+  prune()
+  const own = [...observations.values()].filter((value) => value.runId === run.id)
+  for (const value of own.slice(0, Math.max(0, own.length - PER_RUN + 1)))
+    observations.delete(value.id)
+}
+// Drops one run's observations; another run's references stay valid.
+function clearRun(run: RunContext): void {
+  for (const [id, value] of observations) if (value.runId === run.id) observations.delete(id)
 }
 function validControl(value: unknown): value is Control {
   if (!value || typeof value !== 'object') return false
@@ -86,8 +100,10 @@ export function controlTarget(
   run: RunContext
 ): { window: WinInfo; preview: Record<string, unknown> } {
   assertRun(run)
-  prune(run)
-  const snapshot = observations.get(String(args.observation))
+  prune()
+  const found = observations.get(String(args.observation))
+  // Another agent's observation is not this run's to act on.
+  const snapshot = found?.runId === run.id ? found : undefined
   const control = snapshot?.controls.get(String(args.control))
   if (!snapshot || !control)
     throw new Error('Control reference expired or was used. Inspect the app again.')
@@ -111,6 +127,20 @@ export function controlTarget(
         : {}),
       observedAt: new Date(snapshot.at).toISOString()
     }
+  }
+}
+// Centre of an inspected control in screen pixels, for drawing the agent's cursor there.
+export function controlPoint(
+  args: Record<string, unknown>,
+  run: RunContext
+): { x: number; y: number } | null {
+  const snapshot = observations.get(String(args.observation))
+  const control =
+    snapshot?.runId === run.id ? snapshot.controls.get(String(args.control)) : undefined
+  if (!control) return null
+  return {
+    x: Math.round(control.bounds[0] + control.bounds[2] / 2),
+    y: Math.round(control.bounds[1] + control.bounds[3] / 2)
   }
 }
 // Desktop rectangles of an observation's controls, labelled by their cN number so
@@ -166,8 +196,7 @@ export async function inspectApp(
       'Failed to inspect app controls. ' +
         String(response?.message ?? 'Invalid accessibility response.').slice(0, 240)
     )
-  prune(run)
-  while (observations.size >= 4) observations.delete(observations.keys().next().value!)
+  makeRoom(run)
 
   let id: string
   do {
@@ -259,7 +288,7 @@ export async function actOnControl(
   const snapshot = observations.get(String(args.observation))!
   const expected = snapshot.controls.get(String(args.control))!
 
-  observations.clear()
+  clearRun(run)
   try {
     const response = (await automationWorker(
       {

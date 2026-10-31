@@ -23,7 +23,7 @@ const auth = load('src/main/plugins/github-auth.ts', {
     }
   },
   crypto: require('node:crypto'),
-  '../security/run-manager': { currentRun: () => active },
+  '../security/run-manager': { currentRun: () => active, anyRunActive: () => !!active },
   '../settings': { settingsRecovery: () => ({ required: false }) },
   './github-api': { callGithubApi: async () => ({ login: 'octocat' }) },
   './store': {

@@ -1,6 +1,6 @@
 import { globalShortcut } from 'electron'
 import { getSettings } from '../settings'
-import { snapshot } from '../chat/session'
+import { acceptsMessages } from '../chat/session'
 import { shortcutKeys, waitForRelease } from '../voice/shortcut'
 import type { Desktop } from './desktop'
 import { validateShortcut } from '../../shared/shortcut-contract'
@@ -107,13 +107,7 @@ export class Shortcuts {
   private talkPressed = (): void => {
     if (!getSettings().voice.enabled) return
     const voice = this.desktop.voice
-    const state = snapshot()
-    if (
-      this.releaseTalk ||
-      (state.busy && state.runningChatId !== state.chatId) ||
-      voice.snapshot().phase === 'transcribing'
-    )
-      return
+    if (this.releaseTalk || !acceptsMessages() || voice.snapshot().phase === 'transcribing') return
     const hold = getSettings().voice.mode === 'hold'
     let released = false
     let captureId: string | undefined

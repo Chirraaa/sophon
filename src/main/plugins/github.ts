@@ -1,5 +1,5 @@
 import type { SecureIpc } from '../security/ipc'
-import { currentRun } from '../security/run-manager'
+import { anyRunActive } from '../security/run-manager'
 import { settingsRecovery } from '../settings'
 import { bindPluginAction } from './tools'
 import { connected, disconnect, safeResult } from './runtime'
@@ -29,7 +29,7 @@ export function registerGithubIpc(
   let busy = false
   const call = async (id: string, tool: string, raw: string): Promise<unknown> => {
     if (busy) throw new Error('A GitHub operation is already in progress.')
-    if (currentRun()) throw new Error('Finish or stop the current task before using GitHub.')
+    if (anyRunActive()) throw new Error('Finish or stop the current task before using GitHub.')
     if (settingsRecovery().required) throw new Error('Review recovered settings first.')
     const server = serverRecord(id)
     if (server.config.type !== 'http' || server.config.url !== 'https://api.githubcopilot.com/mcp/')
@@ -39,7 +39,7 @@ export function registerGithubIpc(
     busy = true
     try {
       binding.revalidate()
-      if (currentRun()) throw new Error('Finish or stop the current task first.')
+      if (anyRunActive()) throw new Error('Finish or stop the current task first.')
       const connection = connected(id)
       let result: unknown
       try {
@@ -84,7 +84,8 @@ export function registerGithubIpc(
     async (id, tool, raw) => {
       if (busy)
         throw new Error('A GitHub operation is already in progress. Retry Fetch when it finishes.')
-      if (currentRun()) throw new Error('Finish or stop the current task before fetching history.')
+      if (anyRunActive())
+        throw new Error('Finish or stop the current task before fetching history.')
       const server = serverRecord(id)
       busy = true
       try {
