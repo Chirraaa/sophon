@@ -154,7 +154,9 @@ export class ToolDiscovery {
     return catalog.filter((tool) => chosen.has(tool.function.name))
   }
 
-  load(names: string[], catalog: Tool[], unload: string[] = []): string {
+  load(requested: string[], catalog: Tool[], unloading: string[] = []): string {
+    const names = [...new Set(requested)].slice(0, 8)
+    const unload = [...new Set(unloading)].slice(0, 16)
     const available = new Set(catalog.map((tool) => tool.function.name))
     for (const name of unload.filter((name) => !names.includes(name))) {
       this.requested.delete(name)
