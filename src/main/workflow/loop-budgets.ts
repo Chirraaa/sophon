@@ -1,6 +1,15 @@
 import type { ToolOutcome } from './tool-outcome'
 
-type Retry = 'session' | 'gate' | 'arguments' | 'completion' | 'protocol' | 'stall' | 'evidence'
+type Retry =
+  | 'session'
+  | 'gate'
+  | 'arguments'
+  | 'completion'
+  | 'protocol'
+  | 'stall'
+  | 'evidence'
+  | 'batch'
+  | 'proof'
 const RETRY_LIMITS: Record<Retry, number> = {
   session: 3,
   gate: 3,
@@ -8,9 +17,15 @@ const RETRY_LIMITS: Record<Retry, number> = {
   completion: 1,
   protocol: 1,
   stall: 1,
-  evidence: 1
+  evidence: 1,
+  // Malformed batch shapes (mixing calls that must stand alone, unknown tools).
+  batch: 3,
+  // Proof gate rounds without convergence; probe progress resets it.
+  proof: 4
 }
-type Progress = 'checkpoint' | 'inspection' | 'mutation' | 'file-read' | 'arguments'
+// Distinct failed or uncertain actions the model may diagnose between verified changes.
+const SETBACKS = 6
+type Progress = 'checkpoint' | 'inspection' | 'mutation' | 'file-read' | 'arguments' | 'proof'
 
 export class LoopBudgets {
   private retries: Partial<Record<Retry, number>> = {}
@@ -20,6 +35,7 @@ export class LoopBudgets {
   private targetRefreshes = 0
   private controlReadbacks = 0
   private setbacks = 0
+  private failedCalls = new Set<string>()
 
   count(kind: Retry): number {
     return this.retries[kind] ?? 0
@@ -34,6 +50,8 @@ export class LoopBudgets {
     if (['checkpoint', 'inspection', 'mutation'].includes(event)) this.retries.session = 0
     if (['checkpoint', 'file-read'].includes(event)) this.retries.gate = 0
     if (event === 'arguments') this.retries.arguments = 0
+    if (event === 'mutation') this.setbacks = 0
+    if (event === 'proof') this.retries.proof = 0
   }
   recover(tool: string, path: string, result: ToolOutcome): boolean {
     if (tool === 'act_on_control' && result.code === 'control-uncertain')
@@ -59,9 +77,13 @@ export class LoopBudgets {
     if (result.code === 'target-missing') return this.targetRefreshes++ < 2
     return false
   }
-  // A failed or uncertain result without a dedicated recovery path goes back to the
-  // model a bounded number of times per request; denials always stop.
-  setback(result: ToolOutcome): boolean {
-    return ['failed', 'uncertain'].includes(result.status) && this.setbacks++ < 2
+  // A failed or uncertain result without a dedicated recovery path goes back to the model
+  // while its attempts stay distinct: repeating an identical failed call ends recovery,
+  // and a verified change resets the allowance. Denials always stop.
+  setback(result: ToolOutcome, call = ''): boolean {
+    if (!['failed', 'uncertain'].includes(result.status)) return false
+    if (call && this.failedCalls.has(call)) return false
+    if (call) this.failedCalls.add(call)
+    return this.setbacks++ < SETBACKS
   }
 }

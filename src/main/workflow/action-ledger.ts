@@ -10,6 +10,8 @@ export type ActionRecord = Readonly<{
   revision: number
   mutation: 'none' | 'applied' | 'possible'
   readbackWindow?: string
+  // Host-run verification probe: evidence for the proof contract, not a project check.
+  origin?: 'probe'
 }>
 
 export type VerificationReport = Readonly<{
@@ -28,7 +30,10 @@ export class ActionLedger {
   private observations = new Map<string, NonNullable<ToolOutcome['observation']>>()
   private currentRevision: number
   private currentCheckRevision = 0
-  private pending = new Map<string, { tool: string; args: Record<string, unknown> }>()
+  private pending = new Map<
+    string,
+    { tool: string; args: Record<string, unknown>; origin?: 'probe' }
+  >()
   constructor(
     readonly runId: string,
     revision = 0,
@@ -70,15 +75,15 @@ export class ActionLedger {
       report.status === 'passed'
     )
   }
-  begin(actionId: string, tool: string, args: Record<string, unknown>): void {
+  begin(actionId: string, tool: string, args: Record<string, unknown>, origin?: 'probe'): void {
     if (this.pending.has(actionId) || this.completed.has(actionId))
       throw new Error('Duplicate action ID.')
-    this.pending.set(actionId, { tool, args: structuredClone(args) })
+    this.pending.set(actionId, { tool, args: structuredClone(args), ...(origin ? { origin } : {}) })
   }
   complete(actionId: string, outcome: ToolOutcome): ActionRecord {
     const action = this.pending.get(actionId)
     if (!action) throw new Error('No pending action in the ledger.')
-    const record = this.record(actionId, action.tool, action.args, outcome)
+    const record = this.record(actionId, action.tool, action.args, outcome, action.origin)
     this.pending.delete(actionId)
     return record
   }
@@ -97,12 +102,15 @@ export class ActionLedger {
     actionId: string,
     tool: string,
     args: Record<string, unknown>,
-    outcome: ToolOutcome
+    outcome: ToolOutcome,
+    origin?: 'probe'
   ): ActionRecord {
     if (typeof args.path === 'string') args = { ...args, path: this.projectPath(args.path) }
     if (this.completed.has(actionId)) throw new Error('Action outcome already recorded.')
     if (
       outcome.execution !== 'not-started' &&
+      // Contract probes are separate evidence: running one never invalidates project checks.
+      origin !== 'probe' &&
       ((tool === 'run_command' && args.purpose === 'check') ||
         (tool === 'run_npm' && args.action !== 'stop' && isRoutineNpm(args.args)))
     )
@@ -143,7 +151,8 @@ export class ActionLedger {
       outcome,
       revision: this.revision,
       mutation,
-      readbackWindow
+      readbackWindow,
+      ...(origin ? { origin } : {})
     })
     this.completed.add(actionId)
     return record

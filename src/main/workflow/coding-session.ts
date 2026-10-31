@@ -1,7 +1,12 @@
 import { codingMutation } from './coding-mutation'
 import { ActionLedger, type ActionRecord, type VerificationReport } from './action-ledger'
 export { codingMutation, isRoutineNpm } from './coding-mutation'
-import { ACTION_LIMIT, RUN_SECONDS } from '../../shared/loop-limits'
+import {
+  ACTION_CEILING,
+  ACTION_LIMIT,
+  RUN_SECONDS,
+  RUN_SECONDS_CEILING
+} from '../../shared/loop-limits'
 import { untrustedData } from '../llm/untrusted-data'
 import { codingQualityGuide, codingToolFeedback } from '../../shared/coding-quality'
 
@@ -9,9 +14,17 @@ export const CODING_SESSION_INSTRUCTIONS = `CODING WORKFLOW (follow in order; sc
 1. Scope: short follow-ups refine the existing request and keep its constraints. Inspection-only requests get no edits. Reading code, cloning or running an existing script needs no plan, reviewer or lesson.
 2. Inspect: list_files, then read the files you will touch plus AGENTS.md or similar project guidance and package.json (read it fully). Use read_file start_line/line_count for known ranges; never reconstruct a file from a truncated read. For version-sensitive APIs, check the installed version and official docs when web tools are loaded.
 3. Edit: edit_file with short unique old_text/new_text excerpts, or an edits array (up to 12) for one file. Never regenerate unchanged code. write_file creates new files only; overwrites are rejected. Use create_directory for missing folders. If edit_file is unavailable, report the missing permission.
-4. Check: after the last edit run the relevant build/tests (run_npm, or run_command with purpose check). The host also runs discovered npm checks and owns verified status. A nonzero exit is a diagnostic to repair, not a denial: fix the cause, at most two repairs per check, and never weaken or remove checks. If no check exists, say so; do not invent one to satisfy the harness.
+4. Check: after the last edit run the relevant build/tests (run_npm, or run_command with purpose check). The host also runs discovered npm checks and owns verified status. A nonzero exit is a diagnostic to repair, not a denial: fix the cause and never weaken or remove checks. Repairs continue while they change the failure; repeating the same failure escalates and then ends the task unverified. If no check exists, say so; do not invent one to satisfy the harness.
 5. Finish: report changed files, the checks actually run and remaining limits. Do not paste whole files unless asked.
 On a patch mismatch, re-read and copy the exact excerpt. Stop on denial or uncertain effects. run_command uses PowerShell syntax in the workspace with purpose inspect, change or check; run dependent commands separately and read each exit code. Approval cards handle approval; never ask twice in prose or evade blocked tools, protected paths or the selected GitHub account scope. coding_checkpoint is optional for substantial multi-step work; if you save tasks keep their status current and checkpoint after the latest edits.`
+
+// Added when the contract tools are offered (they follow the run_command permission).
+export const PROOF_INSTRUCTIONS = `PROOF LOOP (verification_contract, run_probes): turn "done" into claims the host can check.
+1. Before the first edit, submit verification_contract alone: behavior claims (what the change must make true), guard claims (what must stay true, such as existing tests or the typecheck) and manual claims (not automatable; reported as unverified), each behavior/guard claim with a probe: one check command or a short node/python script that exits 0 when the claim holds. The user approves new probes once. Behavior probes should fail on the current code.
+2. Change the code. After each fix call run_probes: it costs no approval and no actions, and returns green/red with normalized diagnostics.
+3. A behavior claim is witnessed when its probe failed earlier and passes now, with the probe and its declared test files unchanged. A probe that always passed only guards.
+4. At completion the host re-runs stale probes and project checks and returns any failure to you. A falsifier subagent may then attack the change with its own probes; those that fail become claims to satisfy, or to withdraw with a reason if they contradict the request.
+5. Budgets grow while a failure shrinks or turns green. Repeating the same failure earns nothing, escalates, and then ends the task unverified. Never weaken a probe or test to pass; withdraw it with a reason instead, and the final proof shows the amendment.`
 
 export function wantsCodingSession(text: string, workspace: string): boolean {
   if (
@@ -330,13 +343,14 @@ export class CodingSession {
       CODING_SESSION_INSTRUCTIONS +
       '\n' +
       codingQualityGuide(goal, this.state) +
+      (tools.includes('verification_contract') ? '\n' + PROOF_INSTRUCTIONS : '') +
       '\nCAPABILITY MANIFEST: ' +
       JSON.stringify({
         tools,
         profiles: specialists
           ? ['main', 'reviewer', 'researcher', 'tutor', 'visual_explainer']
           : ['main'],
-        limits: `${ACTION_LIMIT} actions; ${RUN_SECONDS / 60} minutes.`,
+        limits: `${ACTION_LIMIT} actions and ${RUN_SECONDS / 60} minutes, extended while verification shows progress up to ${ACTION_CEILING} actions and ${RUN_SECONDS_CEILING / 60} minutes; probes have their own budget.`,
         skills: 'Assign a task skill only after reading it (harness_manage or plugin_read).'
       })
     )

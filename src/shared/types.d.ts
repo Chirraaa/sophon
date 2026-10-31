@@ -137,6 +137,8 @@ declare global {
     'pending' | 'observed' | 'reported' | 'verified' | 'failed' | 'denied' | 'uncertain'
   interface ActionEvidence {
     code?: string
+    // A host-run verification probe; judged by the proof contract, not as a mutation.
+    origin?: 'probe'
     actionId: string
     runId: string
     tool: string
@@ -159,6 +161,8 @@ declare global {
     codingPaths?: string[]
     mutationRevision?: number
     codingSession?: CodingSessionState
+    // Verification contract: claims, probes and their red/green history.
+    proof?: import('./proof').ProofState
     updatedAt: number
   }
   interface CodingTaskState {
@@ -241,7 +245,8 @@ declare global {
     availableTools?: string[]
     codingResources?: CodingResourceState
   }
-  type SpecialistId = 'simple' | 'researcher' | 'visual_explainer' | 'tutor' | 'reviewer'
+  type SpecialistId =
+    'simple' | 'researcher' | 'visual_explainer' | 'tutor' | 'reviewer' | 'falsifier'
   interface SpecialistRun {
     id: string
     profile: SpecialistId
@@ -361,6 +366,8 @@ declare global {
       reasoningEffort: 'auto' | ReasoningEffort
       specialists: boolean
       codingResources: 'auto' | 'conserve' | 'expand'
+      // checks: host project checks only. proof: adds the verification contract pipeline.
+      verification: 'checks' | 'proof'
     }
     behavior: {
       systemPrompt: string

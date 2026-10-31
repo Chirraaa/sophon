@@ -640,21 +640,26 @@ async function integrationTests() {
   assert.equal(executions.filter((e) => e.name === 'run_npm').length, 2)
   assert.match(JSON.stringify(captured), /Expected 1, got 0/)
 
+  // Repairs that keep reproducing the same failure get escalating strategy prompts, then
+  // stop after six stalled attempts instead of a fixed three.
   reset([
     tool('read_file', { path: 'index.ts' }),
     write(),
     answer(),
-    edit(),
-    answer(),
-    edit(),
-    answer()
+    ...Array.from({ length: 6 }, () => [edit(), answer()]).flat()
   ])
   checkExit = 1
   assert.match(
     await chat('Fix the function in this project', event, []),
     /not verified|verification stopped/
   )
-  assert.equal(executions.filter((e) => e.name === 'run_npm').length, 3)
+  assert.equal(executions.filter((e) => e.name === 'run_npm').length, 7)
+  const escalations = captured
+    .at(-1)
+    .filter((message) => message.role === 'system' && /^Convergence/.test(message.content))
+  assert.equal(escalations.length, 2, 'Hypothesis, then widen-the-search escalation')
+  assert.match(escalations[0].content, /root-cause hypothesis/)
+  assert.match(escalations[1].content, /still stalled/)
 
   reset([
     tool('read_file', { path: 'Hello.java' }),

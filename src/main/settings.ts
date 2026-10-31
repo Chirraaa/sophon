@@ -252,7 +252,8 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
         model.codingResources,
         ['auto', 'conserve', 'expand'],
         base.model.codingResources
-      )
+      ),
+      verification: oneOf(model.verification, ['checks', 'proof'], base.model.verification)
     },
     behavior: {
       systemPrompt: str(behavior.systemPrompt, 8000, base.behavior.systemPrompt),

@@ -1,5 +1,13 @@
 import { ActionLedger, type ActionRecord, type VerificationReport } from './action-ledger'
 import { standaloneHtmlIssue } from './html-check'
+import { ConvergenceGovernor } from './proof/governor'
+import { commandText, failureFingerprint } from './proof/fingerprint'
+import {
+  ACTION_CEILING,
+  ACTION_LIMIT,
+  RUN_SECONDS,
+  RUN_SECONDS_CEILING
+} from '../../shared/loop-limits'
 
 type Action = {
   tool: 'list_files' | 'read_file' | 'run_npm' | 'run_command'
@@ -7,7 +15,9 @@ type Action = {
 }
 type Check = { name: string; passed: boolean; failures: number }
 type Project = { checks: Check[]; reason?: string }
-export type VerificationStep = Action | { done: true } | { blocked: string }
+// unchanged: a required check already failed on exactly this code; it needs a fix, not a re-run.
+export type VerificationStep =
+  Action | { done: true } | { blocked: string } | { unchanged: string; key: string }
 const SCRIPT_NAMES = [
   'typecheck',
   'type-check',
@@ -33,8 +43,17 @@ const file = (folder: string): string =>
 const BUILD_SYSTEM =
   /(?:^|[\s\]/\\])(?:CMakeLists\.txt|[Mm]akefile|meson\.build|pom\.xml|build\.gradle(?:\.kts)?|settings\.gradle(?:\.kts)?|Cargo\.toml|go\.mod|pyproject\.toml|setup\.py|tox\.ini|composer\.json|Gemfile|mix\.exs|deno\.jsonc?|[^\s/\\]+\.(?:sln|csproj|fsproj|vcxproj))\s*$/m
 
+const checkKey = (folder: string, command: string): string => `check:${folder}:${command}`
+
 export class CodingVerification {
-  constructor(readonly ledger = new ActionLedger('standalone')) {}
+  // Failing checks repair until attempts stop changing the failure, not for a fixed count.
+  constructor(
+    readonly ledger = new ActionLedger('standalone'),
+    readonly governor = new ConvergenceGovernor(
+      { calls: 20, actions: ACTION_LIMIT, seconds: RUN_SECONDS },
+      { calls: 80, actions: ACTION_CEILING, seconds: RUN_SECONDS_CEILING }
+    )
+  ) {}
   private observedRevision = -1
   private observedCheckRevision = -1
   private listings = new Map<string, boolean>()
@@ -93,6 +112,8 @@ export class CodingVerification {
       outcome: { text, status, command }
     } = record
     if (record.outcome.execution === 'not-started') return
+    // Contract probes are judged by the proof contract, not added as required checks.
+    if (record.origin === 'probe') return
     const successful = !['denied', 'failed', 'uncertain'].includes(status)
     const path = pathName(args.path)
     if (
@@ -119,14 +140,14 @@ export class CodingVerification {
       if (args.purpose === 'check') {
         const key = path + '\0' + String(args.command)
         const previous = this.commands.get(key)
+        const passed = successful && command?.exitCode === 0 && !command.stopped && !command.running
         this.commands.set(key, {
           path,
           args: structuredClone(args),
-          passed: successful && command?.exitCode === 0 && !command.stopped && !command.running,
-          failures:
-            (previous?.failures ?? 0) +
-            (successful && command?.exitCode === 0 && !command.stopped && !command.running ? 0 : 1)
+          passed,
+          failures: (previous?.failures ?? 0) + (passed ? 0 : 1)
         })
+        this.observe(path, String(args.command), passed, text)
       }
     }
     if (successful && tool === 'list_files') {
@@ -191,6 +212,7 @@ export class CodingVerification {
           successful && command?.exitCode === 0 && command.stopped === false && !command.running
         if (!check.passed) check.failures++
         this.pendingNpmChecks.set(key, check)
+        this.observe(path, `npm run ${script}`, check.passed, text)
       }
     }
   }
@@ -233,7 +255,7 @@ export class CodingVerification {
             }
           }
           const pending = checks.find((check) => !check.passed)
-          if (pending) return { tool: 'run_command', args: pending.args }
+          if (pending) return this.rerun(pending)
           break
         }
         folder = parent(folder)
@@ -247,17 +269,27 @@ export class CodingVerification {
       if (project.reason) return { blocked: project.reason }
       for (const check of project.checks) {
         if (check.passed) continue
-        if (check.failures >= 3)
-          return {
-            blocked: `npm run ${check.name} in ${folder} failed three times. Repair limit reached; code remains unverified.`
-          }
+        const stalled = this.governor.stopReason(
+          (key) => key === checkKey(folder, `npm run ${check.name}`)
+        )
+        if (stalled) return { blocked: stalled }
+        const key = checkKey(folder, `npm run ${check.name}`)
+        if (this.governor.unchangedFailure(key, this.ledger.revision))
+          return { unchanged: `npm run ${check.name} in ${folder}`, key }
         return { tool: 'run_npm', args: { path: folder, args: ['run', check.name] } }
       }
     }
 
-    for (const check of this.commands.values())
-      if (!check.passed) return { tool: 'run_command', args: check.args }
+    for (const check of this.commands.values()) if (!check.passed) return this.rerun(check)
     return { done: true }
+  }
+  private rerun(check: { path: string; args: Record<string, unknown> }): VerificationStep {
+    const key = checkKey(check.path, String(check.args.command))
+    const stalled = this.governor.stopReason((item) => item === key)
+    if (stalled) return { blocked: stalled }
+    if (this.governor.unchangedFailure(key, this.ledger.revision))
+      return { unchanged: `${String(check.args.command)} in ${check.path}`, key }
+    return { tool: 'run_command', args: check.args }
   }
   summary(): string {
     this.synchronize()
@@ -317,20 +349,17 @@ export class CodingVerification {
     }
     return undefined
   }
-  finalRepair(): boolean {
-    return [...this.projects.values()].some((project) =>
-      project.checks.some((check) => !check.passed && check.failures === 2)
+  private observe(folder: string, command: string, passed: boolean, text: string): void {
+    this.governor.observe(
+      checkKey(folder, command),
+      `${command} in ${folder}`,
+      this.ledger.revision,
+      passed,
+      passed ? undefined : failureFingerprint(commandText(text))
     )
   }
+  // Set once repeated repairs stopped changing a check's failure.
   limitIssue(): string | undefined {
-    for (const check of this.commands.values())
-      if (!check.passed && check.failures >= 3)
-        return `${check.args.command} in ${check.path} failed three times. Inspect diagnostics; code remains unverified.`
-    for (const [folder, project] of this.projects) {
-      const check = project.checks.find((item) => item.failures >= 3)
-      if (check)
-        return `npm run ${check.name} in ${folder} failed three times. Repair limit reached; code remains unverified.`
-    }
-    return undefined
+    return this.governor.stopReason((key) => key.startsWith('check:'))
   }
 }

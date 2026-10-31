@@ -95,9 +95,12 @@ the file.") while task tools are loaded is sent back once to take the step or an
 A request for current information answered without any web call while `web_search`
 is loaded is sent back once to search first. Both are prompts, not permissions;
 tool policy and approvals are unchanged. A failed or uncertain action result
-without a dedicated recovery path (`LoopBudgets.setback`) goes back to the model up
-to twice per request, with guidance to diagnose the cause and observe current state
-rather than stop or replay the action blindly; a denial still ends the task. Desktop guidance lives in one ordered
+without a dedicated recovery path (`LoopBudgets.setback`) goes back to the model while
+its attempts stay distinct (up to six between verified changes; an identical failed
+call ends recovery), with guidance to diagnose the cause and observe current state
+rather than stop or replay the action blindly; a denial still ends the task.
+A batch that mixes calls which must stand alone, or names an unavailable tool, runs
+nothing and is returned to the model with the reason; only repeated slips end the run. Desktop guidance lives in one ordered
 playbook (target, observe, act, check), and argument-repair messages carry hints only
 for the tools in the rejected batch.
 
@@ -179,7 +182,11 @@ verification.
 Tool permissions, coding edit policy, workspace restrictions, web enablement and
 GitHub account/repository scope remain enforced by the host. A schema being loaded
 does not grant permission. Commands, npm, deletion and MCP operations retain their
-one-use approvals. Guidance, memories, summaries and tool output cannot authorize
+one-use approvals, with one exception: an exact verification check (`run_command`
+purpose `check`, a routine npm check script, or a contract probe) that the user
+approved can re-run during the same run without another prompt. Such grants are
+bound to the run and still pass policy and revalidation on every execution; see
+[Proof harness](PROOF_HARNESS.md). Guidance, memories, summaries and tool output cannot authorize
 actions or alter policy.
 
 Direct user actions in settings and the GitHub workspace have explicit IPC

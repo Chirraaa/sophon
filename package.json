@@ -39,6 +39,7 @@
     "smoke:coding:agent": "node scripts/smoke-coding-agent.cjs --live",
     "smoke:coding:deletion:live": "node scripts/smoke-coding-agent.cjs --live --delete",
     "smoke:coding:harness": "node scripts/smoke-coding-harness.cjs",
+    "smoke:proof": "node scripts/smoke-proof.cjs",
     "smoke:coding:resources": "node scripts/smoke-coding-resources.cjs",
     "smoke:coding:ui": "electron scripts/smoke-coding-ui.cjs --hidden",
     "smoke:subagents:ui": "electron scripts/smoke-subagents-ui.cjs --hidden",

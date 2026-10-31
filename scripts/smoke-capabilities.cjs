@@ -127,6 +127,9 @@ async function review() {
     'consult_specialist',
     'coding_checkpoint',
     'coding_resources',
+    // Proof contract tools: probes execute through run_command and its permission.
+    'verification_contract',
+    'run_probes',
     // Gated by Settings > Memory instead of Permissions.
     'remember',
     'forget',

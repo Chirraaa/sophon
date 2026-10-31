@@ -283,14 +283,23 @@ async function main() {
   assert.deepEqual(executions, [])
   settings.tools.list_audio = 'ask'
 
-  reset([
-    {
-      tool_calls: [
-        ...call('discover_tools', { names: ['list_audio'] }).tool_calls,
-        ...call('list_audio', {}).tool_calls
-      ]
-    }
-  ])
+  const mixedDiscovery = {
+    tool_calls: [
+      ...call('discover_tools', { names: ['list_audio'] }).tool_calls,
+      ...call('list_audio', {}).tool_calls
+    ]
+  }
+  // A mixed batch is a correctable slip: nothing in it runs and the model hears why.
+  reset([mixedDiscovery, { content: 'Retried discovery on its own.' }])
+  assert.equal(await chat('Help with this', () => {}, []), 'Retried discovery on its own.')
+  assert.deepEqual(executions, [], 'Discovery cannot hide a side effect in the same batch')
+  assert(
+    requests[1].messages.some(
+      (m) => m.role === 'tool' && /Not executed: Discover tool schemas separately/.test(m.content)
+    )
+  )
+  // Only repeated slips end the run, still without running anything.
+  reset([mixedDiscovery, mixedDiscovery, mixedDiscovery, mixedDiscovery])
   await assert.rejects(
     chat('Help with this', () => {}, []),
     /Discover tool schemas separately/

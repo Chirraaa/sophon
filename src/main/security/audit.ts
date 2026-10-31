@@ -34,6 +34,7 @@ export function securityEvent(
     | 'run_started'
     | 'run_stopped'
     | 'tool_allowed'
+    | 'tool_allowed_by_grant'
     | 'tool_denied'
     | 'tool_failed'
     | 'policy_changed',

@@ -1,4 +1,4 @@
-import { ACTION_LIMIT, RUN_SECONDS, isBookkeepingTool } from '../../shared/loop-limits'
+import { PROBE_LIMIT, actionLimit, isBookkeepingTool, runSeconds } from '../../shared/loop-limits'
 import { randomUUID } from 'crypto'
 
 export interface RunContext {
@@ -13,6 +13,10 @@ export interface RunContext {
   readonly interaction: InteractionContext
   readonly interfacePresence?: InterfacePresence
   tools: number
+  // Raised by the coding harness while verification shows progress; capped in loop-limits.
+  actionLimit?: number
+  deadlineSeconds?: number
+  probes?: number
   searches: number
   pages: number
   images: number
@@ -29,6 +33,20 @@ export interface RunContext {
 }
 export type FollowUp = { text: string; attachments: string[] }
 let active: { run: RunContext; controller: AbortController; timer: NodeJS.Timeout } | null = null
+// The deadline can move later while a run makes progress, so the timer re-arms itself
+// for whatever remains instead of firing at a fixed time.
+function armDeadline(run: RunContext): NodeJS.Timeout {
+  const remaining = runSeconds(run) * 1000 - (performance.now() - run.startedAt)
+  return setTimeout(
+    () => {
+      if (active?.run !== run) return
+      if (runSeconds(run) * 1000 - (performance.now() - run.startedAt) > 1000)
+        active.timer = armDeadline(run)
+      else stopRun()
+    },
+    Math.max(1000, remaining)
+  )
+}
 let revision = 0
 let interfacePresence: () => InterfacePresence | undefined = () => undefined
 export function setInterfacePresenceProvider(provider: () => InterfacePresence | undefined): void {
@@ -74,6 +92,9 @@ export function startRun(
       return interfacePresence()
     },
     tools: 0,
+    actionLimit: undefined,
+    deadlineSeconds: undefined,
+    probes: 0,
     searches: 0,
     pages: 0,
     images: 0,
@@ -87,8 +108,7 @@ export function startRun(
     followUps: undefined,
     searchUnavailable: false
   })
-  const timer = setTimeout(stopRun, RUN_SECONDS * 1000)
-  active = { run, controller, timer }
+  active = { run, controller, timer: armDeadline(run) }
   return run
 }
 export function finishRun(run: RunContext): void {
@@ -97,10 +117,20 @@ export function finishRun(run: RunContext): void {
   active.controller.abort()
   active = null
 }
-export function consumeToolBudget(run: RunContext, name = ''): void {
+export function consumeToolBudget(
+  run: RunContext,
+  name = '',
+  budget: 'action' | 'probe' = 'action'
+): void {
   assertRun(run)
+  if (budget === 'probe') {
+    if ((run.probes ?? 0) >= PROBE_LIMIT)
+      throw new Error(`The task reached its ${PROBE_LIMIT}-probe verification limit.`)
+    run.probes = (run.probes ?? 0) + 1
+    return
+  }
   if (isBookkeepingTool(name)) return
-  if (run.tools >= ACTION_LIMIT)
-    throw new Error(`The task reached its ${ACTION_LIMIT}-action limit.`)
+  const limit = actionLimit(run)
+  if (run.tools >= limit) throw new Error(`The task reached its ${limit}-action limit.`)
   run.tools++
 }

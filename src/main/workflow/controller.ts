@@ -5,6 +5,7 @@ import { MUTATIONS, unsupportedCompletion } from './results'
 import { ActionLedger, type ActionRecord, type VerificationReport } from './action-ledger'
 import type { ToolOutcome } from './tool-outcome'
 import { validCodingSession, wantsCodingSession } from './coding-session'
+import { validProofState, type ProofState } from './proof/contract'
 
 const MAX_EVIDENCE = 16
 const ACTIVE_PHASES = ['inspect', 'act', 'verify', 'respond', 'finished']
@@ -48,6 +49,7 @@ export function validWorkflow(value: unknown): value is WorkflowState {
     Number.isInteger(value.omittedEvidence) &&
     Number(value.omittedEvidence) >= 0 &&
     (value.codingSession === undefined || validCodingSession(value.codingSession)) &&
+    (value.proof === undefined || validProofState(value.proof)) &&
     (value.mutationRevision === undefined ||
       (Number.isSafeInteger(value.mutationRevision) && Number(value.mutationRevision) >= 0)) &&
     (value.codingPaths === undefined ||
@@ -65,6 +67,7 @@ export function validWorkflow(value: unknown): value is WorkflowState {
         str(e.target, 160) &&
         member(e.status, STATUSES) &&
         (e.code === undefined || str(e.code, 80)) &&
+        (e.origin === undefined || e.origin === 'probe') &&
         str(e.summary, 240) &&
         date(e.at)
     )
@@ -179,6 +182,10 @@ export class WorkflowController {
     this.state.codingSession = structuredClone(session)
     this.emit()
   }
+  trackProof(proof: ProofState): void {
+    if (!validProofState(proof)) throw new Error('Invalid verification contract.')
+    this.state.proof = structuredClone(proof)
+  }
   publishEvidence(session?: CodingSessionState): void {
     if (session) {
       if (!validCodingSession(session)) throw new Error('Invalid coding projection.')
@@ -217,12 +224,17 @@ export class WorkflowController {
       })
     )
   }
-  beforeAction(actionId: string, tool: string, args: Record<string, unknown>): void {
+  beforeAction(
+    actionId: string,
+    tool: string,
+    args: Record<string, unknown>,
+    origin?: 'probe'
+  ): void {
     if (this.state.outcome !== 'running') throw new Error('This workflow has stopped.')
     if (this.controlReadbackPending && tool !== 'inspect_app')
       throw new Error('Inspect the uncertain control action before any further action.')
-    this.actions.begin(actionId, tool, args)
-    this.state.phase = MUTATIONS.has(tool) ? 'act' : 'inspect'
+    this.actions.begin(actionId, tool, args, origin)
+    this.state.phase = origin === 'probe' ? 'verify' : MUTATIONS.has(tool) ? 'act' : 'inspect'
     this.state.nextStep = 'Wait for the approved tool result before deciding what to do next.'
     this.state.evidence.push({
       actionId,
@@ -233,7 +245,8 @@ export class WorkflowController {
       ).slice(0, 160),
       status: 'pending',
       summary: 'Action proposed; execution and result are not yet confirmed.',
-      at: Date.now()
+      at: Date.now(),
+      ...(origin ? { origin } : {})
     })
     if (this.state.evidence.length > MAX_EVIDENCE) {
       this.state.evidence.shift()
@@ -255,6 +268,13 @@ export class WorkflowController {
       code: result.code
     })
     this.recoveryAction = undefined
+    // A failing or timed-out probe is evidence for the contract, never a reason to stop.
+    if (record.origin === 'probe') {
+      this.state.nextStep =
+        'Probe result recorded. Use it to decide the next change; the proof contract tracks it.'
+      if (publish) this.emit()
+      return record
+    }
     const recover = this.budgets.recover(evidence.tool, String(args.path ?? ''), result)
     if (evidence.tool === 'act_on_control' && result.code === 'control-uncertain' && recover) {
       this.recoveryAction = actionId
@@ -281,7 +301,7 @@ export class WorkflowController {
         'The public web service was unavailable, not denied by the user. Do not repeat a failed search or change providers. Read an available public source or explain the verification limit. Permission denials still stop the task.'
     } else if (
       ['execution-error', 'unverified'].includes(result.code) &&
-      this.budgets.setback(result)
+      this.budgets.setback(result, evidence.tool + '\0' + JSON.stringify(args))
     ) {
       this.recoveryAction = actionId
       this.state.nextStep =
@@ -324,7 +344,7 @@ export class WorkflowController {
   finish(incomplete = false, verification?: VerificationReport): void {
     if (this.state.outcome !== 'running') return
     const actions = this.state.evidence.filter(
-      (e) => e.runId === this.runId && MUTATIONS.has(e.tool)
+      (e) => e.runId === this.runId && MUTATIONS.has(e.tool) && e.origin !== 'probe'
     )
     this.state.phase = 'finished'
     this.state.outcome =

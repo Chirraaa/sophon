@@ -53,5 +53,10 @@ whole-file `write_file` overwrites, directing existing-file changes to `edit_fil
 Saved plans require current task statuses and a checkpoint after the latest edits.
 Host checks must pass after the last source mutation before verified completion.
 All model requests share the run counter; the coordinator reserves a final response.
-Action quotas exclude discovery, resource sizing and checkpoints; the independent
-batch bound and 15-minute run deadline still apply. See `CODING_HARNESS.md`.
+Action quotas exclude discovery, resource sizing, checkpoints and contract probes; the
+independent batch bound still applies, and the 60-action and 15-minute limits extend
+only while verification shows progress (see `PROOF_HARNESS.md`). See `CODING_HARNESS.md`.
+
+The **Falsifier** profile is the one specialist whose output is executed rather than
+read: it has read-only workspace tools and returns probes, which the host runs and
+admits into the verification contract only if they fail on the current code.

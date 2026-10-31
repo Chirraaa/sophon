@@ -7,7 +7,8 @@ export const DEFAULT_MODEL_TUNING = {
   thinking: false,
   reasoningEffort: 'auto',
   specialists: true,
-  codingResources: 'auto'
+  codingResources: 'auto',
+  verification: 'proof'
 } as const
 
 export function qwenSampling(thinking: boolean): {

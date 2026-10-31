@@ -3,6 +3,7 @@ const path = require('node:path')
 const assert = require('node:assert/strict')
 const ts = require('typescript')
 const root = path.resolve(__dirname, '../..')
+let proofUserData
 function load(file, dependencies = {}) {
   const source = fs.readFileSync(path.join(root, file), 'utf8')
   const code = ts.transpileModule(source, {
@@ -59,6 +60,7 @@ function load(file, dependencies = {}) {
           './results': load('src/main/workflow/results.ts')
         })
         return {
+          ...dependencies[name],
           runTool: async (tool, args, ...rest) => {
             const result = await dependencies[name].runTool(tool, args, ...rest)
             const outcome = normalizeToolOutcome(tool, args, result)
@@ -200,6 +202,35 @@ function load(file, dependencies = {}) {
           parse5: require('parse5'),
           'node:vm': require('node:vm')
         })
+      // Proof harness modules are pure apart from probe script files, which go to a
+      // throwaway folder unless a test supplies its own electron/fs fixtures.
+      const proofModule = name.match(
+        /(?:^\.\/|\/proof\/)(contract|fingerprint|governor|falsifier|probe-files)$/
+      )
+      if (
+        !Object.hasOwn(dependencies, name) &&
+        proofModule &&
+        (name.includes('/proof/') || file.startsWith('src/main/workflow/proof/'))
+      )
+        return load(`src/main/workflow/proof/${proofModule[1]}.ts`, {
+          crypto: require('node:crypto'),
+          fs: require('node:fs'),
+          path: require('node:path'),
+          electron: {
+            app: {
+              getPath: () =>
+                (proofUserData ??= fs.mkdtempSync(
+                  path.join(require('node:os').tmpdir(), 'sophon-proof-fixture-')
+                ))
+            }
+          }
+        })
+      if (!Object.hasOwn(dependencies, name) && /(?:^|\/)shared\/proof$/.test(name))
+        return load('src/shared/proof.ts')
+      if (!Object.hasOwn(dependencies, name) && ['../security/grants', './grants'].includes(name))
+        return load('src/main/security/grants.ts')
+      if (!Object.hasOwn(dependencies, name) && name === '../workflow/coding-mutation')
+        return load('src/main/workflow/coding-mutation.ts')
       assert(Object.hasOwn(dependencies, name), `Unexpected dependency in ${file}: ${name}`)
       return dependencies[name]
     },
