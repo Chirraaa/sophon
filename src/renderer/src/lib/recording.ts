@@ -43,8 +43,8 @@ export class MicrophoneRecording {
         this.flush?.()
         return
       }
-      if (data instanceof Float32Array && this.samples < context.sampleRate * 30) {
-        const chunk = data.slice(0, context.sampleRate * 30 - this.samples)
+      if (data instanceof Float32Array) {
+        const chunk = data.slice()
         if (performance.now() - this.lastLevelAt > 80) {
           this.lastLevelAt = performance.now()
           const rms = Math.sqrt(

@@ -200,7 +200,7 @@ export class WhisperServer {
         Number(new URL(base).port),
         this.inferencePath,
         this.child.pid,
-        AbortSignal.any([signal, AbortSignal.timeout(60000)]),
+        signal,
         body,
         `multipart/form-data; boundary=${boundary}`
       )

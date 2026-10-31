@@ -1,11 +1,9 @@
 const RATE = 16000
-export const MAX_RECORDING_SECONDS = 30
 export function validateRecording(value: unknown): Uint8Array {
   if (!(value instanceof Uint8Array)) throw new Error('Invalid microphone recording.')
   const b = Buffer.from(value.buffer, value.byteOffset, value.byteLength)
   if (
     b.length < 44 ||
-    b.length > 44 + RATE * 2 * MAX_RECORDING_SECONDS ||
     b.toString('ascii', 0, 4) !== 'RIFF' ||
     b.readUInt32LE(4) !== b.length - 8 ||
     b.toString('ascii', 8, 16) !== 'WAVEfmt ' ||
