@@ -118,6 +118,21 @@ export type BatchStep = {
   text?: string
   direction?: string
   amount?: number
+  dx?: number
+  dy?: number
+  duration_ms?: number
+  ms?: number
+}
+// Waits in short slices so Stop and a window change still interrupt a long pause.
+async function pause(ms: number, win: WinInfo, guard?: () => void): Promise<string | null> {
+  const end = Date.now() + ms
+  for (let left = ms; left > 0; left = end - Date.now()) {
+    await sleep(Math.min(left, 100))
+    checkRun()
+    guard?.()
+    if (foregroundWindow() !== win.hwnd) return 'focus changed.'
+  }
+  return null
 }
 // Runs steps decided from one screenshot, in order, in a single window. Click
 // points were resolved against that screenshot when the batch was approved, so
@@ -143,19 +158,27 @@ export async function runBatch(
         (point
           ? await pointerClick(point, step.button ?? 'left', step.hold_ms)
           : 'no resolved click point.')
+    } else if (step.action === 'wait') {
+      failure = await pause(Number(step.ms), win, guard)
     } else {
       const result =
         step.action === 'press_keys'
           ? await pressKeys({ keys: step.keys, hold_ms: step.hold_ms }, guard, win)
           : step.action === 'type_text'
             ? await typeText({ text: step.text }, guard, win)
-            : await scrollWindow({ direction: step.direction, steps: step.amount }, guard, win)
-      if (!/^(Pressed|Typed|Scrolled) /.test(result)) failure = result
+            : step.action === 'move_mouse'
+              ? await moveMouse(
+                  { dx: step.dx, dy: step.dy, duration_ms: step.duration_ms },
+                  guard,
+                  win
+                )
+              : await scrollWindow({ direction: step.direction, steps: step.amount }, guard, win)
+      if (!/^(Pressed|Typed|Scrolled|Moved) /.test(result)) failure = result
     }
     if (failure)
       return `Unverified: stopped at step ${i + 1} of ${steps.length} (${step.action}): ${failure} Steps 1-${i} ran.`
     // Give the app a moment to apply this step before the next lands.
-    await sleep(step.action === 'click' ? 120 : 60)
+    if (step.action !== 'wait') await sleep(step.action === 'click' ? 120 : 60)
   }
   return `Ran ${steps.length} input steps in "${win.title}".`
 }
