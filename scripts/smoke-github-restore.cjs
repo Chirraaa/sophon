@@ -28,7 +28,7 @@ const ipc = load('src/main/plugins/ipc.ts', {
       return true
     }
   },
-  '../security/run-manager': { currentRun: () => active, revokePolicy: () => {} },
+  '../security/run-manager': { currentRun: () => active, anyRunActive: () => !!active, revokePolicy: () => {} },
   '../settings': { settingsRecovery: () => ({ required: recovery }) },
   './import': {},
   './config': {},

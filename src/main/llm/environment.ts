@@ -26,6 +26,8 @@ export type RunState = {
   context?: { usedTokens: number; budgetTokens: number | null; compactions: number }
   // Coding runs: model calls earned so far by verified progress, and their ceiling.
   budget?: { earned: number; ceiling: number }
+  // Other agents of this chat (parallel agents) and what they are doing.
+  agents?: unknown[]
 }
 
 export function runStatePrompt(state: RunState): string {
@@ -40,6 +42,7 @@ export function runStatePrompt(state: RunState): string {
       },
       ...(state.context ? { context: state.context } : {}),
       ...(state.hostUI ? { hostUI: state.hostUI } : {}),
+      ...(state.agents?.length ? { agents: state.agents } : {}),
       ...(state.budget
         ? {
             budget: {
@@ -93,7 +96,7 @@ export function environmentPrompt(state: Environment): string {
       ? 'Index tools without a loaded schema are still usable: call discover_tools with their exact names first ([] lists descriptions). Pass unload to drop loaded schemas you no longer need and keep context lean. Skip discovery for conversation and questions you can answer directly. Discovery never changes permissions.'
       : '',
     names.includes('consult_specialist') && !state.tools.includes('consult_specialist')
-      ? 'SUBAGENTS: you can spawn subagents. consult_specialist starts a focused same-model subagent (researcher with web access, tutor, visual_explainer, reviewer, falsifier with read-only workspace access) in its own context window, so its work does not fill yours. They run one at a time while you wait, within the RUN STATE budget; none run in the background, touch the desktop or change files. The user sees each subagent in chat. When asked whether you can spawn agents, say yes and describe exactly this. Load it with discover_tools for difficult research, teaching, figures or draft review; answer simple requests yourself.'
+      ? 'SUBAGENTS: you can spawn subagents. consult_specialist starts a focused same-model subagent (researcher with web access, tutor, visual_explainer, reviewer, falsifier with read-only workspace access) in its own context window, so its work does not fill yours. They run one at a time while you wait, within the RUN STATE budget; none run in the background, touch the desktop or change files. The user sees each subagent in chat. Background agents with their own threads, tools and desktop access are a separate tool, spawn_agent, when it is available. When asked whether you can spawn agents, say yes and describe what is available. Load it with discover_tools for difficult research, teaching, figures or draft review; answer simple requests yourself.'
       : '',
     'Tool availability is policy, not proof that dependencies or vision work; report specific errors.',
     `${state.workspaceSelected ? 'A working folder is selected.' : 'No working folder is selected; file tools require Settings > Files.'} You cannot see your own UI or the desktop unless an image or inspection result is supplied. Never operate your own approval controls. Stop cancels the run. There is no mode to switch.`,

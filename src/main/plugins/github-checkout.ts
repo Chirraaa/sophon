@@ -5,7 +5,7 @@ import { lstat, realpath, mkdir } from 'fs/promises'
 import { join, isAbsolute } from 'path'
 import { readPrivate, writePrivate } from '../security/private-store'
 import { validateWorkspaceRoot } from '../security/workspace-policy'
-import { currentRun } from '../security/run-manager'
+import { anyRunActive } from '../security/run-manager'
 import { settingsRecovery } from '../settings'
 import { serverRecord } from './store'
 import type { GithubCheckout, GithubCheckoutAction } from '../../shared/github-history'
@@ -34,7 +34,7 @@ function store(context: GithubContext, checkout: GithubCheckout | null): void {
   saved = next
 }
 function authorize(context: GithubContext): ReturnType<typeof serverRecord> {
-  if (currentRun()) throw new Error('Finish or stop the current task before updating a checkout.')
+  if (anyRunActive()) throw new Error('Finish or stop the current task before updating a checkout.')
   if (settingsRecovery().required) throw new Error('Review recovered settings first.')
   const server = serverRecord(context.serverId)
   if (

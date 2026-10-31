@@ -1,6 +1,6 @@
 import { shell } from 'electron'
 import { randomUUID } from 'crypto'
-import { currentRun } from '../security/run-manager'
+import { anyRunActive } from '../security/run-manager'
 import { settingsRecovery } from '../settings'
 import { addServer, serverSummaries, setGithubIdentity } from './store'
 import { callGithubApi } from './github-api'
@@ -23,7 +23,7 @@ export function githubSignInConfigured(): boolean {
   return /^[A-Za-z0-9_.-]{6,200}$/.test(process.env.SOPHON_GITHUB_CLIENT_ID || SOPHON_CLIENT_ID)
 }
 function guard(): void {
-  if (currentRun()) throw new Error('Finish or stop the current task before connecting GitHub.')
+  if (anyRunActive()) throw new Error('Finish or stop the current task before connecting GitHub.')
   if (settingsRecovery().required) throw new Error('Review recovered settings first.')
 }
 async function request(

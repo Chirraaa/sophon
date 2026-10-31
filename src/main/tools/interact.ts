@@ -1,5 +1,8 @@
 import { protectedWindowRule, blockedAppRule } from '../permissions'
 import { currentRun, assertRun } from '../security/run-manager'
+import { getSettings } from '../settings'
+import { cursorMove, cursorPosition, cursorPulse } from '../desktop/cursors'
+import { glideCurve, glideDuration, glidePoint } from '../../shared/pointer-path'
 const checkRun = (): void => {
   const run = currentRun()
   if (run) assertRun(run)
@@ -9,6 +12,7 @@ import { activeWindow, findWindow, listWindows, type WinInfo } from './windows'
 import {
   SW_RESTORE,
   bringToFront,
+  cursorPos,
   foregroundWindow,
   keyInput,
   mouseInput,
@@ -80,7 +84,7 @@ export async function clickScreen(
   const fresh = captureCoordinates(x, y)
   if (!fresh || fresh.x !== point.x || fresh.y !== point.y)
     return 'Denied: capture the moved window again.'
-  const failure = await pointerClick(point, button, hold_ms)
+  const failure = await pointerClick(point, button, hold_ms, guard)
   return (
     failure ??
     `Clicked ${button} at (${Math.round(x)}, ${Math.round(y)}) in "${win.title}"${hold_ms ? ` (held ${hold_ms} ms)` : ''}.`
@@ -90,17 +94,42 @@ const holdError = (hold: number | undefined): string | null =>
   hold !== undefined && (!Number.isInteger(hold) || hold < 50 || hold > 5000)
     ? 'Invalid hold_ms: use a whole number from 50 to 5000.'
     : null
+// Moves the real pointer to a screen point the way a hand would: a short eased glide on a
+// slight curve, at the speed chosen in Settings > Agents ('instant' jumps as before). The
+// agent's own cursor travels the same path. Stop and window changes interrupt it.
+async function glideTo(point: { x: number; y: number }, guard?: () => void): Promise<boolean> {
+  const run = currentRun()
+  const from = cursorPos() ?? point
+  const duration = glideDuration(from, point, getSettings().agents?.pointer ?? 'natural')
+  const curve = glideCurve(from, point)
+  if (run) cursorMove(run, point, { duration, curve })
+  if (duration > 0) {
+    const started = performance.now()
+    for (let t = 0; t < 1; ) {
+      await sleep(8)
+      checkRun()
+      guard?.()
+      t = Math.min(1, (performance.now() - started) / duration)
+      const step = glidePoint(from, point, curve, t)
+      if (!setCursor(Math.round(step.x), Math.round(step.y))) return false
+    }
+  }
+  return setCursor(point.x, point.y)
+}
 // Moves the pointer and clicks; returns a failure message, or null on success.
 async function pointerClick(
   point: { x: number; y: number },
   button: string,
-  hold?: number
+  hold?: number,
+  guard?: () => void
 ): Promise<string | null> {
   const flags = button === 'right' ? [0x0008, 0x0010] : button === 'left' ? [0x0002, 0x0004] : null
   if (!flags) return 'Button must be left or right.'
-  if (!setCursor(point.x, point.y)) return 'Windows could not move the pointer.'
+  if (!(await glideTo(point, guard))) return 'Windows could not move the pointer.'
   invalidateScreenCoordinates()
   const refused = 'Windows refused the click (the app may be running as administrator).'
+  const run = currentRun()
+  if (run) cursorPulse(run)
   if (!mouseInput(flags[0])) return refused
   // Mining or attacking in a game needs the button down for the whole span.
   try {
@@ -156,7 +185,7 @@ export async function runBatch(
       failure =
         holdError(step.hold_ms) ??
         (point
-          ? await pointerClick(point, step.button ?? 'left', step.hold_ms)
+          ? await pointerClick(point, step.button ?? 'left', step.hold_ms, guard)
           : 'no resolved click point.')
     } else if (step.action === 'wait') {
       failure = await pause(Number(step.ms), win, guard)
@@ -196,7 +225,12 @@ export async function scrollWindow(
   if (args.direction !== 'up' && args.direction !== 'down') return 'Direction must be up or down.'
   const win = await focus(bound ? undefined : args.window, bound, guard)
   if (typeof win === 'string') return win
-  if (!setCursor(Math.round(win.x + win.width / 2), Math.round(win.y + win.height / 2)))
+  if (
+    !(await glideTo(
+      { x: Math.round(win.x + win.width / 2), y: Math.round(win.y + win.height / 2) },
+      guard
+    ))
+  )
     return 'Windows could not move the pointer.'
   invalidateScreenCoordinates()
   return mouseInput(0x0800, (args.direction === 'up' ? 1 : -1) * steps * 120)
@@ -293,6 +327,7 @@ export async function pressKeys(
     return 'Invalid hold_ms: use a whole number from 50 to 5000.'
   const win = await focus(bound ? undefined : args.window, bound, guard)
   if (typeof win === 'string') return win
+  typingCursor(win)
   const held: number[] = []
   invalidateScreenCoordinates()
   try {
@@ -314,6 +349,20 @@ export async function pressKeys(
     for (const mod of held.reverse()) keyInput(mod, true)
   }
 }
+// Keyboard input has no pointer position: the agent's cursor shows it typing where it last
+// was in this window, or near the window's centre.
+function typingCursor(win: WinInfo): void {
+  const run = currentRun()
+  if (!run) return
+  const at = cursorPosition(run)
+  const inside =
+    at && at.x >= win.x && at.x < win.x + win.width && at.y >= win.y && at.y < win.y + win.height
+  cursorMove(
+    run,
+    inside ? at : { x: Math.round(win.x + win.width / 2), y: Math.round(win.y + win.height / 3) },
+    { typing: true }
+  )
+}
 export async function typeText(
   args: { text?: string; window?: string },
   guard?: () => void,
@@ -323,6 +372,7 @@ export async function typeText(
   if (!text || text.length > 2000) return 'Provide between 1 and 2000 characters.'
   const win = await focus(bound ? undefined : args.window, bound, guard)
   if (typeof win === 'string') return win
+  typingCursor(win)
   invalidateScreenCoordinates()
   for (let i = 0; i < text.length; i++) {
     checkRun()

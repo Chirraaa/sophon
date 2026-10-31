@@ -192,6 +192,82 @@ export const toolSchemas = [
   {
     type: 'function',
     function: {
+      name: 'spawn_agent',
+      description:
+        'Start a background agent for one independent part of the request. It gets its own visible thread, the same tools and permissions, and its own cursor; it runs in parallel while you continue. Use for several independent tasks at once (one agent per app or job), not for a single simple task. Returns its handle (a1, a2…). Several spawn_agent calls in one batch start several agents.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', maxLength: 60, description: 'Short label, e.g. "Spotify playlist".' },
+          task: {
+            type: 'string',
+            maxLength: 4000,
+            description: 'Complete, self-contained instructions; the agent sees nothing else.'
+          },
+          context: { type: 'string', maxLength: 4000, description: 'Optional relevant details.' },
+          wait: { type: 'boolean', description: 'Wait for its result before continuing (default false).' }
+        },
+        required: ['title', 'task']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'message_agent',
+      description:
+        'Send a message to another agent in this chat ("main" is the chat\'s own task). Use it to pass on a change the user asked for, ask a question, or reply when an agent asks you. A running agent reads it at its next step. With await_reply, wait for its reply (or its finish).',
+      parameters: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', maxLength: 16, description: 'Agent handle: main, a1, a2…' },
+          message: { type: 'string', maxLength: 4000 },
+          await_reply: { type: 'boolean' },
+          timeout_seconds: { type: 'number', description: '5–300; default 90.' }
+        },
+        required: ['to', 'message']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'check_agents',
+      description:
+        "Status, current activity and final results of agents in this chat. Without agents, checks the ones you started. wait_seconds (up to 600) waits until they have all finished.",
+      parameters: {
+        type: 'object',
+        properties: {
+          agents: {
+            type: 'array',
+            items: { type: 'string', maxLength: 16 },
+            maxItems: 8,
+            uniqueItems: true
+          },
+          wait_seconds: { type: 'number' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'stop_agent',
+      description:
+        'Stop a running agent in this chat, for example when the user cancels that part. Actions it already took stay done.',
+      parameters: {
+        type: 'object',
+        properties: {
+          agent: { type: 'string', maxLength: 16 },
+          reason: { type: 'string', maxLength: 300 }
+        },
+        required: ['agent']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'inspect_app',
       description:
         'Read a bounded set of visible named controls and text in one Windows app using accessibility. Prefer this for buttons, fields and text; use look_at_screen for visual layout. Returns short-lived observation/control references for act_on_control. Use query to narrow a large view.',

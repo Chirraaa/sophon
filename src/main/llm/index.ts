@@ -1,4 +1,4 @@
-export { chat } from './chat'
+export { chat, saveTurn } from './chat'
 export { generateChatTitle } from './chat-title'
 export { getLlmStatus, listModelChoices, getModelInfo } from './client'
 export { getDefaultPrompt } from './prompt'

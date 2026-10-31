@@ -218,7 +218,11 @@ const capture = load('src/main/tools/screen.ts', {
     }
   },
   '../permissions': { protectedWindowRule: () => null },
-  '../security/run-manager': { currentRun: () => run, assertRun: () => {} },
+  '../security/run-manager': {
+    currentRun: () => run,
+    assertRun: () => {},
+    onRunFinished: () => () => {}
+  },
   './win32': { getProcess: () => ({ pid: 42 }) },
   '../services/screen-glow': { hideScreenGlow: () => {}, showScreenGlow: () => {} },
   './windows': {
@@ -233,7 +237,11 @@ const capture = load('src/main/tools/screen.ts', {
 let inputCount = 0
 const interact = load('src/main/tools/interact.ts', {
   '../permissions': { protectedWindowRule: () => null, blockedAppRule: () => null },
-  '../security/run-manager': { currentRun: () => run, assertRun: () => {} },
+  '../security/run-manager': {
+    currentRun: () => run,
+    assertRun: () => {},
+    onRunFinished: () => () => {}
+  },
   './screen': capture,
   './windows': { activeWindow: () => win, findWindow: () => win, listWindows: () => [win] },
   './win32': {
@@ -246,6 +254,7 @@ const interact = load('src/main/tools/interact.ts', {
       return true
     },
     setCursor: () => true,
+    cursorPos: () => null,
     showWindow: () => {}
   }
 })

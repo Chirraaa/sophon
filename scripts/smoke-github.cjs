@@ -24,7 +24,7 @@ const api = {
 }
 const github = load('src/main/plugins/github.ts', {
   './github-api': api,
-  '../security/run-manager': { currentRun: () => active },
+  '../security/run-manager': { currentRun: () => active, anyRunActive: () => !!active },
   '../settings': { settingsRecovery: () => ({ required: recovery }) },
   './store': {
     serverRecord: () => ({ config: { type: 'http', url: endpoint } }),

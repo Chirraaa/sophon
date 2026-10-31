@@ -20,5 +20,10 @@ export const isBookkeepingTool = (name: string): boolean =>
     'run_probes',
     'remember',
     'forget',
-    'recall'
+    'recall',
+    // Coordinating parallel agents; their own actions count against their own budgets.
+    'spawn_agent',
+    'message_agent',
+    'check_agents',
+    'stop_agent'
   ].includes(name)

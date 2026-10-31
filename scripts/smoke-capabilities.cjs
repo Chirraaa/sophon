@@ -133,7 +133,12 @@ async function review() {
     // Gated by Settings > Memory instead of Permissions.
     'remember',
     'forget',
-    'recall'
+    'recall',
+    // Gated by Settings > Agents; agents' own actions keep their tool permissions.
+    'spawn_agent',
+    'message_agent',
+    'check_agents',
+    'stop_agent'
   ])
   const names = schemas.map((tool) => tool.function.name)
   assert.equal(new Set(names).size, names.length, 'Tool schemas must have unique names')

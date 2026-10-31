@@ -9,7 +9,7 @@ const worker = load('src/main/tools/automation/worker.ts', {
   '../../security/worker-job': load('src/main/security/worker-job.ts', {
     koffi: { default: require('koffi') }
   }),
-  '../../security/run-manager': { currentRun: () => null },
+  '../../security/run-manager': { currentRun: () => null, onRunFinished: () => () => {} },
   '../../workflow/timing': { recordTiming: () => {} },
   './bridge.ps1?raw': {
     default: fs.readFileSync(path.join(root, 'src/main/tools/automation/bridge.ps1'), 'utf8')

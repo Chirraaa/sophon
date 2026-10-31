@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { validGithubContext } from '../../shared/github-context'
 import { serverRecord } from '../plugins/store'
-import { chat, generateChatTitle } from '../llm'
+import { chat, generateChatTitle, saveTurn } from '../llm'
 import { attachmentInfo, storeImage } from '../services/attachments'
 import { TOOL_INFO } from '../tools/registry'
 import { fallbackActionLabel } from '../../shared/action-label'
@@ -21,8 +21,17 @@ import {
   type Conversation
 } from './store'
 import type { ChatEvent, ChatHistory } from '../llm/types'
-import { getSettings } from '../settings'
-import { startRun, finishRun, assertRun } from '../security/run-manager'
+import { getSettings, onSettingsChange } from '../settings'
+import {
+  startRun,
+  finishRun,
+  assertRun,
+  withRun,
+  stopRun,
+  setRunLimit,
+  type RunAgent,
+  type RunContext
+} from '../security/run-manager'
 import { securityEvent } from '../security/audit'
 import { takeChatClear } from './clear-request'
 import { pruneChatMemories, clearChatMemories } from '../memory/store'
@@ -30,8 +39,17 @@ import { deleteEpisode, pruneEpisodes, recordEpisode, renameEpisode } from '../m
 import { resultFailure } from '../workflow/results'
 import { searchProviderLabel } from '../network/search-provider'
 import { archiveAction, readActionDetails } from './action-details'
+import {
+  agentFinished,
+  agentsEnabled,
+  installAgents,
+  nextIdentity,
+  runAgentFor,
+  senderOf
+} from './agents'
 let store: ConversationStore
-let runningChatId: string | null = null
+// Chats and agent threads with a running task. Several can run at once (parallel agents).
+const running = new Map<string, RunContext>()
 // Where each queued follow-up was sent from, so a task started from it keeps that surface.
 const followUpInteractions = new Map<string, InteractionContext>()
 const MAX_FOLLOW_UPS = 8
@@ -39,6 +57,28 @@ const queuedFollowUps = (conversation: Conversation): ChatItem[] =>
   conversation.items.filter((item) => item.followUp === 'queued')
 const listeners = new Set<(snapshot: SessionSnapshot) => void>()
 const textListeners = new Set<(update: { chatId: string; itemId: string; text: string }) => void>()
+
+const chatById = (id: string): Conversation | undefined =>
+  store.chats.find((chat) => chat.id === id)
+// Agent threads hang off their top-level chat.
+const rootOf = (chat: Conversation): Conversation =>
+  (chat.parentId ? chatById(chat.parentId) : undefined) ?? chat
+const familyOf = (rootId: string): Conversation[] =>
+  store.chats.filter((chat) => chat.parentId === rootId)
+const familyBusy = (root: Conversation): boolean =>
+  running.has(root.id) || familyOf(root.id).some((chat) => running.has(chat.id))
+// 0 for a chat's own task, 1 for agents it starts, 2 for agents those start.
+function agentDepth(chat: Conversation): number {
+  if (!chat.parentId) return 0
+  const spawner = chat.agent?.spawnedBy ? chatById(chat.agent.spawnedBy) : undefined
+  return spawner?.parentId ? 2 : 1
+}
+const pinned = (): string[] => [store.activeId, ...running.keys()]
+const runLimit = (): number => {
+  const agents = getSettings().agents
+  return agents?.enabled === false ? 1 : Math.max(1, agents?.maxConcurrent ?? 1)
+}
+
 export function onSessionText(
   listener: (update: { chatId: string; itemId: string; text: string }) => void
 ): () => void {
@@ -51,10 +91,10 @@ export function chatPage(
   chatId: string,
   before: number
 ): { items: ChatItem[]; start: number; total: number } {
-  const chat = store.chats.find((chat) => chat.id === chatId)
+  const chat = chatById(chatId)
   if (!chat) throw new Error('Conversation no longer exists.')
   const page = conversationPage(chat, before)
-  releaseConversations(store, [store.activeId, runningChatId ?? ''])
+  releaseConversations(store, pinned())
   return page
 }
 export function actionDetails(id: string): { preview?: string; detail?: string } {
@@ -66,13 +106,29 @@ export function loadSession(): void {
 
   const retention = getSettings().privacy.chatRetentionDays
   if (retention)
-    store.chats = store.chats.filter((c) => c.updatedAt >= Date.now() - retention * 86400000)
-  if (!store.chats.length) store.chats.push(newConversation())
-  if (!store.chats.some((c) => c.id === store.activeId)) store.activeId = store.chats[0].id
+    store.chats = store.chats.filter(
+      (c) => c.parentId || c.updatedAt >= Date.now() - retention * 86400000
+    )
+  // Agent threads go with their chat.
+  store.chats = store.chats.filter(
+    (c) => !c.parentId || store.chats.some((root) => root.id === c.parentId && !root.parentId)
+  )
+  for (const chat of store.chats)
+    if (chat.agent?.status === 'running') {
+      chat.agent.status = 'stopped'
+      chat.agent.summary ||= 'Interrupted when Sophon closed.'
+      chat.agent.finishedAt ??= Date.now()
+    }
+  if (!store.chats.some((c) => !c.parentId)) store.chats.push(newConversation())
+  if (!store.chats.some((c) => c.id === store.activeId))
+    store.activeId = store.chats.find((c) => !c.parentId)!.id
   if (retention) persistConversations(store)
   pruneChatMemories(new Set(store.chats.map((chat) => chat.id)))
   updateEpisodes(() => pruneEpisodes(new Set(store.chats.map((chat) => chat.id))))
   cleanAttachments(store, old)
+  setRunLimit(runLimit())
+  onSettingsChange(() => setRunLimit(runLimit()))
+  installAgents(bridge)
 }
 // Conversation memory follows the chat's lifetime. A failure here must not block deleting or
 // clearing the chat itself; the next startup prunes digests of chats that no longer exist.
@@ -83,24 +139,81 @@ function updateEpisodes(action: () => void): void {
     /* Retried by the startup prune. */
   }
 }
+
+// The latest action of a running thread, for agent cards and the roster.
+function activity(chat: Conversation): string | undefined {
+  if (!running.has(chat.id)) return undefined
+  const reply = chat.items.findLast((item) => item.pending && item.from === 'agent')
+  const action = reply?.actions.at(-1)
+  if (action?.status === 'waiting') return `Waiting for your approval: ${action.label}`
+  if (action?.status === 'running') return action.label
+  return reply?.text ? 'Writing its answer' : 'Thinking'
+}
+const waitingApproval = (chat: Conversation): boolean =>
+  running.has(chat.id) &&
+  chat.items.some((item) => item.pending && item.actions.some((a) => a.status === 'waiting'))
+function agentInfo(chat: Conversation): AgentInfo {
+  const live = running.has(chat.id)
+  return {
+    ...chat.agent!,
+    chatId: chat.id,
+    parentId: chat.parentId!,
+    ...(live
+      ? { status: 'running' as const, activity: activity(chat), waiting: waitingApproval(chat) }
+      : {})
+  }
+}
+// Approvals waiting in a chat's other threads, so they can be answered from where the user is.
+function approvalsFor(active: Conversation, root: Conversation): AgentApproval[] {
+  return [root, ...familyOf(root.id)]
+    .filter((chat) => chat !== active && running.has(chat.id))
+    .flatMap((chat) =>
+      chat.items
+        .filter((item) => item.pending)
+        .flatMap((item) => item.actions.filter((action) => action.status === 'waiting'))
+        .map((action) => ({ ...senderOf(chat), action: { ...action } }))
+    )
+}
 export function snapshot(): SessionSnapshot {
-  const active = store.chats.find((value) => value.id === store.activeId)!
+  const active = chatById(store.activeId)!
+  const root = rootOf(active)
+  const runningIds = [...running.keys()]
   return {
     mode: active.mode,
     chatId: active.id,
     githubContext: validGithubContext(active.githubContext) ? active.githubContext : undefined,
     items: active.items.slice(-60),
     totalItems: conversationTotal(active),
-    busy: runningChatId !== null,
-    runningChatId,
-    chats: store.chats.map(({ id, title, updatedAt, categoryId }) => ({
-      id,
-      title,
-      updatedAt,
-      categoryId
-    })),
+    busy: active.parentId ? running.has(active.id) : familyBusy(root),
+    runningChatId: running.has(active.id)
+      ? active.id
+      : (runningIds.find((id) => !chatById(id)?.parentId) ?? runningIds[0] ?? null),
+    runningChatIds: runningIds,
+    rootChatId: root.id,
+    agent: active.agent ? agentInfo(active) : undefined,
+    agents: familyOf(root.id)
+      .filter((chat) => chat.agent)
+      .slice(-30)
+      .map(agentInfo),
+    approvals: approvalsFor(active, root),
+    chats: store.chats
+      .filter((chat) => !chat.parentId)
+      .map((chat) => ({
+        id: chat.id,
+        title: chat.title,
+        updatedAt: chat.updatedAt,
+        categoryId: chat.categoryId,
+        ...(familyBusy(chat) ? { running: true } : {})
+      })),
     categories: (store.categories ?? []).map((category) => ({ ...category }))
   }
+}
+// Whether a message sent to the open chat can be taken now: it joins or is routed within the
+// open chat's work, or there is room for another task.
+export function acceptsMessages(): boolean {
+  const active = chatById(store.activeId)
+  if (!active) return false
+  return running.has(active.id) || familyBusy(rootOf(active)) || running.size < runLimit()
 }
 export function onSession(listener: (snapshot: SessionSnapshot) => void): () => void {
   listeners.add(listener)
@@ -110,7 +223,7 @@ export function onSession(listener: (snapshot: SessionSnapshot) => void): () => 
 }
 function emit(save = true): void {
   if (save) persistConversations(store)
-  if (save) releaseConversations(store, [store.activeId, runningChatId ?? ''])
+  if (save) releaseConversations(store, pinned())
   const state = snapshot()
   listeners.forEach((listener) => listener(state))
 }
@@ -121,14 +234,15 @@ export function createChat(): void {
   emit()
 }
 export function selectChat(id: string): void {
-  if (!store.chats.some((value) => value.id === id)) return
+  if (!chatById(id)) return
   store.activeId = id
   emit()
 }
 export function setGithubContext(chatId: string, context: GithubContext | null): void {
-  if (runningChatId) throw new Error('Wait for the current task to finish before changing context.')
-  const conversation = store.chats.find((chat) => chat.id === chatId)
+  const conversation = chatById(chatId)
   if (!conversation) throw new Error('This chat no longer exists. Open a chat and try again.')
+  if (familyBusy(rootOf(conversation)))
+    throw new Error('Wait for the current task to finish before changing context.')
   if (context !== null) {
     if (!validGithubContext(context))
       throw new Error('Choose an account, owned repository and branch.')
@@ -142,10 +256,11 @@ export function setGithubContext(chatId: string, context: GithubContext | null):
   emit()
 }
 export function renameChat(id: string, title: string): void {
-  const conversation = store.chats.find((value) => value.id === id)
+  const conversation = chatById(id)
   if (!conversation || typeof title !== 'string' || !title.trim()) return
   conversation.title = title.trim().slice(0, 80)
-  updateEpisodes(() => renameEpisode(id, conversation.title))
+  if (conversation.agent) conversation.agent.title = conversation.title.slice(0, 60)
+  else updateEpisodes(() => renameEpisode(id, conversation.title))
   emit()
 }
 function categoryName(name: string, exceptId?: string): string {
@@ -184,12 +299,12 @@ export function moveChat(
   categoryId: string | null,
   beforeId: string | null = null
 ): void {
-  const chat = store.chats.find((chat) => chat.id === id)
-  if (!chat) throw new Error('Chat no longer exists.')
+  const chat = chatById(id)
+  if (!chat || chat.parentId) throw new Error('Chat no longer exists.')
   if (categoryId !== null && !store.categories?.some((category) => category.id === categoryId))
     throw new Error('Category no longer exists.')
   if (beforeId === id) return
-  const before = beforeId ? store.chats.find((chat) => chat.id === beforeId) : undefined
+  const before = beforeId ? chatById(beforeId) : undefined
   if (beforeId && (!before || (before.categoryId ?? null) !== categoryId))
     throw new Error('The destination chat has moved. Try again.')
   chat.categoryId = categoryId ?? undefined
@@ -199,25 +314,51 @@ export function moveChat(
   emit()
 }
 export function deleteChat(id: string): void {
-  if (runningChatId === id) throw new Error('Wait for this chat to finish before deleting it.')
-  clearChatMemories(id)
-  updateEpisodes(() => deleteEpisode(id))
+  const target = chatById(id)
+  if (!target) return
+  const root = rootOf(target)
+  const removed = target.parentId ? [target] : [target, ...familyOf(target.id)]
+  if (removed.some((chat) => running.has(chat.id)))
+    throw new Error('Wait for this chat to finish before deleting it.')
+  for (const chat of removed) clearChatMemories(chat.id)
+  if (!target.parentId) updateEpisodes(() => deleteEpisode(id))
   const old = attachmentIds(store)
-  store.chats = store.chats.filter((value) => value.id !== id)
-  if (!store.chats.length) store.chats.push(newConversation())
-  if (!store.chats.some((value) => value.id === store.activeId)) store.activeId = store.chats[0].id
+  store.chats = store.chats.filter((value) => !removed.includes(value))
+  if (target.parentId)
+    for (const item of root.items) if (item.agentRef === target.id) delete item.agentRef
+  if (!store.chats.some((value) => !value.parentId)) store.chats.push(newConversation())
+  if (!chatById(store.activeId))
+    store.activeId = target.parentId ? root.id : store.chats.find((value) => !value.parentId)!.id
   emit()
   cleanAttachments(store, old)
 }
 export function clear(): void {
-  if (runningChatId === store.activeId) return
-  const active = store.chats.find((value) => value.id === store.activeId)!
+  const active = chatById(store.activeId)!
+  const root = rootOf(active)
+  if (active.parentId ? running.has(active.id) : familyBusy(root)) return
   const old = attachmentIds(store)
   clearChatMemories(active.id)
-  updateEpisodes(() => deleteEpisode(active.id))
+  if (!active.parentId) {
+    updateEpisodes(() => deleteEpisode(active.id))
+    // A cleared chat starts over without its agents.
+    const agents = familyOf(active.id)
+    for (const agent of agents) clearChatMemories(agent.id)
+    store.chats = store.chats.filter((chat) => !agents.includes(chat))
+  }
   clearConversation(active)
   emit()
   cleanAttachments(store, old)
+}
+// Stops a chat's task and all of its agents, or one agent thread. No id stops every task.
+export function stopChat(chatId?: string): void {
+  if (chatId === undefined) return stopRun()
+  const chat = chatById(chatId)
+  if (!chat) return
+  const threads = chat.parentId ? [chat] : [chat, ...familyOf(chat.id)]
+  for (const thread of threads) {
+    const run = running.get(thread.id)
+    if (run) stopRun(run.id)
+  }
 }
 export async function rerun(
   chatId: string,
@@ -225,9 +366,9 @@ export async function rerun(
   text: string,
   interaction?: InteractionContext
 ): Promise<void> {
-  if (runningChatId) throw new Error('Stop the current response before rerunning.')
+  if (running.has(chatId)) throw new Error('Stop the current response before rerunning.')
   try {
-    const original = store.chats.find((value) => value.id === chatId)
+    const original = chatById(chatId)
     if (original) expandConversation(original)
     const index =
       original?.items.findIndex((item) => item.id === itemId && item.from === 'you') ?? -1
@@ -244,7 +385,7 @@ export async function rerun(
     )
   } finally {
     persistConversations(store)
-    releaseConversations(store, [store.activeId, runningChatId ?? ''])
+    releaseConversations(store, pinned())
   }
 }
 function precedingHistory(items: ChatItem[], index: number): ChatHistory {
@@ -269,15 +410,26 @@ function precedingHistory(items: ChatItem[], index: number): ChatHistory {
 export async function send(
   text: string,
   attachmentIds: string[] = [],
-  interaction?: InteractionContext
+  interaction?: InteractionContext,
+  route?: AgentRoute
 ): Promise<void> {
-  const conversation = store.chats.find((value) => value.id === store.activeId)!
-  if (runningChatId === conversation.id)
-    await queueFollowUp(conversation, text, attachmentIds, interaction)
-  else await respond(conversation, text, attachmentIds, interaction)
+  const conversation = chatById(store.activeId)!
+  if (!running.has(conversation.id))
+    return respond(conversation, text, attachmentIds, interaction)
+  const choice = route ?? getSettings().agents?.route ?? 'auto'
+  // An agent thread's own composer always talks to that agent.
+  if (conversation.parentId || choice === 'steer' || !agentsEnabled())
+    return queueFollowUp(conversation, text, attachmentIds, interaction)
+  return dispatch(conversation, text, attachmentIds, interaction, choice)
 }
 const BUSY_ELSEWHERE =
   'Sophon is working in another chat. Open that chat to add to its request, or wait for it to finish.'
+function validMessage(text: string, attachmentIds: string[]): boolean {
+  if (!Array.isArray(attachmentIds) || attachmentIds.length > 4)
+    throw new Error('Attach up to four files.')
+  if (text.length > 32000) throw new Error('Message is too long.')
+  return !!text.trim() || attachmentIds.length > 0
+}
 // A message sent to the chat that is already working waits for the task's next step.
 async function queueFollowUp(
   conversation: Conversation,
@@ -286,15 +438,12 @@ async function queueFollowUp(
   interaction?: InteractionContext
 ): Promise<void> {
   const trimmed = text.trim()
-  if (!Array.isArray(attachmentIds) || attachmentIds.length > 4)
-    throw new Error('Attach up to four files.')
-  if (!trimmed && !attachmentIds.length) return
-  if (text.length > 32000) throw new Error('Message is too long.')
+  if (!validMessage(text, attachmentIds)) return
   const attachments = await Promise.all(attachmentIds.map(attachmentInfo))
   if (!store.chats.includes(conversation))
     throw new Error('This chat was deleted. Please choose another chat.')
   // The task finished while the attachments were read: this message starts the next one.
-  if (runningChatId !== conversation.id)
+  if (!running.has(conversation.id))
     return respond(conversation, text, attachmentIds, interaction)
   if (queuedFollowUps(conversation).length >= MAX_FOLLOW_UPS)
     throw new Error(
@@ -314,8 +463,202 @@ async function queueFollowUp(
   conversation.updatedAt = Date.now()
   emit()
 }
+const titleFrom = (text: string, attachments: ChatAttachment[]): string => {
+  const words = (text.trim() || attachments[0]?.name || 'Follow-up').replace(/\s+/g, ' ')
+  return words.length > 48 ? words.slice(0, 47).trimEnd() + '…' : words
+}
+function newAgentThread(root: Conversation, agent: AgentMeta): Conversation {
+  const thread: Conversation = {
+    ...newConversation(),
+    title: agent.title,
+    parentId: root.id,
+    agent,
+    githubContext: root.githubContext
+  }
+  store.chats.push(thread)
+  root.updatedAt = Date.now()
+  return thread
+}
+function startAgent(
+  thread: Conversation,
+  text: string,
+  attachments: string[],
+  interaction?: InteractionContext,
+  sender?: AgentSender
+): void {
+  respond(thread, text, attachments, interaction, undefined, undefined, {
+    agent: runAgentFor(thread, agentDepth(thread)),
+    sender
+  }).catch((error: Error) => {
+    // The run never started (for example the run limit was reached meanwhile).
+    if (thread.agent?.status === 'running' && !running.has(thread.id))
+      finishAgent(thread, 'failed', `Could not start: ${error.message}`)
+  })
+}
+// A message to a busy chat starts an agent of its own: a router that decides whether it
+// belongs to a running agent (and relays it), or a worker when the user chose parallel.
+async function dispatch(
+  root: Conversation,
+  text: string,
+  attachmentIds: string[],
+  interaction: InteractionContext | undefined,
+  route: 'auto' | 'parallel'
+): Promise<void> {
+  const trimmed = text.trim()
+  if (!validMessage(text, attachmentIds)) return
+  const attachments = await Promise.all(attachmentIds.map(attachmentInfo))
+  if (!store.chats.includes(root))
+    throw new Error('This chat was deleted. Please choose another chat.')
+  if (!running.has(root.id)) return respond(root, text, attachmentIds, interaction)
+  // No room for another task right now: the running task reads it instead.
+  if (running.size >= runLimit()) return queueFollowUp(root, text, attachmentIds, interaction)
+  const { handle, color } = nextIdentity(familyOf(root.id))
+  const thread = newAgentThread(root, {
+    handle,
+    color,
+    kind: route === 'parallel' ? 'worker' : 'router',
+    title: titleFrom(trimmed, attachments),
+    task: trimmed || attachments.map((attachment) => attachment.name).join(', '),
+    status: 'running',
+    startedAt: Date.now()
+  })
+  root.items.push(
+    {
+      id: randomUUID(),
+      from: 'you',
+      text: trimmed,
+      attachments,
+      actions: [],
+      pending: false,
+      agentRef: thread.id
+    },
+    { id: randomUUID(), from: 'agent', text: '', actions: [], pending: true, agentRef: thread.id }
+  )
+  emit()
+  startAgent(thread, text, attachmentIds, interaction)
+}
+// Records how an agent ended: on its thread, its card in the chat, the chat's history (so
+// later turns know what happened) and for anyone waiting on it.
+function finishAgent(thread: Conversation, status: AgentStatus, answer: string): void {
+  const meta = thread.agent
+  if (!meta) return
+  meta.status = status
+  meta.finishedAt = Date.now()
+  meta.summary = answer.slice(0, 4000)
+  const root = rootOf(thread)
+  const card = root.items.findLast((item) => item.agentRef === thread.id && item.from === 'agent')
+  if (card) {
+    card.text = meta.summary || (status === 'done' ? 'Done.' : 'Stopped.')
+    card.pending = false
+  }
+  if (status !== 'stopped' && getSettings().model.historyTurns > 0)
+    saveTurn(root.history, [
+      {
+        role: 'user',
+        content: `[While you worked, agent ${meta.handle} ("${meta.title}") handled this in parallel] ${meta.task}`
+      },
+      { role: 'assistant', content: meta.summary || 'No answer.' }
+    ])
+  root.updatedAt = Date.now()
+  const observed = agentFinished(thread.id)
+  // Whoever started it hears about the result at its next step, unless it was waiting.
+  const spawner = meta.spawnedBy ? chatById(meta.spawnedBy) : undefined
+  if (!observed && spawner && running.has(spawner.id))
+    try {
+      deliver(
+        spawner,
+        `Agent ${meta.handle} ("${meta.title}") ${status === 'done' ? 'finished' : status}. Its answer:\n${meta.summary}`,
+        senderOf(thread)
+      )
+    } catch {
+      // Its queue is full; check_agents still shows the result.
+    }
+  emit()
+}
+function deliver(target: Conversation, text: string, sender: AgentSender): ChatItem {
+  if (queuedFollowUps(target).length >= MAX_FOLLOW_UPS)
+    throw new Error(`Agent ${senderOf(target).handle} has too many unread messages; try later.`)
+  const item: ChatItem = {
+    id: randomUUID(),
+    from: 'you',
+    text,
+    actions: [],
+    pending: false,
+    followUp: 'queued',
+    sender
+  }
+  target.items.push(item)
+  target.updatedAt = Date.now()
+  emit()
+  return item
+}
+const bridge = {
+  chat: (id: string) => chatById(id),
+  family: (rootId: string) => familyOf(rootId).filter((chat) => chat.agent),
+  running: (chatId: string) => running.get(chatId),
+  activity: (chatId: string) => {
+    const chat = chatById(chatId)
+    return chat ? activity(chat) : undefined
+  },
+  lastAnswer: (chatId: string) => {
+    const chat = chatById(chatId)
+    if (!chat) return ''
+    if (chat.agent?.summary && !running.has(chat.id)) return chat.agent.summary
+    return (
+      chat.items.findLast((item) => item.from === 'agent' && !item.pending && !item.agentRef)
+        ?.text ?? ''
+    )
+  },
+  deliver: (chatId: string, text: string, sender: AgentSender) => {
+    const target = chatById(chatId)
+    if (!target || !running.has(chatId)) throw new Error('That agent is no longer running.')
+    const item = deliver(target, text, sender)
+    return { read: () => item.followUp !== 'queued' }
+  },
+  spawn: (
+    spawnerChatId: string,
+    agent: { title: string; task: string; context?: string },
+    interaction: InteractionContext
+  ) => {
+    const spawner = chatById(spawnerChatId)
+    if (!spawner) throw new Error('This chat no longer exists.')
+    if (running.size >= runLimit())
+      throw new Error(
+        `${running.size} tasks are already running, the most allowed at once (Settings > Agents). Wait for one with check_agents, or do this part yourself.`
+      )
+    const root = rootOf(spawner)
+    const { handle, color } = nextIdentity(familyOf(root.id))
+    const thread = newAgentThread(root, {
+      handle,
+      color,
+      kind: 'worker',
+      title: agent.title,
+      task: agent.task,
+      status: 'running',
+      spawnedBy: spawner.id,
+      startedAt: Date.now()
+    })
+    root.items.push({
+      id: randomUUID(),
+      from: 'agent',
+      text: '',
+      actions: [],
+      pending: true,
+      agentRef: thread.id
+    })
+    emit()
+    startAgent(
+      thread,
+      agent.context ? `${agent.task}\n\nContext:\n${agent.context}` : agent.task,
+      [],
+      interaction,
+      senderOf(spawner)
+    )
+    return thread.id
+  }
+}
 export function removeFollowUp(chatId: string, itemId: string): void {
-  const conversation = store.chats.find((chat) => chat.id === chatId)
+  const conversation = chatById(chatId)
   const item = conversation?.items.find((value) => value.id === itemId)
   if (!conversation || !item?.followUp)
     throw new Error('Sophon already read this message, so it can no longer be removed.')
@@ -332,18 +675,16 @@ async function respond(
   interaction?: InteractionContext,
   prompt?: ChatItem,
   // A follow-up left over from the previous task, already in the conversation.
-  queued?: ChatItem
+  queued?: ChatItem,
+  // Agent threads: who the run works as, and who handed it the task.
+  options: { agent?: RunAgent; sender?: AgentSender } = {}
 ): Promise<void> {
   const trimmed = text.trim()
   if (!Array.isArray(promptAttachmentIds) || promptAttachmentIds.length > 4)
     throw new Error('Attach up to four files.')
   if (!trimmed && !promptAttachmentIds.length) return
-  if (runningChatId)
-    throw new Error(
-      runningChatId === conversation.id
-        ? 'Wait for the current response before sending another message.'
-        : BUSY_ELSEWHERE
-    )
+  if (running.has(conversation.id))
+    throw new Error('Wait for the current response before sending another message.')
   if (text.length > 32000) throw new Error('Message is too long.')
   const previousItems = conversation.items
   const previousCount = previousItems.length
@@ -352,12 +693,8 @@ async function respond(
   const attachments = queued
     ? (queued.attachments ?? [])
     : await Promise.all(promptAttachmentIds.map(attachmentInfo))
-  if (runningChatId)
-    throw new Error(
-      runningChatId === conversation.id
-        ? 'Wait for the current response before sending another message.'
-        : BUSY_ELSEWHERE
-    )
+  if (running.has(conversation.id))
+    throw new Error('Wait for the current response before sending another message.')
   if (!store.chats.includes(conversation))
     throw new Error('This chat was deleted. Please choose another chat.')
   if (
@@ -369,16 +706,55 @@ async function respond(
   const history = prompt ? precedingHistory(conversation.items, index) : undefined
   const removedAttachments = prompt ? attachmentIds(store) : undefined
   const settings = getSettings()
-  const run = startRun(
-    conversation.mode,
-    settings.model.endpoint,
-    settings.files.workspace,
-    interaction
+  let run: RunContext
+  try {
+    run = startRun(
+      conversation.mode,
+      settings.model.endpoint,
+      settings.files.workspace,
+      interaction,
+      options.agent ?? runAgentFor(conversation, agentDepth(conversation))
+    )
+  } catch (error) {
+    if (runLimit() === 1 && running.size) throw new Error(BUSY_ELSEWHERE, { cause: error })
+    throw error
+  }
+  running.set(conversation.id, run)
+  // Everything this task does, including tools and model calls, runs as this run.
+  return withRun(run, () =>
+    work(conversation, run, trimmed, promptAttachmentIds, attachments, {
+      prompt,
+      queued,
+      history,
+      removedAttachments,
+      sender: options.sender
+    })
   )
-  runningChatId = conversation.id
+}
+async function work(
+  conversation: Conversation,
+  run: RunContext,
+  trimmed: string,
+  promptAttachmentIds: string[],
+  attachments: ChatAttachment[],
+  {
+    prompt,
+    queued,
+    history,
+    removedAttachments,
+    sender
+  }: {
+    prompt?: ChatItem
+    queued?: ChatItem
+    history?: ChatHistory
+    removedAttachments?: Set<string>
+    sender?: AgentSender
+  }
+): Promise<void> {
   securityEvent('run_started', run.id)
   const needsTitle = !prompt && !conversation.items.length && conversation.title === 'New chat'
   if (prompt) {
+    const index = conversation.items.indexOf(prompt)
     conversation.items = conversation.items.slice(0, index + 1)
     prompt.text = trimmed
     prompt.attachments = attachments
@@ -413,7 +789,8 @@ async function respond(
       text: trimmed,
       attachments,
       actions: [],
-      pending: false
+      pending: false,
+      ...(sender ? { sender } : {})
     })
   conversation.items.push(reply)
   run.followUps = {
@@ -424,7 +801,7 @@ async function respond(
       for (const item of added) {
         delete item.followUp
         followUpInteractions.delete(item.id)
-        asked.push(item.text)
+        if (!item.sender) asked.push(item.text)
       }
       const items = conversation.items
       if (
@@ -453,7 +830,8 @@ async function respond(
       emit()
       return added.map((item) => ({
         text: item.text,
-        attachments: (item.attachments ?? []).map((attachment) => attachment.id)
+        attachments: (item.attachments ?? []).map((attachment) => attachment.id),
+        ...(item.sender ? { sender: item.sender } : {})
       }))
     }
   }
@@ -476,6 +854,7 @@ async function respond(
   let textTimer: ReturnType<typeof setTimeout> | undefined
   let progressTimer: ReturnType<typeof setTimeout> | undefined
   let compactionBefore: ContextCompactionNotice | undefined
+  let failed = false
   const onEvent = (event: ChatEvent): void => {
     reply.sources = run.sources.slice(sourceStart).map((source) => ({ ...source }))
     if (event.type === 'model_progress') {
@@ -649,7 +1028,8 @@ async function respond(
         conversation.title = title
     }
     const memory = getSettings().memory
-    if (memory?.enabled && memory.episodes && !run.signal.aborted)
+    // Agent threads are summarised into their chat's history instead.
+    if (memory?.enabled && memory.episodes && !run.signal.aborted && !conversation.parentId)
       try {
         recordEpisode({
           chatId: conversation.id,
@@ -666,6 +1046,7 @@ async function respond(
         // Conversation memory is best effort; the reply itself succeeded.
       }
   } catch (error) {
+    failed = true
     delete reply.quality
     const detail = run.signal.aborted
       ? 'Stopped. No further actions will run.'
@@ -698,17 +1079,35 @@ async function respond(
         specialist.status = 'failed'
         specialist.summary = 'Request stopped or interrupted.'
       }
-    runningChatId = null
+    if (running.get(conversation.id) === run) running.delete(conversation.id)
     conversation.updatedAt = Date.now()
-    const clearing = takeChatClear() && !stopped
+    const clearing = takeChatClear(run.id) && !stopped
     const leftover = queuedFollowUps(conversation)
-    if (stopped) for (const item of leftover) item.followUp = 'unsent'
+    // Messages from other agents that arrived too late are not read by a new task.
+    for (const item of leftover) if (item.sender) item.followUp = 'unsent'
+    const unread = leftover.filter((item) => !item.sender)
+    if (stopped) for (const item of unread) item.followUp = 'unsent'
     // Messages the task ended before reading start the next task; the rest of them
     // are read at its first step. Started before emit releases the conversation.
-    else if (leftover.length && !clearing && store.chats.includes(conversation))
-      startFollowUp(conversation, leftover[0], run.interaction)
+    else if (unread.length && !clearing && store.chats.includes(conversation))
+      startFollowUp(conversation, unread[0], run.interaction)
+    if (conversation.agent && store.chats.includes(conversation))
+      finishAgent(
+        conversation,
+        stopped ? 'stopped' : failed ? 'failed' : 'done',
+        replies
+          .map((segment) => segment.text)
+          .filter(Boolean)
+          .at(-1) ?? ''
+      )
     emit()
-    if (clearing) clear()
+    if (clearing) {
+      const previous = store.activeId
+      store.activeId = conversation.id
+      clear()
+      if (chatById(previous)) store.activeId = previous
+      emit(false)
+    }
   }
 }
 function startFollowUp(
@@ -722,7 +1121,10 @@ function startFollowUp(
     (item.attachments ?? []).map((attachment) => attachment.id),
     followUpInteractions.get(item.id) ?? interaction,
     undefined,
-    item
+    item,
+    conversation.agent
+      ? { agent: runAgentFor(conversation, agentDepth(conversation)) }
+      : undefined
   ).catch(() => {
     for (const queued of queuedFollowUps(conversation)) queued.followUp = 'unsent'
     emit()

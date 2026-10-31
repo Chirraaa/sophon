@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   motion: 'full',
   showResponseDiagnostics: false,
   screenGlow: { enabled: true, color: '#a78bfa' },
+  agents: { enabled: true, maxConcurrent: 3, route: 'auto', cursors: true, pointer: 'natural' },
   closeToTray: true,
   dockNotify: true,
   dockAlwaysVisible: false,
@@ -158,6 +159,7 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
   const privacy = isObj(r.privacy) ? r.privacy : {}
   const memory = isObj(r.memory) ? r.memory : {}
   const screenGlow = isObj(r.screenGlow) ? r.screenGlow : {}
+  const agents = isObj(r.agents) ? r.agents : {}
   const out: AppSettings = {
     policyVersion: 1,
     profile: {
@@ -211,6 +213,13 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
         typeof screenGlow.color === 'string' && /^#[0-9a-f]{6}$/i.test(screenGlow.color)
           ? screenGlow.color.toLowerCase()
           : base.screenGlow.color
+    },
+    agents: {
+      enabled: bool(agents.enabled, base.agents.enabled),
+      maxConcurrent: num(agents.maxConcurrent, 1, 6, base.agents.maxConcurrent, true),
+      route: oneOf(agents.route, ['auto', 'steer', 'parallel'], base.agents.route),
+      cursors: bool(agents.cursors, base.agents.cursors),
+      pointer: oneOf(agents.pointer, ['natural', 'fast', 'instant'], base.agents.pointer)
     },
     closeToTray: bool(r.closeToTray, base.closeToTray),
     dockNotify: bool(r.dockNotify, base.dockNotify),

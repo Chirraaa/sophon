@@ -3,6 +3,7 @@ const user32 = koffi.load('user32.dll')
 const dwmapi = koffi.load('dwmapi.dll')
 const kernel32 = koffi.load('kernel32.dll')
 const shell32 = koffi.load('shell32.dll')
+const gdi32 = koffi.load('gdi32.dll')
 const EnumWindowsProc = koffi.proto('bool __stdcall EnumWindowsProc(void *hwnd, intptr lParam)')
 const EnumWindows = user32.func('bool __stdcall EnumWindows(EnumWindowsProc *cb, intptr lParam)')
 const IsWindowVisible = user32.func('bool __stdcall IsWindowVisible(intptr hwnd)')
@@ -31,6 +32,7 @@ const PostMessageW = user32.func(
   'bool __stdcall PostMessageW(intptr hwnd, uint32 msg, intptr wParam, intptr lParam)'
 )
 const SetCursorPos = user32.func('bool __stdcall SetCursorPos(int x, int y)')
+const GetCursorPos = user32.func('bool __stdcall GetCursorPos(_Out_ int32_t *point)')
 const SendInput = user32.func('uint32 __stdcall SendInput(uint32 count, void *inputs, int size)')
 const MapVirtualKeyW = user32.func('uint32 __stdcall MapVirtualKeyW(uint32 code, uint32 mapType)')
 const DwmGetWindowAttribute = dwmapi.func(
@@ -42,6 +44,22 @@ const OpenProcess = kernel32.func(
 const CloseHandle = kernel32.func('bool __stdcall CloseHandle(intptr handle)')
 const QueryFullProcessImageNameW = kernel32.func(
   'bool __stdcall QueryFullProcessImageNameW(intptr process, uint32 flags, _Out_ uint16_t *buf, _Inout_ uint32_t *size)'
+)
+const GetDC = user32.func('intptr __stdcall GetDC(intptr hwnd)')
+const ReleaseDC = user32.func('int __stdcall ReleaseDC(intptr hwnd, intptr hdc)')
+const CreateCompatibleDC = gdi32.func('intptr __stdcall CreateCompatibleDC(intptr hdc)')
+const CreateCompatibleBitmap = gdi32.func(
+  'intptr __stdcall CreateCompatibleBitmap(intptr hdc, int w, int h)'
+)
+const SelectObject = gdi32.func('intptr __stdcall SelectObject(intptr hdc, intptr obj)')
+const DeleteObject = gdi32.func('bool __stdcall DeleteObject(intptr obj)')
+const DeleteDC = gdi32.func('bool __stdcall DeleteDC(intptr hdc)')
+const SetStretchBltMode = gdi32.func('int __stdcall SetStretchBltMode(intptr hdc, int mode)')
+const StretchBlt = gdi32.func(
+  'bool __stdcall StretchBlt(intptr dst, int x, int y, int w, int h, intptr src, int sx, int sy, int sw, int sh, uint32 rop)'
+)
+const GetDIBits = gdi32.func(
+  'int __stdcall GetDIBits(intptr hdc, intptr bmp, uint32 start, uint32 lines, void *bits, void *info, uint32 usage)'
 )
 const SHQueryUserNotificationState = shell32.func(
   'int __stdcall SHQueryUserNotificationState(_Out_ int32_t *state)'
@@ -149,7 +167,46 @@ export function exclusiveFullscreen(): boolean {
   return SHQueryUserNotificationState(state) === 0 && state[0] === QUNS_RUNNING_D3D_FULL_SCREEN
 }
 export const requestClose = (h: number): boolean => PostMessageW(h, 0x0010, 0, 0)
+// A small downscaled copy of a screen rectangle (physical pixels), 32-bit BGRA rows top to
+// bottom. A few milliseconds instead of a full monitor capture, for deciding whether a
+// window has stopped changing. Windows excluded from capture (Sophon's overlays) are absent.
+export function screenSample(
+  rect: { x: number; y: number; width: number; height: number },
+  width: number
+): Buffer | null {
+  if (rect.width < 1 || rect.height < 1) return null
+  const w = Math.max(1, Math.min(width, rect.width))
+  const h = Math.max(1, Math.round((w * rect.height) / rect.width))
+  const screenDc = Number(GetDC(0))
+  if (!screenDc) return null
+  const memory = Number(CreateCompatibleDC(screenDc))
+  const bitmap = memory ? Number(CreateCompatibleBitmap(screenDc, w, h)) : 0
+  const previous = bitmap ? SelectObject(memory, bitmap) : 0
+  try {
+    if (!bitmap) return null
+    SetStretchBltMode(memory, 4)
+    if (!StretchBlt(memory, 0, 0, w, h, screenDc, rect.x, rect.y, rect.width, rect.height, 0x00cc0020))
+      return null
+    const info = Buffer.alloc(44)
+    info.writeUInt32LE(40, 0)
+    info.writeInt32LE(w, 4)
+    info.writeInt32LE(-h, 8)
+    info.writeUInt16LE(1, 12)
+    info.writeUInt16LE(32, 14)
+    const bits = Buffer.alloc(w * h * 4)
+    SelectObject(memory, previous)
+    return GetDIBits(memory, bitmap, 0, h, bits, info, 0) === h ? bits : null
+  } finally {
+    if (bitmap) DeleteObject(bitmap)
+    if (memory) DeleteDC(memory)
+    ReleaseDC(0, screenDc)
+  }
+}
 export const setCursor = (x: number, y: number): boolean => SetCursorPos(x, y)
+export function cursorPos(): { x: number; y: number } | null {
+  const point = new Int32Array(2)
+  return GetCursorPos(point) ? { x: point[0], y: point[1] } : null
+}
 const INPUT_SIZE = process.arch === 'x64' ? 40 : 28
 const DATA_OFFSET = process.arch === 'x64' ? 8 : 4
 function submitInput(type: number, fill: (data: Buffer) => void): boolean {
