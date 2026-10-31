@@ -514,8 +514,15 @@ export class Desktop {
       this.openDock(win)
     else this.showCompact()
   }
+  /**
+   * The mic goes to whichever surface is already on screen: an open shortcut window keeps it,
+   * otherwise the full app takes it even while another app has focus, so the overlay never
+   * appears next to the full app. Only when the full app is away does the overlay show.
+   */
   talkTarget(): BrowserWindow {
-    if (this.main?.isVisible() && this.main.isFocused()) return this.main
+    const compactOpen = Boolean(this.compact?.isVisible())
+    if (this.main && (this.main.isFocused() || (!compactOpen && this.mainShowing())))
+      return this.main
     this.showCompact('voice')
     return this.compact!
   }

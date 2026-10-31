@@ -41,18 +41,34 @@ export function readCombo(e: KeyboardEvent): Combo {
     Quote: "'",
     BracketLeft: '[',
     BracketRight: ']',
-    Backquote: '`'
+    Backquote: '`',
+    CapsLock: 'CapsLock',
+    NumLock: 'NumLock',
+    ScrollLock: 'ScrollLock',
+    PrintScreen: 'PrintScreen',
+    NumpadAdd: 'numadd',
+    NumpadSubtract: 'numsub',
+    NumpadMultiply: 'nummult',
+    NumpadDivide: 'numdiv',
+    NumpadDecimal: 'numdec',
+    NumpadEnter: 'Return',
+    AudioVolumeUp: 'VolumeUp',
+    AudioVolumeDown: 'VolumeDown',
+    AudioVolumeMute: 'VolumeMute',
+    MediaTrackNext: 'MediaNextTrack',
+    MediaTrackPrevious: 'MediaPreviousTrack',
+    MediaStop: 'MediaStop',
+    MediaPlayPause: 'MediaPlayPause'
   }
   const key = /^Key[A-Z]$/.test(e.code)
     ? e.code.slice(3)
     : /^Digit[0-9]$/.test(e.code)
       ? e.code.slice(5)
-      : /^F([1-9]|1[0-9]|2[0-4])$/.test(e.code)
-        ? e.code
-        : keys[e.code]
-  if (!key) return { modifiers, hint: 'Choose a letter, number, function key or navigation key.' }
-  if (!e.ctrlKey && !e.altKey && !e.metaKey) {
-    return { modifiers, hint: 'Include Ctrl, Alt or the Windows key in the shortcut.' }
-  }
+      : /^Numpad[0-9]$/.test(e.code)
+        ? 'num' + e.code.slice(6)
+        : /^F([1-9]|1[0-9]|2[0-4])$/.test(e.code)
+          ? e.code
+          : keys[e.code]
+  if (!key) return { modifiers, hint: 'That key can’t be used. Try another key.' }
   return { modifiers, accelerator: [...modifiers, key].join('+') }
 }

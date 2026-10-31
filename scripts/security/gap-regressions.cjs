@@ -89,9 +89,13 @@ module.exports = async function ({ load, fixture }) {
     JSON.parse(untrusted.untrustedData('local-file', 'test.txt', attack)).sourceId
   )
   const shortcuts = load('src/shared/shortcut-contract.ts')
-  for (const bad of ['A', 'Shift+A', 'Control', 'Control+Alt+A+B'])
+  for (const bad of ['Control', 'Control+Alt', 'Control+Alt+A+B', 'Control+Ctrl+A', '', 'Foo'])
     assert.throws(() => shortcuts.validateShortcut(bad))
-  shortcuts.validateShortcut('Control+Alt+Space')
+  for (const good of ['Control+Alt+Space', 'A', 'Shift+A', 'F8', 'num5', 'VolumeMute'])
+    shortcuts.validateShortcut(good)
+  assert(shortcuts.sameShortcut('Control+Shift+K', 'shift+ctrl+k'))
+  assert(shortcuts.sameShortcut('Alt+Enter', 'Alt+Return'))
+  assert(!shortcuts.sameShortcut('Control+K', 'Control+Shift+K'))
   const registered = new Map()
   const shortcutModule = load('src/main/app/shortcuts.ts', {
     electron: {

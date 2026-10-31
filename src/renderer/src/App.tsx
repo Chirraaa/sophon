@@ -53,6 +53,15 @@ export default function App(): React.JSX.Element {
       clearInterval(timer)
     }
   }, [connection, settings?.model.provider])
+  // The mic shortcut works from other apps: bring the chat forward so its status and the
+  // transcribed command are visible when the full app is opened on another page.
+  useEffect(
+    () =>
+      window.api.voice.onState((state) => {
+        if (state.phase !== 'idle' && !document.hasFocus()) setView('chat')
+      }),
+    []
+  )
   const openModel = (): void => {
     setSettingsTab('model')
     setView('settings')

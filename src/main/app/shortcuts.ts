@@ -3,13 +3,12 @@ import { getSettings } from '../settings'
 import { acceptsMessages } from '../chat/session'
 import { shortcutKeys, waitForRelease } from '../voice/shortcut'
 import type { Desktop } from './desktop'
-import { validateShortcut } from '../../shared/shortcut-contract'
+import { SHORTCUT_CONFLICT, sameShortcut, validateShortcut } from '../../shared/shortcut-contract'
 export class Shortcuts {
   commitSettings(next: AppSettings, persist: () => AppSettings): AppSettings {
     validateShortcut(next.hotkeys.summon)
     validateShortcut(next.hotkeys.talk)
-    if (next.hotkeys.summon.toLowerCase() === next.hotkeys.talk.toLowerCase())
-      throw new Error('Choose different shortcuts.')
+    if (sameShortcut(next.hotkeys.summon, next.hotkeys.talk)) throw new Error(SHORTCUT_CONFLICT)
     const staged: string[] = []
     try {
       for (const kind of ['summon', 'talk'] as const) {
