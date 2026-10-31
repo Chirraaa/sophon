@@ -607,6 +607,10 @@ const bridge = {
         ?.text ?? ''
     )
   },
+  close: (chatId: string) => {
+    const target = chatById(chatId)
+    if (target?.agent && !running.has(chatId)) deleteChat(chatId)
+  },
   deliver: (chatId: string, text: string, sender: AgentSender) => {
     const target = chatById(chatId)
     if (!target || !running.has(chatId)) throw new Error('That agent is no longer running.')

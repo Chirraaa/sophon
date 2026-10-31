@@ -138,7 +138,8 @@ async function review() {
     'spawn_agent',
     'message_agent',
     'check_agents',
-    'stop_agent'
+    'stop_agent',
+    'show_cursor'
   ])
   const names = schemas.map((tool) => tool.function.name)
   assert.equal(new Set(names).size, names.length, 'Tool schemas must have unique names')

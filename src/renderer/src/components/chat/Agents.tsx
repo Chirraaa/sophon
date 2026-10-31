@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, ArrowUpRight, Bot, Square } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Bot, Square, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/hooks/useSession'
 import { Badge } from '@/components/ui/badge'
@@ -57,6 +57,13 @@ export function AgentBar({ compact = false }: { compact?: boolean }): React.JSX.
     void window.api.chats.select(id).catch((cause: Error) => setError(cause.message))
   }
   const rootTitle = chats.find((chat) => chat.id === rootChatId)?.title ?? 'Chat'
+  const finished = agents.filter((item) => item.status !== 'running')
+  const closeFinished = (): void => {
+    setError('')
+    void Promise.all(finished.map((item) => window.api.chats.delete(item.chatId))).catch(
+      (cause: Error) => setError(cause.message)
+    )
+  }
   const mainLive = !!rootChatId && runningChatIds.includes(rootChatId)
   return (
     <div className={compact ? 'shrink-0 px-1 pb-2' : 'border-b border-border px-7 py-2'}>
@@ -96,6 +103,17 @@ export function AgentBar({ compact = false }: { compact?: boolean }): React.JSX.
               {!item.waiting && item.status === 'failed' && <span className="sr-only">failed</span>}
             </Button>
           ))}
+          {finished.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-7 shrink-0 gap-1 rounded-full px-2.5 text-xs text-muted-foreground"
+              title="Close the threads of agents that have finished. Their answers stay in the chat."
+              onClick={closeFinished}
+            >
+              <X className="size-3" aria-hidden /> Close finished
+            </Button>
+          )}
         </div>
       </ScrollArea>
       {error && (
@@ -146,7 +164,7 @@ export function AgentThreadHeader({ agent }: { agent: AgentInfo }): React.JSX.El
             {agent.task}
           </p>
         </div>
-        {agent.status === 'running' && (
+        {agent.status === 'running' ? (
           <Button
             variant="outline"
             size="sm"
@@ -154,6 +172,16 @@ export function AgentThreadHeader({ agent }: { agent: AgentInfo }): React.JSX.El
             onClick={() => run(window.api.stop(agent.chatId))}
           >
             <Square className="size-3" fill="currentColor" /> Stop agent
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            title="Close this thread. The agent's answer stays in the chat."
+            onClick={() => run(window.api.chats.delete(agent.chatId))}
+          >
+            <X className="size-3" aria-hidden /> Close thread
           </Button>
         )}
       </div>

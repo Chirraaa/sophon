@@ -59,6 +59,8 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 .c{position:fixed;left:0;top:0;will-change:transform;transition:opacity .25s ease}
 .c svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
 .c .tag{position:absolute;left:16px;top:18px;padding:3px 7px;border-radius:7px;color:#fff;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.35);display:flex;gap:5px;align-items:center}
+.c.pop{animation:p .35s cubic-bezier(.2,.9,.3,1.3)}
+@keyframes p{from{opacity:0;scale:.4}to{opacity:1;scale:1}}
 .c.idle{opacity:.55}.c.waiting{opacity:.7}.c.waiting .tag::after{content:"waiting";opacity:.8;font-weight:500}
 .c .dots{display:none;gap:2px}.c.typing .dots{display:inline-flex}
 .c .dots i{width:3px;height:3px;border-radius:50%;background:#fff;opacity:.4;animation:b 1s infinite}
@@ -79,6 +81,18 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
     var p = (1-s)*(1-s), q = 2*(1-s)*s, r = s*s;
     return { x: p*a.fx + q*cx + r*a.tx, y: p*a.fy + q*cy + r*a.ty };
   }
+  function along(a, t){
+    var d = Math.min(1, Math.max(0, t)) * a.total, pts = a.trace;
+    for (var i = 1; i < pts.length; i++){
+      var seg = a.lens[i];
+      if (d <= seg || i === pts.length - 1){
+        var u = seg ? Math.min(1, d / seg) : 1;
+        return { x: pts[i-1].x + (pts[i].x - pts[i-1].x) * u, y: pts[i-1].y + (pts[i].y - pts[i-1].y) * u };
+      }
+      d -= seg;
+    }
+    return pts[pts.length - 1];
+  }
   function place(c){ c.el.style.transform = 'translate3d(' + (c.x-2) + 'px,' + (c.y-2) + 'px,0)'; }
   function tick(now){
     raf = 0;
@@ -87,7 +101,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
       var c = items[id];
       if (!c.anim) continue;
       var t = c.anim.dur ? (now - c.anim.start) / c.anim.dur : 1;
-      var p = point(c.anim, t);
+      var p = c.anim.trace ? along(c.anim, t) : point(c.anim, t);
       c.x = p.x; c.y = p.y; place(c);
       if (t >= 1) c.anim = null; else busy = true;
     }
@@ -136,6 +150,11 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
           c.anim = { fx: c.x, fy: c.y, tx: cmd.x, ty: cmd.y, curve: cmd.curve || 0, dur: cmd.dur, start: performance.now() };
           if (!raf) raf = requestAnimationFrame(tick);
         }
+      } else if (cmd.op === 'trace'){
+        var pts = cmd.points, lens = [0], total = 0;
+        for (var i = 1; i < pts.length; i++){ var l = Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y); lens.push(l); total += l; }
+        c.anim = { trace: pts, lens: lens, total: total, dur: cmd.dur, start: performance.now() };
+        if (!raf) raf = requestAnimationFrame(tick);
       } else if (cmd.op === 'pulse'){
         var r = document.createElement('div');
         r.className = 'r'; r.style.borderColor = c.path.getAttribute('fill');
@@ -144,7 +163,8 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
         setTimeout(function(){ r.remove(); }, 500);
       }
       if (cmd.state){
-        c.el.className = 'c ' + cmd.state + (cmd.typing ? ' typing' : '');
+        c.el.className = 'c ' + cmd.state + (cmd.typing ? ' typing' : '') + (cmd.pop ? ' pop' : '');
+        if (cmd.pop) setTimeout(function(){ c.el.classList.remove('pop'); }, 400);
       }
     });
   }};
@@ -248,25 +268,70 @@ function scheduleClose(): void {
   }, 800)
 }
 
-// Moves a run's cursor to a physical screen point over `duration` ms along `curve`.
+// Where a new cursor first appears: `from` when it is on the same display, else the target.
+function appear(display: Electron.Display, from: Point | undefined, to: Point): Point {
+  if (!from) return to
+  const start = locate(from)
+  return start.display.id === display.id ? start.local : locate(to).local
+}
+
+// Makes sure the run's cursor exists on the display of `to`, popping it in at `from`.
+function place(
+  run: RunContext,
+  to: Point,
+  from: Point | undefined
+): {
+  cursor: Cursor
+  display: Electron.Display
+  local: Point
+  start: Point
+  fresh: boolean
+} | null {
+  clearTimeout(closeTimer)
+  const cursor = identity(run)
+  const { display, local } = locate(to)
+  if (!overlayFor(display)) return null
+  // Crossing to another monitor: leave the old one and appear on the new one.
+  if (cursor.display !== undefined && cursor.display !== display.id)
+    send(cursor.display, { op: 'remove', id: cursor.id })
+  const fresh = cursor.display !== display.id
+  cursor.display = display.id
+  const start = fresh ? appear(display, from, to) : local
+  if (fresh)
+    send(display.id, {
+      op: 'move',
+      id: cursor.id,
+      label: cursor.label,
+      color: cursor.color,
+      x: start.x,
+      y: start.y,
+      dur: 0,
+      state: 'idle',
+      pop: !reducedMotion()
+    })
+  return { cursor, display, local, start, fresh }
+}
+
+// Moves a run's cursor to a physical screen point over `duration` ms along `curve`. A cursor
+// that has just appeared pops in at `from` (default: the target) and glides from there.
 export function cursorMove(
   run: RunContext,
   to: Point,
-  options: { duration?: number; curve?: number; state?: CursorState; typing?: boolean } = {}
+  options: {
+    duration?: number
+    curve?: number
+    state?: CursorState
+    typing?: boolean
+    from?: Point
+  } = {}
 ): void {
   if (!enabled()) return
   try {
-    clearTimeout(closeTimer)
-    const cursor = identity(run)
-    const { display, local } = locate(to)
-    const overlay = overlayFor(display)
-    if (!overlay) return
-    // Crossing to another monitor: leave the old one and appear at the destination.
-    if (cursor.display !== undefined && cursor.display !== display.id)
-      send(cursor.display, { op: 'remove', id: cursor.id })
-    const fresh = cursor.display !== display.id
-    cursor.display = display.id
+    const placed = place(run, to, options.from)
+    if (!placed) return
+    const { cursor, display, local, start } = placed
     cursor.at = to
+    const glide = placed.fresh && (start.x !== local.x || start.y !== local.y)
     send(display.id, {
       op: 'move',
       id: cursor.id,
@@ -274,7 +339,7 @@ export function cursorMove(
       color: cursor.color,
       x: local.x,
       y: local.y,
-      dur: fresh || reducedMotion() ? 0 : Math.max(0, options.duration ?? 0),
+      dur: reducedMotion() ? 0 : Math.max(0, options.duration ?? (glide ? 250 : 0)),
       curve: options.curve ?? 0,
       state: options.state ?? 'active',
       typing: options.typing === true
@@ -282,6 +347,106 @@ export function cursorMove(
   } catch {
     // Cursors are a courtesy; a display change mid-move must never fail the action.
   }
+}
+
+// Draws the run's cursor along a polyline of physical screen points over `duration` ms at a
+// steady pace, entirely inside the overlay so the motion stays smooth. Never touches the
+// real pointer. Resolves when the trace has finished or the run stops.
+export async function cursorTrace(
+  run: RunContext,
+  points: Point[],
+  duration: number
+): Promise<boolean> {
+  if (!enabled() || points.length < 2) return false
+  try {
+    const placed = place(run, points[0], undefined)
+    if (!placed) return false
+    const { cursor, display } = placed
+    const local = points.map((point) => locate(point).local)
+    cursor.at = points[points.length - 1]
+    send(display.id, {
+      op: 'trace',
+      id: cursor.id,
+      label: cursor.label,
+      color: cursor.color,
+      points: local,
+      dur: reducedMotion() ? 0 : duration,
+      state: 'active',
+      typing: false
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+const num = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value))
+
+// The show_cursor tool: moves only this agent's drawn cursor, on a circle or a path, without
+// touching the real pointer, the keyboard or any window. It takes no desktop turn, so several
+// agents can do it at once. Returns the tool result text.
+export async function showCursor(run: RunContext, args: Record<string, unknown>): Promise<string> {
+  if (!enabled()) return 'Agent cursors are switched off in Settings > Agents.'
+  let points: Point[]
+  const perLap = clamp(num(args.duration_ms) ?? 3000, 300, 20_000)
+  let laps = 1
+  if (Array.isArray(args.points) && args.points.length) {
+    points = args.points
+      .slice(0, 64)
+      .map((item) => ({ x: num(item?.x), y: num(item?.y) }))
+      .filter((p): p is Point => p.x !== undefined && p.y !== undefined)
+    if (points.length < 2) return 'Not shown: give at least two points with x and y.'
+  } else {
+    const middle = (): Point => {
+      const primary = screen.getPrimaryDisplay()
+      return screen.dipToScreenPoint({
+        x: primary.bounds.x + primary.bounds.width / 2,
+        y: primary.bounds.y + primary.bounds.height / 2
+      })
+    }
+    const cx = num(args.x) ?? middle().x
+    const cy = num(args.y) ?? middle().y
+    const radius = clamp(num(args.radius) ?? 200, 10, 2000)
+    laps = Math.round(clamp(num(args.laps) ?? 1, 1, 10))
+    const steps = 72 * laps
+    points = Array.from({ length: steps + 1 }, (_, i) => {
+      const angle = (i / 72) * Math.PI * 2 - Math.PI / 2
+      return {
+        x: Math.round(cx + radius * Math.cos(angle)),
+        y: Math.round(cy + radius * Math.sin(angle))
+      }
+    })
+  }
+  const total = reducedMotion() ? 0 : perLap * laps
+  // Appear at the first point, then travel at a steady pace so it reads as a smooth loop.
+  cursorMove(run, points[0], { duration: 0, state: 'active' })
+  if (!(await cursorTrace(run, points, total)))
+    return 'Not shown: no display available for the cursor.'
+  await new Promise<void>((resolve, reject) => {
+    const done = (): void => {
+      clearTimeout(timer)
+      run.signal.removeEventListener('abort', onAbort)
+    }
+    const onAbort = (): void => {
+      done()
+      reject(run.signal.reason ?? new Error('Stopped.'))
+    }
+    const timer = setTimeout(() => {
+      done()
+      resolve()
+    }, total + 50)
+    run.signal.addEventListener('abort', onAbort, { once: true })
+  })
+  send(cursors.get(run.agent?.chatId ?? run.id)?.display ?? -1, {
+    op: 'state',
+    id: run.agent?.chatId ?? run.id,
+    state: 'idle',
+    typing: false
+  })
+  return `Moved only agent ${run.agent?.handle ?? 'main'}'s on-screen cursor along ${points.length} points over ${Math.round(total)} ms. The real mouse pointer and other apps were not touched.`
 }
 
 // A click ripple at the cursor's position.
