@@ -255,6 +255,11 @@ export async function chat(
         ? []
         : turns.map((saved) => historicalDesktopReferences(repairToolHistory(saved)))
     const discovery = new ToolDiscovery(discoveryText(taskText, history))
+    // show_cursor only draws a demonstration circle, so it is offered when the request is
+    // about cursors; otherwise models reach for it as a "look at this" gesture.
+    const wantsCursorDemo = /\b(cursors?|pointers?)\b/i.test(taskText)
+    const requestAgentTools = (): string[] =>
+      agentToolNames(run).filter((name) => name !== 'show_cursor' || wantsCursorDemo)
     const books = selectPlaybooks(taskText)
     const memories = settings.memory?.enabled
       ? rankMemories(listMemories(), taskText, run.workspace, chatId)
@@ -340,7 +345,7 @@ export async function chat(
         }
       }
       if (!inlineVisual) {
-        for (const name of agentToolNames(run))
+        for (const name of requestAgentTools())
           tools.push(toolSchemas.find((tool) => tool.function.name === name)!)
         tools.push(toolSchemas.find((tool) => tool.function.name === 'discover_tools')!)
         tools.push(toolSchemas.find((tool) => tool.function.name === 'ask_questions')!)
@@ -391,7 +396,7 @@ export async function chat(
         ...memoryTools(settings.memory).map((tool) => tool.function.name),
         // Agent coordination stays loaded: deciding to parallelise or relay a change
         // should not cost a discovery step.
-        ...agentToolNames(run)
+        ...requestAgentTools()
       ])
     }
     const attached = await attachmentContent(attachments)
