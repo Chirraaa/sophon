@@ -400,6 +400,9 @@ declare global {
       route: AgentRoute
       // Each agent's own labelled cursor on screen while it uses the desktop.
       cursors: boolean
+      // Show the cursors in screen recordings too. Off hides them from every capture; on also
+      // lets the agent's own screenshots see them.
+      cursorsInRecordings: boolean
       // How the real pointer travels to a click: a short natural glide, faster, or instant.
       pointer: 'natural' | 'fast' | 'instant'
       // How agents send clicks, scrolling and typing: straight to the app's window with only

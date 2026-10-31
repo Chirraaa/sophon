@@ -177,7 +177,7 @@ async function sessionAgents() {
     model: { endpoint: 'http://localhost', historyTurns: 6 },
     files: { workspace: '' },
     memory: { enabled: false },
-    agents: { enabled: true, maxConcurrent: 4, route: 'auto', cursors: true, pointer: 'natural' }
+    agents: { enabled: true, maxConcurrent: 4, route: 'auto', cursors: true, cursorsInRecordings: false, pointer: 'natural' }
   }
   const settingsModule = {
     getSettings: () => structuredClone(settings),

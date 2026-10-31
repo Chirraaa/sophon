@@ -29,6 +29,7 @@ const cursors = new Map<string, Cursor>()
 const overlays = new Map<number, Overlay>()
 let closeTimer: NodeJS.Timeout | undefined
 let watching = false
+let recordable = false
 
 const enabled = (): boolean => getSettings().agents?.cursors !== false
 const reducedMotion = (): boolean => getSettings().motion === 'reduced'
@@ -183,10 +184,13 @@ function closeAll(): void {
 function watch(): void {
   if (watching) return
   watching = true
+  recordable = getSettings().agents?.cursorsInRecordings === true
   screen.on('display-removed', closeAll)
   screen.on('display-metrics-changed', closeAll)
   onSettingsChange((settings) => {
-    if (settings.agents?.cursors === false) closeAll()
+    if (settings.agents?.cursors === false || settings.agents?.cursorsInRecordings !== recordable)
+      closeAll()
+    recordable = settings.agents?.cursorsInRecordings === true
   })
 }
 
@@ -219,8 +223,10 @@ function overlayFor(display: Electron.Display): Overlay | null {
   })
   window.setIgnoreMouseEvents(true)
   window.setAlwaysOnTop(true, 'screen-saver')
-  // Screenshots and the settle probe must never see the cursors.
-  window.setContentProtection(true)
+  // Screenshots and the settle probe must never see the cursors. Windows has no way to hide
+  // a window from only one capturer, so this also hides it from screen recordings, unless the
+  // user opts in to seeing the cursors there.
+  window.setContentProtection(!getSettings().agents?.cursorsInRecordings)
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event) => event.preventDefault())
   const overlay: Overlay = { window, ready: false, queue: [], bounds: display.bounds }

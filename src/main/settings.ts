@@ -42,6 +42,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     maxConcurrent: 3,
     route: 'auto',
     cursors: true,
+    cursorsInRecordings: false,
     pointer: 'natural',
     input: 'background'
   },
@@ -226,6 +227,7 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
       maxConcurrent: num(agents.maxConcurrent, 1, 6, base.agents.maxConcurrent, true),
       route: oneOf(agents.route, ['auto', 'steer', 'parallel'], base.agents.route),
       cursors: bool(agents.cursors, base.agents.cursors),
+      cursorsInRecordings: bool(agents.cursorsInRecordings, base.agents.cursorsInRecordings),
       pointer: oneOf(agents.pointer, ['natural', 'fast', 'instant'], base.agents.pointer),
       input: oneOf(agents.input, ['background', 'pointer'], base.agents.input)
     },

@@ -125,13 +125,37 @@ export function BehaviorTab({ settings }: { settings: AppSettings }): React.JSX.
             </Row>
             <Row
               label="Agent cursors"
-              hint="Shows each agent's own labelled cursor where it acts on screen. Screenshots never include them. Hidden over exclusive fullscreen games."
+              hint="Shows each agent's own labelled cursor where it acts on screen. Agent screenshots never include them. Hidden over exclusive fullscreen games."
             >
               <Toggle
                 checked={a.cursors}
                 onChange={(cursors) => void save({ agents: { cursors } })}
               />
             </Row>
+            {a.cursors && (
+              <>
+                <Row
+                  label="Show cursors in recordings"
+                  hint="Makes the cursors visible to screen recorders such as OBS or Game Bar. Off by default because Windows hides them from every capture, recordings included."
+                >
+                  <Toggle
+                    checked={a.cursorsInRecordings}
+                    onChange={(cursorsInRecordings) =>
+                      void save({ agents: { cursorsInRecordings } })
+                    }
+                  />
+                </Row>
+                {a.cursorsInRecordings && (
+                  <div className="mb-3">
+                    <Notice tone="warn">
+                      The agent&apos;s screenshots will now include its cursor and name label, which
+                      can distract them or make them react to the overlay. Turn this off again when
+                      you are done recording.
+                    </Notice>
+                  </div>
+                )}
+              </>
+            )}
           </>
         )}
         <Row
