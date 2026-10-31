@@ -29,7 +29,7 @@ agents; Stop in an agent's thread stops only that agent; a policy change stops e
 An agent thread is a conversation with `parentId` set to its top-level chat and an `agent`
 record (handle, title, colour, kind, task, status, who started it, result). Threads are saved
 with the conversation index, stay out of the sidebar, are deleted and cleared with their chat,
-and load as stopped if Sophon closed while they ran. Each agent also has a card in its chat:
+and load as stopped if Sophon closed while they ran. A finished thread can be closed: the user uses **Close thread** in the thread or **Close finished** in the agent strip, and the model uses `stop_agent` with `close`. Closing removes the thread but keeps the agent's card and answer in the chat. Each agent also has a card in its chat:
 live progress while it works, its answer when it finishes. When an agent finishes, its task
 and answer are added to the chat's history so later turns know what happened.
 
@@ -64,7 +64,8 @@ These coordinator tools are pinned while available and never touch the desktop o
 | `spawn_agent`   | Start a worker for one independent part, with a title and a self-contained task.        |
 | `message_agent` | Send a message to another agent of the chat; optionally wait up to 300 s for its reply. |
 | `check_agents`  | Status, current activity and results; optionally wait up to 600 s for them to finish.   |
-| `stop_agent`    | Stop another agent of the chat (never main or itself).                                  |
+| `stop_agent`    | Stop another agent of the chat (never main or itself); `close` also removes its thread. |
+| `show_cursor`   | Move only your own drawn cursor on a circle or path; never the real pointer.            |
 
 A run at depth 2 (an agent started by an agent) cannot start more. A running agent reads
 messages at its next step, framed as coming from another agent, not the user. A reply to an
@@ -99,7 +100,7 @@ transparent, click-through, capture-excluded overlay per monitor. Labels are pas
 and rendered as text. A cursor glides to where its agent acts, shows a ripple on clicks, dots
 while typing, dims while waiting for its turn and fades out when the agent finishes. For
 accessibility actions the cursor moves to the control without touching the real pointer.
-Overlays are not shown on a monitor running an exclusive fullscreen game, follow reduced
+A new cursor pops in rather than appearing abruptly. `show_cursor` draws a circle or path as one steady trace inside the overlay, takes no input turn and never moves the real pointer, so agents can demonstrate their cursors at the same time; `move_mouse` is for real pointer movement only. Overlays are not shown on a monitor running an exclusive fullscreen game, follow reduced
 motion, and can be switched off.
 
 The real pointer now travels to clicks and scrolls along the same eased, slightly curved
