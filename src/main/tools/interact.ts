@@ -105,7 +105,7 @@ async function glideTo(point: { x: number; y: number }, guard?: () => void): Pro
   if (run) cursorMove(run, point, { duration, curve })
   if (duration > 0) {
     const started = performance.now()
-    for (let t = 0; t < 1; ) {
+    for (let t = 0; t < 1;) {
       await sleep(8)
       checkRun()
       guard?.()

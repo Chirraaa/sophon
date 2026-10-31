@@ -17,7 +17,8 @@ export function glideDuration(from: Point, to: Point, speed: PointerSpeed): numb
 
 // A small sideways bow, signed and sized from the endpoints so it is stable for a move.
 export function glideCurve(from: Point, to: Point): number {
-  const seed = Math.sin(from.x * 12.9898 + from.y * 78.233 + to.x * 37.719 + to.y * 4.581) * 43758.5453
+  const seed =
+    Math.sin(from.x * 12.9898 + from.y * 78.233 + to.x * 37.719 + to.y * 4.581) * 43758.5453
   const unit = seed - Math.floor(seed)
   return (unit < 0.5 ? -1 : 1) * (0.04 + (unit % 0.5) * 0.12)
 }

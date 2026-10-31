@@ -19,7 +19,12 @@ const publish = (next: SessionSnapshot): void => {
     (next.totalItems ?? next.items.length) === 0
   )
     clearDraft(next.chatId)
-  pruneDrafts(next.chats.map((chat) => chat.id))
+  // Drafts typed in agent threads belong to their chat's agents.
+  pruneDrafts([
+    ...next.chats.map((chat) => chat.id),
+    ...(next.agents ?? []).map((agent) => agent.chatId),
+    next.chatId
+  ])
   state = next
   revision++
   for (const listener of listeners) listener()

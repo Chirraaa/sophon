@@ -18,7 +18,12 @@ type Cursor = {
   display?: number
   at?: Point
 }
-type Overlay = { window: BrowserWindow; ready: boolean; queue: unknown[]; bounds: Electron.Rectangle }
+type Overlay = {
+  window: BrowserWindow
+  ready: boolean
+  queue: unknown[]
+  bounds: Electron.Rectangle
+}
 
 const cursors = new Map<string, Cursor>()
 const overlays = new Map<number, Overlay>()

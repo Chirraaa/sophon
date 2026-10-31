@@ -38,8 +38,7 @@ export function Message(props: {
   hideCoding?: boolean
 }): React.JSX.Element {
   // Agent cards and messages between agents have their own presentation.
-  if (props.item.from === 'agent' && props.item.agentRef)
-    return <AgentCard item={props.item} />
+  if (props.item.from === 'agent' && props.item.agentRef) return <AgentCard item={props.item} />
   if (props.item.sender) return <PeerMessage item={props.item} />
   return <ChatMessage {...props} />
 }

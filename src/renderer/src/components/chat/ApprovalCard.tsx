@@ -3,6 +3,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ActionPreview } from './ActionPreview'
+import { useSession } from '@/hooks/useSession'
+import { AgentDot } from './Agents'
 
 function actionTitle(action: ToolAction): string {
   const verbs = {
@@ -182,13 +184,30 @@ export function ApprovalCard({ action }: { action: ToolAction }): React.JSX.Elem
   )
 }
 
+// One approval at a time, since each card answers keyboard shortcuts: this thread's own
+// first, then those waiting in the chat's other threads (its agents, or the main task).
 export function ApprovalRequests({ items }: { items: ChatItem[] }): React.JSX.Element | null {
+  const { approvals = [] } = useSession()
   const action = items
     .flatMap((item) => (item.pending ? item.actions : []))
     .find((candidate) => candidate.status === 'waiting')
-  return action ? (
+  if (action)
+    return (
+      <div className="mb-2">
+        <ApprovalCard key={action.id} action={action} />
+      </div>
+    )
+  const other = approvals[0]
+  if (!other) return null
+  return (
     <div className="mb-2">
-      <ApprovalCard key={action.id} action={action} />
+      <p className="mb-1.5 flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
+        <AgentDot color={other.color} />
+        {other.handle === 'main' ? 'The main task' : `Agent ${other.handle} · ${other.title}`} is
+        asking
+        {approvals.length > 1 && <span>· {approvals.length - 1} more waiting</span>}
+      </p>
+      <ApprovalCard key={other.action.id} action={other.action} />
     </div>
-  ) : null
+  )
 }

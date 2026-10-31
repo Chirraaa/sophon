@@ -414,8 +414,7 @@ export async function send(
   route?: AgentRoute
 ): Promise<void> {
   const conversation = chatById(store.activeId)!
-  if (!running.has(conversation.id))
-    return respond(conversation, text, attachmentIds, interaction)
+  if (!running.has(conversation.id)) return respond(conversation, text, attachmentIds, interaction)
   const choice = route ?? getSettings().agents?.route ?? 'auto'
   // An agent thread's own composer always talks to that agent.
   if (conversation.parentId || choice === 'steer' || !agentsEnabled())
@@ -443,8 +442,7 @@ async function queueFollowUp(
   if (!store.chats.includes(conversation))
     throw new Error('This chat was deleted. Please choose another chat.')
   // The task finished while the attachments were read: this message starts the next one.
-  if (!running.has(conversation.id))
-    return respond(conversation, text, attachmentIds, interaction)
+  if (!running.has(conversation.id)) return respond(conversation, text, attachmentIds, interaction)
   if (queuedFollowUps(conversation).length >= MAX_FOLLOW_UPS)
     throw new Error(
       `Up to ${MAX_FOLLOW_UPS} messages can wait for the current task. Remove one or wait for Sophon to read them.`
@@ -1122,9 +1120,7 @@ function startFollowUp(
     followUpInteractions.get(item.id) ?? interaction,
     undefined,
     item,
-    conversation.agent
-      ? { agent: runAgentFor(conversation, agentDepth(conversation)) }
-      : undefined
+    conversation.agent ? { agent: runAgentFor(conversation, agentDepth(conversation)) } : undefined
   ).catch(() => {
     for (const queued of queuedFollowUps(conversation)) queued.followUp = 'unsent'
     emit()

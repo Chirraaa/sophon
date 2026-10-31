@@ -3,6 +3,7 @@ const path = require('node:path')
 
 const suites = [
   'action-outcomes',
+  'agents',
   'anthropic',
   'app-routing',
   'apps',

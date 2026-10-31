@@ -135,7 +135,8 @@ export function controlPoint(
   run: RunContext
 ): { x: number; y: number } | null {
   const snapshot = observations.get(String(args.observation))
-  const control = snapshot?.runId === run.id ? snapshot.controls.get(String(args.control)) : undefined
+  const control =
+    snapshot?.runId === run.id ? snapshot.controls.get(String(args.control)) : undefined
   if (!control) return null
   return {
     x: Math.round(control.bounds[0] + control.bounds[2] / 2),

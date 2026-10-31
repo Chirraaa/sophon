@@ -53,7 +53,11 @@ export function windowClaim(hwnd: number, run?: RunContext): DesktopOwner | null
   return owner(claim.run)
 }
 
-function abortable(run: RunContext, ms: number, register: (wake: () => void) => () => void): Promise<void> {
+function abortable(
+  run: RunContext,
+  ms: number,
+  register: (wake: () => void) => () => void
+): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let done = false
     const finish = (error?: unknown): void => {
@@ -73,7 +77,11 @@ function abortable(run: RunContext, ms: number, register: (wake: () => void) => 
   })
 }
 
-async function awaitClaim(run: RunContext, hwnd: number, onWait?: (busy: DesktopOwner) => void): Promise<void> {
+async function awaitClaim(
+  run: RunContext,
+  hwnd: number,
+  onWait?: (busy: DesktopOwner) => void
+): Promise<void> {
   const deadline = Date.now() + CLAIM_WAIT_MS
   let told = false
   for (;;) {

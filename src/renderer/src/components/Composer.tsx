@@ -18,7 +18,8 @@ import { CodingMode } from './CodingMode'
 import { ContextUsage } from './ContextUsage'
 import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSession } from '@/hooks/useSession'
-import { AgentRouteSelect, routePlaceholder } from './AgentRoute'
+import { AgentRouteSelect } from './AgentRoute'
+import { routePlaceholder } from '@/lib/agent-route'
 type Props = {
   onSend: (text: string, attachments: string[], route?: AgentRoute) => Promise<void>
   chatId: string
@@ -46,7 +47,6 @@ export function Composer({
   // own and never block sending here.
   const busy = session.chatId === chatId && session.busy
   const working = busy
-  const elsewhere = false
   const queued = working
     ? items.filter((item) => item.followUp === 'queued' && !item.sender).length
     : 0
@@ -102,7 +102,7 @@ export function Composer({
   const recording = voice.phase === 'starting' || voice.phase === 'listening'
   const voiceBusy = recording || voice.phase === 'transcribing'
   const hold = settings?.voice.mode !== 'toggle'
-  const draft = useComposer(chatId, elsewhere || voiceBusy, async (text, attachments) => {
+  const draft = useComposer(chatId, voiceBusy, async (text, attachments) => {
     await onSend(
       design.preferences.attached
         ? [text, designBrief(design.preferences)].filter(Boolean).join('\n\n')
@@ -112,7 +112,7 @@ export function Composer({
     )
     if (design.preferences.attached) design.update({ attached: false })
   })
-  const disabled = elsewhere || voiceBusy || draft.loading || draft.sending
+  const disabled = voiceBusy || draft.loading || draft.sending
   // Settings that shape a task stay fixed while one runs.
   const settingsLocked = disabled || busy
   const draftActive = draft.text.length > 0 || draft.attachments.length > 0
@@ -281,7 +281,7 @@ export function Composer({
             )}
             {settings?.voice.enabled && (
               <VoiceButton
-                disabled={elsewhere || draft.sending || voice.phase === 'transcribing'}
+                disabled={draft.sending || voice.phase === 'transcribing'}
                 recording={recording}
                 hold={hold}
               />
@@ -292,9 +292,7 @@ export function Composer({
                 variant={working && canSend ? 'outline' : 'default'}
                 onClick={() => {
                   setStopError('')
-                  void window.api
-                    .stop(chatId)
-                    .catch((error: Error) => setStopError(error.message))
+                  void window.api.stop(chatId).catch((error: Error) => setStopError(error.message))
                 }}
                 aria-label={agent ? 'Stop this agent' : 'Stop response'}
                 title={

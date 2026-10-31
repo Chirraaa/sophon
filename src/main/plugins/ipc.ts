@@ -25,7 +25,8 @@ export const pluginState = (): PluginState => ({
 let busy = false
 async function mutation(action: () => Promise<void>): Promise<PluginState> {
   if (busy) throw new Error('Another plugin change is in progress.')
-  if (anyRunActive()) throw new Error('Finish or stop the current task before changing connections.')
+  if (anyRunActive())
+    throw new Error('Finish or stop the current task before changing connections.')
   if (settingsRecovery().required)
     throw new Error('Review recovered settings before changing plugins.')
   busy = true

@@ -254,7 +254,11 @@ function load(file, dependencies = {}) {
         ['../../shared/pointer-path', '../shared/pointer-path'].includes(name)
       )
         return load('src/shared/pointer-path.ts')
-      if (!Object.hasOwn(dependencies, name) && name === '../settings' && file === 'src/main/tools/interact.ts')
+      if (
+        !Object.hasOwn(dependencies, name) &&
+        name === '../settings' &&
+        file === 'src/main/tools/interact.ts'
+      )
         return { getSettings: () => ({ agents: { pointer: 'instant' } }) }
       // Chat fixtures that do not exercise parallel agents see none available.
       if (!Object.hasOwn(dependencies, name) && name === '../chat/agents')

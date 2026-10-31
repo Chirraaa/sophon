@@ -107,12 +107,7 @@ export class Shortcuts {
   private talkPressed = (): void => {
     if (!getSettings().voice.enabled) return
     const voice = this.desktop.voice
-    if (
-      this.releaseTalk ||
-      !acceptsMessages() ||
-      voice.snapshot().phase === 'transcribing'
-    )
-      return
+    if (this.releaseTalk || !acceptsMessages() || voice.snapshot().phase === 'transcribing') return
     const hold = getSettings().voice.mode === 'hold'
     let released = false
     let captureId: string | undefined

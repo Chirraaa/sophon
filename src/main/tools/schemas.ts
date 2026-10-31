@@ -198,14 +198,21 @@ export const toolSchemas = [
       parameters: {
         type: 'object',
         properties: {
-          title: { type: 'string', maxLength: 60, description: 'Short label, e.g. "Spotify playlist".' },
+          title: {
+            type: 'string',
+            maxLength: 60,
+            description: 'Short label, e.g. "Spotify playlist".'
+          },
           task: {
             type: 'string',
             maxLength: 4000,
             description: 'Complete, self-contained instructions; the agent sees nothing else.'
           },
           context: { type: 'string', maxLength: 4000, description: 'Optional relevant details.' },
-          wait: { type: 'boolean', description: 'Wait for its result before continuing (default false).' }
+          wait: {
+            type: 'boolean',
+            description: 'Wait for its result before continuing (default false).'
+          }
         },
         required: ['title', 'task']
       }
@@ -234,7 +241,7 @@ export const toolSchemas = [
     function: {
       name: 'check_agents',
       description:
-        "Status, current activity and final results of agents in this chat. Without agents, checks the ones you started. wait_seconds (up to 600) waits until they have all finished.",
+        'Status, current activity and final results of agents in this chat. Without agents, checks the ones you started. wait_seconds (up to 600) waits until they have all finished.',
       parameters: {
         type: 'object',
         properties: {

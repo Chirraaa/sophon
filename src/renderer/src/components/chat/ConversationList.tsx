@@ -26,7 +26,9 @@ import { cn } from '@/lib/utils'
 import { useSession } from '@/hooks/useSession'
 import { Label } from '@/components/ui/label'
 export function ConversationList({ onSelect }: { onSelect: () => void }): React.JSX.Element {
-  const { chats, chatId, runningChatId, categories = [] } = useSession()
+  const { chats, chatId, rootChatId, categories = [] } = useSession()
+  // Inside an agent's thread, its chat stays selected in the list.
+  const selectedId = rootChatId ?? chatId
   const [editing, setEditing] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -251,7 +253,7 @@ export function ConversationList({ onSelect }: { onSelect: () => void }): React.
                       onDrop={(event) => drop(event, category.id, chat.id)}
                       className={cn(
                         'group relative flex min-w-0 items-center rounded-lg',
-                        chat.id === chatId && 'bg-muted/40',
+                        chat.id === selectedId && 'bg-muted/40',
                         dragged === chat.id && 'opacity-40',
                         dropTarget === chat.id && 'border-t-2 border-tint'
                       )}
@@ -281,7 +283,7 @@ export function ConversationList({ onSelect }: { onSelect: () => void }): React.
                           <MessageSquare
                             className={cn(
                               'size-3 shrink-0',
-                              runningChatId === chat.id && 'animate-pulse text-tint'
+                              chat.running && 'animate-pulse text-tint'
                             )}
                           />
                           <span className="truncate">{chat.title}</span>
@@ -311,7 +313,7 @@ export function ConversationList({ onSelect }: { onSelect: () => void }): React.
                           <DeleteChatPopover
                             id={chat.id}
                             title={chat.title}
-                            disabled={runningChatId === chat.id}
+                            disabled={chat.running === true}
                           />
                         </div>
                       )}

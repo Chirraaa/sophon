@@ -47,7 +47,8 @@ function statusLabel(agent: AgentInfo): string {
 }
 
 // The chat and its agents, to switch between their threads. Shown once a chat has agents.
-export function AgentBar(): React.JSX.Element | null {
+// compact: the shortcut window's narrower layout, without the header rule.
+export function AgentBar({ compact = false }: { compact?: boolean }): React.JSX.Element | null {
   const { agents = [], agent, rootChatId, chatId, chats, runningChatIds = [] } = useSession()
   const [error, setError] = useState('')
   if (!agents.length && !agent) return null
@@ -58,7 +59,7 @@ export function AgentBar(): React.JSX.Element | null {
   const rootTitle = chats.find((chat) => chat.id === rootChatId)?.title ?? 'Chat'
   const mainLive = !!rootChatId && runningChatIds.includes(rootChatId)
   return (
-    <div className="border-b border-border px-7 py-2">
+    <div className={compact ? 'shrink-0 px-1 pb-2' : 'border-b border-border px-7 py-2'}>
       <ScrollArea className="w-full" viewportClassName="overscroll-contain">
         <div role="tablist" aria-label="Chat and its agents" className="flex items-center gap-1">
           <Button
@@ -92,9 +93,7 @@ export function AgentBar(): React.JSX.Element | null {
                   Approval
                 </Badge>
               )}
-              {!item.waiting && item.status === 'failed' && (
-                <span className="sr-only">failed</span>
-              )}
+              {!item.waiting && item.status === 'failed' && <span className="sr-only">failed</span>}
             </Button>
           ))}
         </div>
@@ -243,7 +242,9 @@ export function PeerMessage({ item }: { item: ChatItem }): React.JSX.Element {
         <AgentDot color={sender.color} />
         {sender.handle === 'main' ? 'Main task' : `Agent ${sender.handle} · ${sender.title}`}
         {item.followUp === 'queued' && <span className="font-normal">· not read yet</span>}
-        {item.followUp === 'unsent' && <span className="font-normal">· arrived after it finished</span>}
+        {item.followUp === 'unsent' && (
+          <span className="font-normal">· arrived after it finished</span>
+        )}
       </p>
       <p className="whitespace-pre-wrap text-[13px] leading-6 text-foreground">{item.text}</p>
     </div>

@@ -190,7 +190,9 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'microsoft:cancel': {},
   'microsoft:select': { required: [id] },
   'microsoft:remove': { required: [id] },
-  'model:set-key': { required: [oneOf('openai', 'compatible', 'anthropic', 'claude'), text(1000), text(4096)] },
+  'model:set-key': {
+    required: [oneOf('openai', 'compatible', 'anthropic', 'claude'), text(1000), text(4096)]
+  },
   'research:set-key': { required: [text(512)] },
   'llama:get': {},
   'llama:set-enabled': { required: [(v) => typeof v === 'boolean'] },

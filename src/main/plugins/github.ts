@@ -84,7 +84,8 @@ export function registerGithubIpc(
     async (id, tool, raw) => {
       if (busy)
         throw new Error('A GitHub operation is already in progress. Retry Fetch when it finishes.')
-      if (anyRunActive()) throw new Error('Finish or stop the current task before fetching history.')
+      if (anyRunActive())
+        throw new Error('Finish or stop the current task before fetching history.')
       const server = serverRecord(id)
       busy = true
       try {

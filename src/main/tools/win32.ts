@@ -185,7 +185,9 @@ export function screenSample(
   try {
     if (!bitmap) return null
     SetStretchBltMode(memory, 4)
-    if (!StretchBlt(memory, 0, 0, w, h, screenDc, rect.x, rect.y, rect.width, rect.height, 0x00cc0020))
+    if (
+      !StretchBlt(memory, 0, 0, w, h, screenDc, rect.x, rect.y, rect.width, rect.height, 0x00cc0020)
+    )
       return null
     const info = Buffer.alloc(44)
     info.writeUInt32LE(40, 0)
