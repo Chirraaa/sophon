@@ -76,6 +76,7 @@
     "smoke:exa": "node scripts/smoke-exa.cjs",
     "smoke:specialists": "node scripts/smoke-specialists.cjs",
     "smoke:agents": "node scripts/smoke-agents.cjs",
+    "smoke:agents:native": "electron scripts/smoke-agents-native.cjs",
     "smoke:security:electron": "electron scripts/smoke-security-electron.cjs --hidden",
     "smoke:desktop": "electron-vite dev --entry scripts/smoke-desktop.cjs",
     "smoke:formatting": "electron scripts/smoke-formatting.cjs --hidden",

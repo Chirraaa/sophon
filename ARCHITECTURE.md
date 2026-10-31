@@ -152,10 +152,11 @@ receive them; `click` accepts `hold_ms`. After input to that window the result
 includes a settled screenshot (`capture_after: false` opts out), and within a
 batch only the last input captures. `look_at_screen` with `marks: true` draws
 numbered boxes on accessible controls so `click` can take a mark that resolves
-to coordinates before the normal checks. A window nothing covers is cut from a
-monitor capture. Sophon's own visible windows, including the shortcut bar, are
-hidden only if they sit in view while it captures; the screen-observation glow
-is excluded from capture.
+to coordinates before the normal checks. A windowed app nothing covers is copied
+straight from the screen; others are cut from a monitor capture. Sophon's own
+visible windows, including the shortcut bar, are hidden only if they sit in view
+while it captures; the screen-observation glow and agent cursors are excluded
+from capture.
 
 A message sent while a run is active is queued, not rejected. The run reads it at
 its next step, and a message that arrives with the final answer keeps the task

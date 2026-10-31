@@ -2,7 +2,8 @@ import { BrowserWindow, desktopCapturer, nativeImage, screen, type NativeImage }
 import { drawMarks, type Mark } from './marks'
 import { protectedWindowRule } from '../permissions'
 import { currentRun, assertRun, onRunFinished } from '../security/run-manager'
-import { enumTopLevelWindows, getProcess, screenSample } from './win32'
+import { enumTopLevelWindows, getProcess, screenPixels, screenSample } from './win32'
+import { fullscreenApp } from '../services/fullscreen'
 import { hideScreenGlow, showScreenGlow } from '../services/screen-glow'
 import { recordTiming } from '../workflow/timing'
 const checkRun = (): void => {
@@ -238,6 +239,23 @@ function target(
   if (!display) return 'No monitor is available to capture.'
   return { window: win, display, captureWindow: Boolean(win) }
 }
+// A window nothing covers, copied straight from the screen. Fullscreen and borderless apps
+// can present outside desktop composition, where a screen copy is stale or black, so they
+// use the monitor capture; so does a copy that comes back blank.
+function directCapture(win: WinInfo): NativeImage | null {
+  try {
+    if (fullscreenApp()?.hwnd === win.hwnd) return null
+    const copy = screenPixels({ x: win.x, y: win.y, width: win.width, height: win.height })
+    if (!copy) return null
+    let lit = 0
+    for (let i = 0; i < copy.bits.length && lit <= 4; i += 4 * 97)
+      if (copy.bits[i] > 8 || copy.bits[i + 1] > 8 || copy.bits[i + 2] > 8) lit++
+    if (lit <= 4) return null
+    return nativeImage.createFromBitmap(copy.bits, { width: copy.width, height: copy.height })
+  } catch {
+    return null
+  }
+}
 // A window nothing covers is cut from a monitor capture instead. Window capture
 // thumbnails every open window, which is slow, and often returns a stale frame
 // for games and other GPU-drawn windows.
@@ -333,46 +351,51 @@ async function capture(
       }
       if (hidden.length) await new Promise((resolve) => setTimeout(resolve, 120))
     }
-    const options = {
-      types: [fromScreen ? 'screen' : 'window'],
-      thumbnailSize:
-        fromScreen && win
-          ? { width: display.full.width, height: display.full.height }
-          : args.region
-            ? { width: 2560, height: 1600 }
-            : { width: 1280, height: 960 }
-    } satisfies Parameters<typeof desktopCapturer.getSources>[0]
-    let sources = await desktopCapturer.getSources(options)
-    checkRun()
-    guard?.()
-    const select = (): (typeof sources)[number] | undefined =>
-      fromScreen
-        ? sources.find((s) => s.display_id === String(display.id))
-        : sources.find((s) => s.id.startsWith(`window:${win!.hwnd}:`))
-    let source = select()
-    if (!source || source.thumbnail.isEmpty()) {
-      sources = await desktopCapturer.getSources(options)
+    // An uncovered, windowed app is copied straight from the screen in a few milliseconds;
+    // a monitor capture costs a few hundred. Anything else uses the monitor capture.
+    let image: NativeImage | null = fromScreen && win ? directCapture(win) : null
+    if (!image) {
+      const options = {
+        types: [fromScreen ? 'screen' : 'window'],
+        thumbnailSize:
+          fromScreen && win
+            ? { width: display.full.width, height: display.full.height }
+            : args.region
+              ? { width: 2560, height: 1600 }
+              : { width: 1280, height: 960 }
+      } satisfies Parameters<typeof desktopCapturer.getSources>[0]
+      let sources = await desktopCapturer.getSources(options)
       checkRun()
       guard?.()
-      source = select()
-    }
-    if (!source || source.thumbnail.isEmpty())
-      return captureWindow
-        ? 'Could not capture the last active window. Bring that window to the foreground, reopen Sophon, and try again. You can also attach an image file.'
-        : 'Could not capture that monitor. Check that it is connected and try again, or attach an image file.'
-    let image = source.thumbnail
-    if (fromScreen && win) {
-      const full = image.getSize()
-      const sx = full.width / display.full.width
-      const sy = full.height / display.full.height
-      const left = Math.round((win.x - display.full.x) * sx)
-      const top = Math.round((win.y - display.full.y) * sy)
-      image = image.crop({
-        x: left,
-        y: top,
-        width: Math.max(1, Math.min(full.width - left, Math.round(win.width * sx))),
-        height: Math.max(1, Math.min(full.height - top, Math.round(win.height * sy)))
-      })
+      const select = (): (typeof sources)[number] | undefined =>
+        fromScreen
+          ? sources.find((s) => s.display_id === String(display.id))
+          : sources.find((s) => s.id.startsWith(`window:${win!.hwnd}:`))
+      let source = select()
+      if (!source || source.thumbnail.isEmpty()) {
+        sources = await desktopCapturer.getSources(options)
+        checkRun()
+        guard?.()
+        source = select()
+      }
+      if (!source || source.thumbnail.isEmpty())
+        return captureWindow
+          ? 'Could not capture the last active window. Bring that window to the foreground, reopen Sophon, and try again. You can also attach an image file.'
+          : 'Could not capture that monitor. Check that it is connected and try again, or attach an image file.'
+      image = source.thumbnail
+      if (fromScreen && win) {
+        const full = image.getSize()
+        const sx = full.width / display.full.width
+        const sy = full.height / display.full.height
+        const left = Math.round((win.x - display.full.x) * sx)
+        const top = Math.round((win.y - display.full.y) * sy)
+        image = image.crop({
+          x: left,
+          y: top,
+          width: Math.max(1, Math.min(full.width - left, Math.round(win.width * sx))),
+          height: Math.max(1, Math.min(full.height - top, Math.round(win.height * sy)))
+        })
+      }
     }
     const rawSize = image.getSize()
 

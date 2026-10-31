@@ -106,13 +106,25 @@ The real pointer now travels to clicks and scrolls along the same eased, slightl
 path (`shared/pointer-path.ts`): about 160–480 ms depending on distance (Natural), about
 half that (Fast), or an immediate jump (Instant). Every step checks Stop and the window.
 
-## Faster settling after input
+## Faster settling and screenshots
 
-After input, `settle()` waits for the window to stop changing before the result screenshot.
-It now samples just the window's rectangle with a small GDI `StretchBlt` (a few milliseconds)
-instead of capturing whole monitors, starts after 80 ms instead of 100 ms, polls every 40 ms,
-and requires two still intervals in a row. If GDI sampling is unavailable it falls back to the
-previous monitor probe. The one-second cap for windows that never settle is unchanged.
+On the development machine, every Electron monitor capture costs about 295 ms whatever its
+size, while copying a window's rectangle from the screen with GDI takes about 3 ms.
+
+- **Settling after input.** `settle()` waits for the window to stop changing before the result
+  screenshot. It now samples just the window's rectangle (2.6 ms per probe, against 295 ms for
+  the previous monitor thumbnail), starts after 80 ms instead of 100 ms, polls every 40 ms and
+  requires two still intervals in a row. The earliest settle drops from about 750 ms to about
+  170 ms; windows that never settle still stop at about one second. If sampling is unavailable
+  it uses the previous probe.
+- **Screenshots.** A windowed app that nothing covers is copied straight from the screen at full
+  resolution (2.8 ms against 295 ms). Fullscreen and borderless apps, which can present outside
+  desktop composition, covered windows, monitor captures and a copy that comes back blank still
+  use the monitor capture.
+
+Together this saves roughly a second on each input action that returns a screenshot, and about
+0.3 s on each `look_at_screen` of an uncovered window. Timings depend on the machine and the
+number of monitors.
 
 ## Validation
 
@@ -121,10 +133,13 @@ previous monitor probe. The one-second cap for windows that never settle is unch
   session flow — router relay with the main task's reply, parallel worker, spawned agent with
   `check_agents`, add-to-task, agent thread messages and stop, the off switch, chat-wide stop
   and deletion. The model is scripted.
+- `npm run smoke:agents:native`: on the real desktop, without a model or pointer movement, the
+  window sampler and direct copy read real pixels, the direct copy matches the monitor capture,
+  the cursor overlay draws, neither copy nor capture includes it, and both probes are timed.
 - `npm run smoke:agents:ui` (after a build): agent strip, live and finished cards, relayed
   message, cross-thread approval, route choice and agent thread in both windows.
 
 Not yet established: live behaviour with a real model and real apps (how reliably a given
-model routes, relays and parallelises), and the measured settle speed-up. A local model server
+model routes, relays and parallelises), and end-to-end task time. A local model server
 with one slot answers parallel agents' requests in turn. Switching focus between agents takes
 a borderless game out of the foreground while another agent types elsewhere.
