@@ -175,7 +175,8 @@ export function anthropicReply(
 export function anthropicStream(
   onText: (text: string) => void,
   model: string,
-  scope?: string
+  scope?: string,
+  onProgress?: (progress: ModelProgress) => void
 ): {
   accept: (data: string) => void
   reply: () => ModelReply
@@ -183,6 +184,7 @@ export function anthropicStream(
 } {
   const blocks = new Map<number, Block & { json?: string }>()
   let text = ''
+  let generatedChars = 0
   let stopReason: unknown
   let details: unknown
   let usage: Record<string, unknown> = {}
@@ -198,6 +200,8 @@ export function anthropicStream(
       if (event.type === 'content_block_start') {
         if (!Number.isInteger(event.index) || event.index < 0 || event.index >= 1000)
           throw new Error('Invalid Messages block index.')
+        if (event.content_block?.type === 'tool_use')
+          onProgress?.({ toolName: event.content_block.name ?? '', generatedChars })
         blocks.set(event.index, {
           ...event.content_block,
           ...(event.content_block?.type === 'tool_use' ? { json: '' } : {})
@@ -214,6 +218,8 @@ export function anthropicStream(
           onText(text)
         } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
           block.json = (block.json ?? '') + delta.partial_json
+          generatedChars += delta.partial_json.length
+          onProgress?.({ toolName: String(block.name ?? ''), generatedChars })
         } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string')
           block.thinking = `${block.thinking ?? ''}${delta.thinking}`
         else if (delta.type === 'signature_delta' && typeof delta.signature === 'string')

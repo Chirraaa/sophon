@@ -105,9 +105,12 @@ const contracts: Record<string, { required?: Validator[]; optional?: Validator[]
   'visuals:save': { required: [id] },
   'agent:send': {
     required: [text(32000)],
-    optional: [(v) => Array.isArray(v) && v.length <= 4 && v.every(id)]
+    optional: [
+      (v) => Array.isArray(v) && v.length <= 4 && v.every(id),
+      oneOf('auto', 'steer', 'parallel')
+    ]
   },
-  'agent:stop': {},
+  'agent:stop': { optional: [id] },
   'agent:rerun': { required: [id, id, text(32000)] },
   'agent:remove-follow-up': { required: [id, id] },
   'session:get': {},

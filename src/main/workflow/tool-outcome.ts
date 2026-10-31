@@ -11,6 +11,8 @@ export type OutcomeCode =
   | 'workspace-missing'
   | 'patch-not-applied'
   | 'web-unavailable'
+  // Another agent is using the target window; nothing was sent.
+  | 'window-busy'
 
 export type ToolOutcome = Readonly<{
   kind: 'tool-outcome'

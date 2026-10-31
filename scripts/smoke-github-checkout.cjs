@@ -64,7 +64,7 @@ const api = load('src/main/plugins/github-checkout.ts', {
     writePrivate: () => {}
   },
   '../security/workspace-policy': { validateWorkspaceRoot: async (value) => value },
-  '../security/run-manager': { currentRun: () => active },
+  '../security/run-manager': { currentRun: () => active, anyRunActive: () => !!active },
   '../settings': { settingsRecovery: () => ({ required: false }) },
   './store': {
     serverRecord: () => ({

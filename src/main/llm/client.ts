@@ -97,11 +97,11 @@ function modelChoicesFrom(data: Record<string, unknown>): ModelChoice[] {
         ? [
             {
               id: m.id,
+              // llama.cpp names the model by its file path; show the file name.
               label:
                 typeof m.display_name === 'string'
                   ? m.display_name.slice(0, 200)
-                  : // llama.cpp names the model by its file path; show the file name.
-                    /^[A-Za-z]:[\\/]/.test(m.id)
+                  : /^[A-Za-z]:[\\/]/.test(m.id)
                     ? m.id.replace(/^.*[\\/]/, '')
                     : m.id,
               ...modelCapabilities(m.id, getSettings().model.provider ?? 'local', m)
@@ -314,7 +314,7 @@ export async function callLLM(
   const stream =
     onText || onProgress || plan || (claude && budget.reservedOutputTokens > 16000)
       ? claude
-        ? anthropicStream(onText ?? (() => {}), model)
+        ? anthropicStream(onText ?? (() => {}), model, undefined, onProgress)
         : responses
           ? responsesStream(
               onText ?? (() => {}),

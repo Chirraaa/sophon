@@ -42,7 +42,8 @@ import {
   rerun,
   removeFollowUp,
   setGithubContext,
-  snapshot
+  snapshot,
+  stopChat
 } from '../chat/session'
 import { chatPage, actionDetails } from '../chat/session'
 import { resolveApproval } from '../permissions'
@@ -165,8 +166,10 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
     return createDiagram(event.sender, source)
   })
   ipcMain.handle('privacy:clear-security-events', clearSecurityEvents)
-  ipcMain.handle('agent:stop', () => {
-    stopRun()
+  // A chat's Stop ends its task and its agents; an agent thread's Stop ends only that agent.
+  ipcMain.handle('agent:stop', (_event, chatId?: string) => {
+    if (chatId === undefined) stopRun()
+    else stopChat(chatId)
     voice.cancel()
   })
   ipcMain.handle('research:has-key', hasSearchKey)
@@ -257,10 +260,13 @@ export function registerIpc(desktop: Desktop, shortcuts: Shortcuts, updates: Upd
   ipcMain.handle('visuals:save', (event, id: string) =>
     desktop.keepOpen(() => saveVisual(owner(event), id))
   )
-  ipcMain.handle('agent:send', async (_event, text: string, attachments: string[] = []) => {
-    if (voice.active()) throw new Error('Finish or cancel the voice recording before sending.')
-    await send(String(text ?? ''), attachments, desktop.interaction(_event.sender))
-  })
+  ipcMain.handle(
+    'agent:send',
+    async (_event, text: string, attachments: string[] = [], route?: AgentRoute) => {
+      if (voice.active()) throw new Error('Finish or cancel the voice recording before sending.')
+      await send(String(text ?? ''), attachments, desktop.interaction(_event.sender), route)
+    }
+  )
   ipcMain.handle('agent:rerun', async (_event, chatId: string, itemId: string, text: string) => {
     if (voice.active()) throw new Error('Finish or cancel the voice recording before rerunning.')
     await rerun(chatId, itemId, text, desktop.interaction(_event.sender))

@@ -1,7 +1,7 @@
 import { dialog } from 'electron'
 import type { SecureIpc } from '../security/ipc'
 import { nativeConsent } from '../security/native-consent'
-import { revokePolicy, currentRun } from '../security/run-manager'
+import { revokePolicy, anyRunActive } from '../security/run-manager'
 import { settingsRecovery } from '../settings'
 import { readPlugin } from './import'
 import { parseMcpConfig, destination } from './config'
@@ -25,7 +25,8 @@ export const pluginState = (): PluginState => ({
 let busy = false
 async function mutation(action: () => Promise<void>): Promise<PluginState> {
   if (busy) throw new Error('Another plugin change is in progress.')
-  if (currentRun()) throw new Error('Finish or stop the current task before changing connections.')
+  if (anyRunActive())
+    throw new Error('Finish or stop the current task before changing connections.')
   if (settingsRecovery().required)
     throw new Error('Review recovered settings before changing plugins.')
   busy = true
@@ -42,10 +43,10 @@ export function registerPluginsIpc(
 ): void {
   registerGithubIpc(ipc, publishHistory)
   ipc.handle('github:accounts', async () => {
-    if (!busy && !currentRun() && !settingsRecovery().required) {
+    if (!busy && !anyRunActive() && !settingsRecovery().required) {
       await mutation(async () => {
         await identifyGithubAccounts()
-        if (currentRun() || settingsRecovery().required) return
+        if (anyRunActive() || settingsRecovery().required) return
 
         await Promise.allSettled(
           connectionSummaries()

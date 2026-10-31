@@ -4,7 +4,11 @@ const INTERNAL_ACTION_LABELS: Record<string, string> = {
   coding_checkpoint: 'Save coding progress',
   remember: 'Remember',
   forget: 'Forget a memory',
-  recall: 'Search memory'
+  recall: 'Search memory',
+  spawn_agent: 'Start an agent',
+  message_agent: 'Message an agent',
+  check_agents: 'Check on agents',
+  stop_agent: 'Stop an agent'
 }
 
 export function fallbackActionLabel(name: string): string {

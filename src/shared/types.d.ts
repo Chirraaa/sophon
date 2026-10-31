@@ -300,6 +300,51 @@ declare global {
     title: string
     updatedAt: number
     categoryId?: string
+    // Agent threads belong to a chat and are listed with it, not in the sidebar.
+    parentId?: string
+    agent?: AgentMeta
+    // The chat or one of its agents is working (sidebar listing only).
+    running?: boolean
+  }
+  // Parallel agents. A message sent to a busy chat is routed by an agent (auto), added to
+  // the running task (steer), or started as a new parallel agent (parallel).
+  type AgentRoute = 'auto' | 'steer' | 'parallel'
+  // worker: does a task. router: decides whether a message belongs to a running agent.
+  type AgentKind = 'worker' | 'router'
+  type AgentStatus = 'running' | 'done' | 'failed' | 'stopped'
+  interface AgentSender {
+    chatId: string
+    handle: string
+    title: string
+    color: string
+  }
+  interface AgentMeta {
+    handle: string
+    title: string
+    color: string
+    kind: AgentKind
+    task: string
+    status: AgentStatus
+    // The chat (root or agent thread) whose run started it; absent when the user did.
+    spawnedBy?: string
+    summary?: string
+    startedAt: number
+    finishedAt?: number
+  }
+  interface AgentInfo extends AgentMeta {
+    chatId: string
+    parentId: string
+    // Label of the latest action while it works.
+    activity?: string
+    // An action is waiting for the user's approval.
+    waiting?: boolean
+  }
+  interface AgentApproval {
+    chatId: string
+    handle: string
+    title: string
+    color: string
+    action: ToolAction
   }
   interface ChatCategory {
     id: string
@@ -345,6 +390,19 @@ declare global {
     motion: 'full' | 'system' | 'reduced'
     showResponseDiagnostics: boolean
     screenGlow: { enabled: boolean; color: string }
+    // Parallel agents: background work in its own visible thread, sharing the desktop.
+    agents: {
+      enabled: boolean
+      // Runs at once across all chats, including the main task (1 turns parallel work off).
+      maxConcurrent: number
+      // A message sent to a busy chat: let an agent decide, add it to the running task, or
+      // start a new parallel agent.
+      route: AgentRoute
+      // Each agent's own labelled cursor on screen while it uses the desktop.
+      cursors: boolean
+      // How the real pointer travels to a click: a short natural glide, faster, or instant.
+      pointer: 'natural' | 'fast' | 'instant'
+    }
     closeToTray: boolean
     dockNotify: boolean
     dockAlwaysVisible: boolean
@@ -456,6 +514,10 @@ declare global {
     // A message sent while a task was running: 'queued' until the task reads it at its
     // next step, 'unsent' when the task stopped first.
     followUp?: 'queued' | 'unsent'
+    // The agent thread this item reports on (a card in the parent chat).
+    agentRef?: string
+    // Set on a message another agent sent to this thread.
+    sender?: AgentSender
   }
   interface SessionSnapshot {
     githubContext?: GithubContext
@@ -466,7 +528,18 @@ declare global {
     categories?: ChatCategory[]
     runningChatId: string | null
     items: ChatItem[]
+    // The active chat or any of its agents is working.
     busy: boolean
+    // Every chat and agent thread with a running task.
+    runningChatIds?: string[]
+    // The top-level chat the active thread belongs to (itself for a top-level chat).
+    rootChatId?: string
+    // Set when the active thread is an agent thread.
+    agent?: AgentInfo
+    // Agents of the active chat, oldest first.
+    agents?: AgentInfo[]
+    // Approvals waiting in the active chat's other threads.
+    approvals?: AgentApproval[]
   }
   interface LlmStatus {
     online: boolean
@@ -511,7 +584,8 @@ declare global {
     reviewSettingsRecovery: () => Promise<void>
     removeWorkspace: () => Promise<void>
     clearSecurityEvents: () => Promise<number>
-    stop: () => Promise<void>
+    /** Stops a chat's task and its agents, one agent thread, or (no id) every task. */
+    stop: (chatId?: string) => Promise<void>
     llama: {
       get: () => Promise<LlamaView>
       setEnabled: (enabled: boolean) => Promise<LlamaView>
@@ -555,7 +629,7 @@ declare global {
       release: (id: string) => Promise<void>
       save: (id: string) => Promise<void>
     }
-    send: (text: string, attachments?: string[]) => Promise<void>
+    send: (text: string, attachments?: string[], route?: AgentRoute) => Promise<void>
     rerun: (chatId: string, itemId: string, text: string) => Promise<void>
     removeFollowUp: (chatId: string, itemId: string) => Promise<void>
     chats: {

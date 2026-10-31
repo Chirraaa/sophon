@@ -10,7 +10,7 @@ describe components of this runtime.
 flowchart TD
   UI[React chat or shortcut] --> IPC[Validated preload and IPC]
   IPC --> SESSION[Conversation session]
-  SESSION --> RUN[One active cancellable run]
+  SESSION --> RUN[Cancellable runs, one per working chat or agent]
   RUN --> CONTEXT[Instructions, history, memory, tool schemas and checkpoints]
   CONTEXT --> CLIENT[Shared model client]
   CLIENT <--> PROVIDER[Local server or hosted provider]
@@ -40,19 +40,19 @@ string adapters are a migration boundary, not a second completion authority.
 `chat.ts` coordinates actions through the runtime rather than maintaining its own
 desktop identity map or separately updating three mutation histories.
 
-| Component                                                     | Responsibility                                                                             |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `src/main/chat/session.ts`                                    | Conversation events, streaming updates, persistence and run lifetime                       |
-| `src/main/security/run-manager.ts`                            | One active run, cancellation, policy revocation, shared model-call and action budgets      |
-| `src/main/llm/chat.ts`                                        | Context assembly, inference/tool iteration, optional consultations and completion          |
-| `src/main/llm/client.ts` and `providers.ts`                   | Shared inference transport, provider formats, streaming and usage                          |
-| `src/main/llm/context.ts`, `compaction.ts` and `retention.ts` | Context budgeting, summaries and checkpoint-based retention                                |
-| `src/main/llm/tool-discovery.ts`                              | Load relevant schemas from the policy-filtered capability catalog                          |
-| `src/main/llm/run-tool.ts`                                    | Shared assistant action gate and approval lifecycle                                        |
-| `src/main/tools/index.ts`                                     | Dispatch tools after authorization and argument validation                                 |
-| `src/main/workflow`                                           | Evidence, coding checkpoints, project verification and bounded repairs                     |
-| `src/main/llm/specialists.ts`                                 | Optional consultations (parallel when batched) using the same model, client and run budget |
-| `src/main/memory` and `harness`                               | Personal recall and separately managed procedural guidance                                 |
+| Component                                                     | Responsibility                                                                                 |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `src/main/chat/session.ts`                                    | Conversation events, streaming updates, persistence and run lifetime                           |
+| `src/main/security/run-manager.ts`                            | Concurrent scoped runs, cancellation, policy revocation, per-run model-call and action budgets |
+| `src/main/llm/chat.ts`                                        | Context assembly, inference/tool iteration, optional consultations and completion              |
+| `src/main/llm/client.ts` and `providers.ts`                   | Shared inference transport, provider formats, streaming and usage                              |
+| `src/main/llm/context.ts`, `compaction.ts` and `retention.ts` | Context budgeting, summaries and checkpoint-based retention                                    |
+| `src/main/llm/tool-discovery.ts`                              | Load relevant schemas from the policy-filtered capability catalog                              |
+| `src/main/llm/run-tool.ts`                                    | Shared assistant action gate and approval lifecycle                                            |
+| `src/main/tools/index.ts`                                     | Dispatch tools after authorization and argument validation                                     |
+| `src/main/workflow`                                           | Evidence, coding checkpoints, project verification and bounded repairs                         |
+| `src/main/llm/specialists.ts`                                 | Optional consultations (parallel when batched) using the same model, client and run budget     |
+| `src/main/memory` and `harness`                               | Personal recall and separately managed procedural guidance                                     |
 
 ## Request lifecycle
 
@@ -160,7 +160,18 @@ is excluded from capture.
 A message sent while a run is active is queued, not rejected. The run reads it at
 its next step, and a message that arrives with the final answer keeps the task
 going. Messages the task ends before reading start the next task; stopping leaves
-them "Not sent".
+them "Not sent". With parallel agents on, a message to a busy chat can instead
+start an agent of its own (a router that relays changes to the running task, or a
+worker), and the model can start agents with `spawn_agent`.
+
+## Parallel agents
+
+Several runs can be active at once, up to the limit in Settings. Each run is
+scoped to its async call chain, so tools and model calls act for the run that
+started them, and per-run desktop state is never shared. Agents run the same loop
+with the same tool gate in their own threads; physical input takes turns through
+the desktop arbiter, while accessibility actions run in parallel. Each agent has
+its own cursor overlay. See [Parallel agents](PARALLEL_AGENTS.md).
 
 ## Coding within the same loop
 

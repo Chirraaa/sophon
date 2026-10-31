@@ -23,6 +23,7 @@ import { Message } from '@/components/Message'
 import { Button } from '@/components/ui/button'
 import { VoiceActivity } from '@/components/compact/VoiceActivity'
 import { ApprovalRequests } from '@/components/chat/ApprovalCard'
+import { AgentBar } from '@/components/chat/Agents'
 import { CodingRun } from '@/components/chat/CodingRun'
 import { codingView, shortcutCodingItem } from '@/lib/coding'
 import { replyActivity } from '@/lib/activity'
@@ -34,7 +35,8 @@ import { TimerBarClock, TimerStrip } from '@/components/TimerStrip'
 export default function CompactApp(): React.JSX.Element {
   useSettings()
   useCompactBackdrop()
-  const { items, busy, chatId, githubContext, runningChatId } = useSession()
+  const { items, busy, chatId, githubContext, agent, agents = [], approvals = [] } = useSession()
+  const liveAgents = agents.filter((item) => item.status === 'running').length
   const voice = useVoice()
   const [presentation, setPresentation] = useState<CompactPresentation>({
     mode: 'command',
@@ -70,9 +72,10 @@ export default function CompactApp(): React.JSX.Element {
   const taskKey = coding ? `${chatId}:${coding.id}` : null
   const taskVisible = !!coding && !hiddenTasks.has(taskKey!)
   const voiceActive = ['starting', 'listening', 'transcribing'].includes(voice.phase)
-  const waiting = items.some(
-    (item) => item.pending && item.actions.some((action) => action.status === 'waiting')
-  )
+  // An approval anywhere in this chat, including its agents' threads, needs the user.
+  const waiting =
+    approvals.length > 0 ||
+    items.some((item) => item.pending && item.actions.some((action) => action.status === 'waiting'))
   const collapsed = presentation.mode === 'voice' && voiceActive && !waiting
   // A docked window rests as a slim bar and opens fully on hover, focus, or
   // whenever something needs the user's attention.
@@ -82,7 +85,10 @@ export default function CompactApp(): React.JSX.Element {
   const status = coding
     ? codingView(coding)
     : {
-        label: busy ? (pending ? replyActivity(pending) : 'Working on it…') : 'Ready',
+        label: busy
+          ? (pending ? replyActivity(pending) : 'Working on it…') +
+            (liveAgents ? ` · ${liveAgents} agent${liveAgents === 1 ? '' : 's'} working` : '')
+          : 'Ready',
         attention: false
       }
   const visible = items.slice(start.chatId === chatId ? Math.min(start.index, items.length) : 0)
@@ -499,6 +505,7 @@ export default function CompactApp(): React.JSX.Element {
               <VoiceActivity voice={voice} />
             ) : (
               <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2.5">
+                <AgentBar compact />
                 {visible.length > 0 && (
                   <ScrollArea
                     viewportProps={{ render: <div data-chat-viewport /> }}
@@ -529,16 +536,16 @@ export default function CompactApp(): React.JSX.Element {
                     focusToken={presentation.token}
                     autoFocus={presentation.mode === 'command'}
                     placeholder="What should I do?"
-                    onSend={(text, attachments) => window.api.send(text, attachments)}
+                    onSend={(text, attachments, route) => window.api.send(text, attachments, route)}
                   />
                   <div className="mt-2 flex items-center justify-between px-2 text-[10px] text-muted-foreground">
                     <span>
                       Esc to hide
-                      {runningChatId === chatId
-                        ? ' · Task keeps running · Send more to add to it'
-                        : busy
-                          ? ' · Task keeps running'
-                          : ' · Drag to move'}
+                      {busy
+                        ? agent
+                          ? ' · Agent keeps running · Messages reach it next step'
+                          : ' · Task keeps running · Send more to add or start something'
+                        : ' · Drag to move'}
                     </span>
                     <Button
                       variant="ghost"

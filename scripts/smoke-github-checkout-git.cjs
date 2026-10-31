@@ -66,7 +66,7 @@ async function main() {
       writePrivate: () => {}
     },
     '../security/workspace-policy': { validateWorkspaceRoot: fs.realpath },
-    '../security/run-manager': { currentRun: () => null },
+    '../security/run-manager': { currentRun: () => null, anyRunActive: () => false },
     '../settings': { settingsRecovery: () => ({ required: false }) },
     './store': {
       serverRecord: () => ({

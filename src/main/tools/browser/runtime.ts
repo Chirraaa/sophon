@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { join } from 'path'
 import { createHash, randomUUID } from 'crypto'
 import { chromium, type BrowserContext, type Page, type ElementHandle } from 'playwright-core'
-import { assertRun, type RunContext } from '../../security/run-manager'
+import { assertRun, onRunFinished, type RunContext } from '../../security/run-manager'
 import { blockedAppRule, protectedWindowRule, toolPermission } from '../../permissions'
 import { untrustedData } from '../../llm/untrusted-data'
 import { toolOutcome, type ToolOutcome } from '../../workflow/tool-outcome'
@@ -42,14 +42,19 @@ function clearObservations(tab?: Tab): void {
     for (const entry of observation.elements.values()) void entry.handle.dispose().catch(() => {})
   }
 }
+// Parallel agents keep their own tab references and observations; only closed tabs,
+// expired observations and finished runs drop out.
 function prune(run: RunContext): void {
   assertRun(run)
-  for (const [ref, entry] of references)
-    if (entry.run !== run.id || entry.tab.page.isClosed()) references.delete(ref)
+  for (const [ref, entry] of references) if (entry.tab.page.isClosed()) references.delete(ref)
   for (const observation of observations.values())
-    if (observation.run !== run.id || Date.now() - observation.at > 120000)
-      clearObservations(observation.tab)
+    if (Date.now() - observation.at > 120000) clearObservations(observation.tab)
 }
+onRunFinished((run) => {
+  for (const [ref, entry] of references) if (entry.run === run.id) references.delete(ref)
+  for (const observation of observations.values())
+    if (observation.run === run.id) clearObservations(observation.tab)
+})
 function reference(tab: Tab, run: RunContext): string {
   for (const [ref, entry] of references) if (entry.run === run.id && entry.tab === tab) return ref
   const ref = id('tab-')
@@ -127,7 +132,10 @@ async function cancellable<T>(
 async function inspect(tab: Tab, run: RunContext, query = ''): Promise<ToolOutcome> {
   await checkTab(tab, run)
   clearObservations(tab)
-  while (observations.size >= 4) clearObservations(observations.values().next().value!.tab)
+  // Four live observations per run, so one agent never expires another's.
+  const own = (): Observation[] => [...observations.values()].filter((o) => o.run === run.id)
+  while (own().length >= 4) clearObservations(own()[0].tab)
+  while (observations.size >= 16) clearObservations(observations.values().next().value!.tab)
   const revision = tab.revision,
     url = tab.page.url()
   const elements = new Map<string, Element>()
@@ -220,7 +228,9 @@ async function actionTarget(
   run: RunContext
 ): Promise<{ snapshot: Observation; element: Element }> {
   prune(run)
-  const snapshot = observations.get(String(args.observation))
+  const found = observations.get(String(args.observation))
+  // Another agent's observation is not this run's to act on.
+  const snapshot = found?.run === run.id ? found : undefined
   const element = snapshot?.elements.get(String(args.element))
   if (!snapshot || !element)
     throw new Error('DOM reference expired or used. Inspect the tab again.')

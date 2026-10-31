@@ -101,6 +101,10 @@ memories remain separate and encrypted. Trusted starter documents retain their
 status. Generated documents previously promoted by execution counts migrate back
 to trial with their history intact, including archived entries on rollback.
 Usefulness promotion remains disabled pending independent quality evaluation.
+On `dev`, the existing version-rollback mechanism can retain a trial with three
+successful executions and no failures as a recovery point. Restoring it preserves
+its unproven trial status; these counters do not certify usefulness. Trusted
+starter versions remain active, and old generated active snapshots restore as trials.
 
 ## Built-in coding teacher
 

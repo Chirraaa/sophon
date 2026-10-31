@@ -71,7 +71,8 @@ const session = load('src/main/chat/session.ts', {
         { role: 'assistant', content: 'New answer' }
       ])
       return 'New answer'
-    }
+    },
+    saveTurn: (turns, turn) => turns.push(turn)
   },
   '../services/attachments': {
     attachmentInfo: async (id) => {
@@ -109,8 +110,10 @@ const session = load('src/main/chat/session.ts', {
     getSettings: () => ({
       privacy: {},
       model: { endpoint: 'http://localhost', historyTurns: 4 },
-      files: { workspace: '' }
-    })
+      files: { workspace: '' },
+      agents: { enabled: false, maxConcurrent: 1, route: 'steer' }
+    }),
+    onSettingsChange: () => () => {}
   },
   '../security/run-manager': {
     startRun: () => {
@@ -122,10 +125,21 @@ const session = load('src/main/chat/session.ts', {
     finishRun: (finished) => finished.controller.abort(),
     assertRun: () => {
       if (run.signal.aborted) throw new Error('Stopped')
-    }
+    },
+    withRun: (_run, fn) => fn(),
+    stopRun: () => run?.controller.abort(),
+    setRunLimit: () => {}
   },
   '../security/audit': { securityEvent: () => {} },
   './clear-request': clearRequest,
+  './agents': {
+    installAgents: () => {},
+    agentFinished: () => false,
+    agentsEnabled: () => false,
+    nextIdentity: () => ({ handle: 'a1', color: '#f97316' }),
+    runAgentFor: (chat, depth) => ({ handle: chat.agent?.handle ?? 'main', depth }),
+    senderOf: (chat) => ({ chatId: chat.id, handle: chat.agent?.handle ?? 'main' })
+  },
   '../memory/store': { pruneChatMemories: () => {}, clearChatMemories: () => {} },
   '../workflow/results': { resultFailure: () => false },
   '../network/search-provider': { searchProviderLabel: () => 'fixture' },
@@ -237,7 +251,7 @@ async function main() {
     'Do not restore a prompt cleared while loading attachments'
   )
   chatBehavior = () => {
-    clearRequest.requestChatClear()
+    clearRequest.requestChatClear(run.id)
     return 'Done'
   }
   await session.send('Clear this chat')

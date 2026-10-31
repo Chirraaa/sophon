@@ -32,6 +32,7 @@ Sophon is built to help small local models deliver stronger, more consistent res
 - **Memory & procedural harness**: encrypted memories that Sophon can save (`remember`), correct, `forget` and `recall` from past chats, with an undo card for every change, plus propose → probe → compose Markdown skills with a trial/active lifecycle. See [Memory harness](MEMORY_HARNESS.md).
 - **Plugins & MCP**: import skill packages, connect stdio/HTTP MCP servers; GitHub workspace with device-flow sign-in.
 - **Subagents**: `consult_specialist` runs Simple, Researcher, Visual Explainer, Tutor or Reviewer profiles on the same loaded model, in parallel when batched, each with its own context window.
+- **Parallel agents**: work on several things at once. While a chat is busy, a new message is routed by an agent (relayed to the running task when it changes it, handled in parallel when it is new), added to the task, or started as a new agent. The assistant can also start background agents for independent parts of a request. Each agent has its own thread, approvals and labelled on-screen cursor; physical input takes turns, accessibility actions run in parallel. See [Parallel agents](PARALLEL_AGENTS.md).
 - **Messages mid-task**: send another message (typed or by voice) while Sophon is working and the running task reads it at its next step.
 - **Quick command and dock**: global shortcut (`Ctrl+Alt+Space`) opens a compact bar; `Ctrl+Alt+V` for voice. The bar stays over borderless and fullscreen games without taking focus, and can alert you from the top of the screen when a task finishes or needs approval (Settings → General). It stays visible in screenshots and streams and steps aside only while Sophon captures the screen.
 
@@ -156,7 +157,7 @@ On first launch, open **Settings → Model** to pick your provider and model, **
 - [Security implementation record](SECURITY_IMPLEMENTATION.md)
 - [Coding harness](CODING_HARNESS.md) · [Coding workflow](docs/CODING_WORKFLOW.md)
 - [Memory harness](MEMORY_HARNESS.md) · [Evolving harness](EVOLVING_HARNESS.md)
-- [Agent / subagent design](AGENT_SYSTEM_DESIGN.md)
+- [Agent / subagent design](AGENT_SYSTEM_DESIGN.md) · [Parallel agents](PARALLEL_AGENTS.md)
 - [Desktop interaction](DESKTOP_INTERACTIONS.md)
 - [App interaction routes](docs/APP_INTERACTION.md)
 - [Calendar](docs/CALENDAR.md) · [Notes and timers](docs/NOTES_AND_TIMERS.md) · [Microsoft accounts](docs/MICROSOFT_ACCOUNTS.md)

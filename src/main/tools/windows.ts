@@ -1,6 +1,6 @@
 import { protectedWindowRule } from '../permissions'
 import { randomUUID } from 'crypto'
-import { currentRun, assertRun } from '../security/run-manager'
+import { currentRun, assertRun, onRunFinished } from '../security/run-manager'
 import { monitorsText, monitorOf } from './monitors'
 import type { WinInfo } from './window-types'
 import {
@@ -24,19 +24,29 @@ export { moveWindow, POSITIONS } from './window-move'
 export type { MoveArgs } from './window-move'
 export type { WinInfo } from './window-types'
 const IGNORED_TITLES = new Set(['Program Manager'])
-const references = new Map<string, { hwnd: number; pid: number; exe: string }>()
-
-const editedTitles = new Map<string, { hwnd: number; pid: number; exe: string; title: string }>()
-let referenceRun = ''
-function currentReferences(): typeof references {
+type Identity = { hwnd: number; pid: number; exe: string }
+// Window references belong to one run. Parallel agents each keep their own set, so one
+// agent listing windows never expires another agent's references.
+const perRun = new Map<
+  string,
+  { references: Map<string, Identity>; editedTitles: Map<string, Identity & { title: string }> }
+>()
+onRunFinished((run) => perRun.delete(run.id))
+function runState(): {
+  references: Map<string, Identity>
+  editedTitles: Map<string, Identity & { title: string }>
+} {
   const id = currentRun()?.id ?? ''
-  if (id !== referenceRun || !id) {
-    references.clear()
-    editedTitles.clear()
-    referenceRun = id
+  // Outside a run nothing is remembered, as before.
+  if (!id) return { references: new Map(), editedTitles: new Map() }
+  let state = perRun.get(id)
+  if (!state) {
+    state = { references: new Map(), editedTitles: new Map() }
+    perRun.set(id, state)
   }
-  return references
+  return state
 }
+const currentReferences = (): Map<string, Identity> => runState().references
 export function windowReference(w: WinInfo): string {
   const refs = currentReferences()
   const pid = getProcess(w.hwnd).pid
@@ -48,7 +58,7 @@ export function windowReference(w: WinInfo): string {
   return ref
 }
 export function rememberEditedWindow(before: WinInfo, pid: number): void {
-  currentReferences()
+  const { editedTitles } = runState()
   const now = listWindows().find((w) => w.hwnd === before.hwnd && w.exe === before.exe)
   if (!now || now.title === before.title || getProcess(now.hwnd).pid !== pid) return
   const identity = { hwnd: before.hwnd, pid, exe: before.exe }
@@ -114,7 +124,7 @@ function score(w: WinInfo, q: string): number {
   return 0
 }
 export function findWindow(query: string): WinInfo | null {
-  currentReferences()
+  const { editedTitles } = runState()
   if (query.startsWith('win-')) {
     const ref = /^(win-[0-9a-f-]{36})(?:\s+"[^"\r\n]*")?$/i.exec(query)?.[1] ?? query
     const identity = currentReferences().get(ref)

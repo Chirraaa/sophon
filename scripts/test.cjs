@@ -3,6 +3,7 @@ const path = require('node:path')
 
 const suites = [
   'action-outcomes',
+  'agents',
   'anthropic',
   'app-routing',
   'apps',
@@ -30,6 +31,7 @@ const suites = [
   'github-restore',
   'harness',
   'harness-outcomes',
+  'harness-rollback',
   'harness-store',
   'icons',
   'licenses',

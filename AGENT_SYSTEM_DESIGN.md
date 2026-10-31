@@ -2,6 +2,8 @@
 
 Runtime ownership and execution flow are defined in [Runtime architecture](ARCHITECTURE.md). This document describes a component of that single assistant runtime.
 
+Specialists are consultations inside one task: they return findings and never act. Background agents that do act, with their own threads, tools and desktop cursors, are separate; see [Parallel agents](PARALLEL_AGENTS.md).
+
 Sophon is a general-purpose assistant: studying, factual questions, visuals and practical tasks share one conversation. The harness now exposes `consult_specialist` to the main assistant, with five profiles running on the same loaded model. Calls batched in one tool step start together and share the model-call budget; tool executions are serialized so permission prompts never stack. Enable or disable **Specialist agents** in Settings → Model. It starts enabled; the model can answer quick questions directly without a consultation.
 
 | Profile          | Customized guidance                                                                                                                           | Expected output                                                    |

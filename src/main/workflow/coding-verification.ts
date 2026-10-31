@@ -68,9 +68,9 @@ export class CodingVerification {
     { path: string; args: Record<string, unknown>; passed: boolean; failures: number }
   >()
   private missingCommand?: string
-  private buildSystem = false
   private htmlChecks = new Map<string, string | undefined>()
   private htmlRepair?: string
+  private buildSystem = false
   get active(): boolean {
     return this.ledger.paths().length > 0
   }
@@ -238,9 +238,6 @@ export class CodingVerification {
             (check) => check.path === '.' || changed.startsWith(check.path + '/')
           )
           if (!checks.length) {
-            // Plain documents in a folder without a build system (copying
-            // notes, writing a CSV) have nothing to check.
-            if (!this.ledger.codingIntent && !this.buildSystem) break
             if (this.ledger.paths().length === 1 && /\.html?$/i.test(changed)) {
               if (!this.htmlChecks.has(changed))
                 return { tool: 'read_file', args: { path: changed, max_chars: 60000 } }
@@ -249,6 +246,9 @@ export class CodingVerification {
               this.htmlRepair = `${changed}: ${issue}`
               return { blocked: this.htmlRepair }
             }
+            // Plain documents in a folder without a build system (copying
+            // notes, writing a CSV) have nothing to check.
+            if (!this.ledger.codingIntent && !this.buildSystem) break
             this.missingCommand = changed
             return {
               blocked: `No build/test command has been recorded for ${changed}. Inspect the project's build instructions and run its relevant checks with run_command purpose check.`

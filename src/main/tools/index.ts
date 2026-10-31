@@ -60,7 +60,10 @@ import {
   typeText,
   type BatchStep
 } from './interact'
-import { inspectApp, actOnControl, observationBounds } from './automation/controls'
+import { inspectApp, actOnControl, observationBounds, controlPoint } from './automation/controls'
+import { withDesktop, WindowBusyError } from '../desktop/arbiter'
+import { cursorMove, cursorPosition, cursorPulse, cursorState } from '../desktop/cursors'
+import { glideCurve, glideDuration } from '../../shared/pointer-path'
 import { commandOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
 import { MUTATIONS, resultFailure } from '../workflow/results'
 export const INPUT_TOOLS = [
@@ -118,7 +121,63 @@ const handlers: Record<
   write_file: (a, scope) =>
     writeWorkspaceFile(a as Parameters<typeof writeWorkspaceFile>[0], scope.file)
 }
+// Tools that send real input or change focus, z-order or window geometry take turns at the
+// desktop with other agents. act_on_control works through accessibility without the pointer
+// or focus, so it runs in parallel and only claims its window.
+const DESKTOP_TURN = new Set([
+  ...INPUT_TOOLS,
+  'focus_window',
+  'move_window',
+  'close_window',
+  'close_app',
+  'open_app'
+])
 export async function executeTool(
+  name: string,
+  args: unknown,
+  run: RunContext,
+  scope: ExecutionScope = {},
+  onOutput?: (output: string) => void
+): Promise<string | CapturedScreen | ToolOutcome> {
+  if (!DESKTOP_TURN.has(name) && name !== 'act_on_control')
+    return dispatchTool(name, args, run, scope, onOutput)
+  try {
+    return await withDesktop(
+      run,
+      {
+        hwnd: scope.window?.hwnd,
+        input: DESKTOP_TURN.has(name),
+        onWait: (busy) => {
+          cursorState(run, 'waiting')
+          onOutput?.(
+            `Waiting for the desktop: agent ${busy.handle} ("${busy.title}") is using ${scope.window && name !== 'open_app' ? 'this window' : 'the pointer and keyboard'}.`
+          )
+        }
+      },
+      async () => {
+        if (name === 'act_on_control') showControlAction(run, args)
+        return dispatchTool(name, args, run, scope, onOutput)
+      }
+    )
+  } catch (error) {
+    if (error instanceof WindowBusyError)
+      return toolOutcome('failed', error.message, { execution: 'not-started', code: 'window-busy' })
+    throw error
+  } finally {
+    cursorState(run, 'idle')
+  }
+}
+// Accessibility actions never move the real pointer; the agent's own cursor glides to the
+// control instead, so the user still sees what each agent is touching.
+function showControlAction(run: RunContext, args: unknown): void {
+  const point = controlPoint(args as Record<string, unknown>, run)
+  if (!point) return
+  const from = cursorPosition(run) ?? point
+  const duration = glideDuration(from, point, getSettings().agents?.pointer ?? 'natural')
+  cursorMove(run, point, { duration, curve: glideCurve(from, point) })
+  setTimeout(() => cursorPulse(run), duration)
+}
+async function dispatchTool(
   name: string,
   args: unknown,
   run: RunContext,
@@ -178,7 +237,7 @@ export async function executeTool(
     assertRun(run)
     return await executePluginTool(name, parameters, run)
   }
-  if (name === 'clear_chat') return requestChatClear()
+  if (name === 'clear_chat') return requestChatClear(run.id)
   if (name === 'wait') return await wait(Number(parameters.seconds), run)
   if (name === 'harness_manage') {
     if (!getSettings().memory.enabled)
