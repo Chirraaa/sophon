@@ -316,6 +316,19 @@ async function main() {
     (await capture.captureScreen({ window: 'Fixture' })).image,
     'Default capture always supplies an image'
   )
+  result = await capture.captureScreen({ window: 'Fixture', glance: true })
+  assert.match(result.text, /1024×576/, 'The automatic image after an action is a smaller glance')
+  assert.deepEqual(capture.captureCoordinates(512, 288), { x: -960, y: 640, window: win })
+  await capture.captureScreen({
+    window: 'Fixture',
+    region: { x: 448, y: 480, width: 128, height: 96 }
+  })
+  assert.deepEqual(
+    crops.at(-1),
+    { x: 1120, y: 1200, width: 320, height: 240 },
+    'A region after a glance is read in that glance image’s pixels'
+  )
+  await capture.captureScreen({ window: 'Fixture' })
   await interact.pressKeys({ keys: 'Tab', window: 'Fixture' })
   assert.equal(capture.captureCoordinates(1, 1), null)
   await capture.captureScreen({ window: 'Fixture' })

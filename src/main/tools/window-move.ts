@@ -54,6 +54,12 @@ export const POSITIONS = [
   'top_right',
   'bottom_left',
   'bottom_right',
+  'top_left_third',
+  'top_center_third',
+  'top_right_third',
+  'bottom_left_third',
+  'bottom_center_third',
+  'bottom_right_third',
   'center',
   'maximize',
   'minimize',
@@ -90,6 +96,22 @@ function presetRect(position: string, a: Area): Area | null {
       return { x: a.x, y: a.y + hh, width: hw, height: a.height - hh }
     case 'bottom_right':
       return { x: a.x + hw, y: a.y + hh, width: a.width - hw, height: a.height - hh }
+    // A 3×2 grid, for up to six windows side by side.
+    case 'top_left_third':
+    case 'top_center_third':
+    case 'top_right_third':
+    case 'bottom_left_third':
+    case 'bottom_center_third':
+    case 'bottom_right_third': {
+      const column = ['left', 'center', 'right'].indexOf(position.split('_')[1])
+      const bottom = position.startsWith('bottom')
+      return {
+        x: a.x + third * column,
+        y: bottom ? a.y + hh : a.y,
+        width: column === 2 ? a.width - third * 2 : third,
+        height: bottom ? a.height - hh : hh
+      }
+    }
     case 'center': {
       const w = Math.floor(a.width * 0.6)
       const h = Math.floor(a.height * 0.7)

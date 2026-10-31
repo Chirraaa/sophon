@@ -74,6 +74,27 @@ Messages to a finished agent are not delivered; late ones are marked unread rath
 starting a new task. Results are bounded and wrapped as untrusted data. Agent tools do not
 count against the action budget; the agents' own actions count against their own budgets.
 
+## Background input
+
+With **Settings → Behavior → Parallel agents → Mouse and keyboard → Sophon's cursor** (the
+default), `desktop/background-input.ts` sends clicks, right clicks, scrolling, typing and
+single keys straight to Chromium-based windows (Chrome, Edge and Electron apps such as VS
+Code, Discord or Slack) as window messages. The real pointer and keyboard stay with the user,
+the window is not activated, and only the agent's cursor overlay glides and ripples where it
+acts. A point covered by another window raises the target without activating it; a point
+that stays covered falls back to real input. Other apps, fullscreen apps and games, held
+buttons, relative mouse movement and shortcuts with modifiers (Ctrl+A, Shift+Tab) keep using
+real input; the pointer then returns to where the user left it, except in fullscreen apps.
+**Your pointer** restores the previous behaviour. Keys, text and captures without a named
+window go to the window the task last worked in (`rememberWorkingWindow`), not to the app the
+user has in front, which also keeps parallel agents in their own windows.
+
+When one message gives several independent tasks, the main agent starts one agent per task
+and gives each a screen area: halves for two, thirds for three, quarters for four and a 3×2
+grid (`top_/bottom_ left/center/right_third`) for five or six. Each agent opens its own new
+window and places it with `move_window`. Windows that do not overlap are captured straight
+from the screen and receive background input without raising.
+
 ## Sharing the desktop
 
 Windows has one pointer, one keyboard focus and one foreground window, so physical input
@@ -86,9 +107,11 @@ cannot happen at the same time. `desktop/arbiter.ts` shares it:
 - **Window claims.** An agent that acts in a window keeps it until it has been idle for
   30 seconds or finishes. Another agent's input to that window waits up to 20 seconds, then
   returns `window-busy` with nothing sent and suggests waiting, messaging or another window.
-- **Parallel paths.** Accessibility actions (`act_on_control`) only claim their window and
-  need no turn; screenshots and inspections need neither. Agents working in different apps
-  through accessibility really run at the same time.
+- **Parallel paths.** Accessibility actions (`act_on_control`) and background input only claim
+  their window and need no turn; screenshots and inspections need neither. Agents working in
+  different windows through accessibility or background input really run at the same time.
+  A background action that has to fall back to real input takes its turn then
+  (`withInputTurn`).
 
 Approvals are answered per action. An approval waiting in an agent's thread also appears in
 its chat and in the shortcut window, labelled with the agent, one at a time.
@@ -103,9 +126,10 @@ accessibility actions the cursor moves to the control without touching the real 
 A new cursor pops in rather than appearing abruptly. `show_cursor` draws a circle or path as one steady trace inside the overlay, takes no input turn and never moves the real pointer, so agents can demonstrate their cursors at the same time; `move_mouse` is for real pointer movement only. Overlays are not shown on a monitor running an exclusive fullscreen game, follow reduced
 motion, and can be switched off.
 
-The real pointer now travels to clicks and scrolls along the same eased, slightly curved
-path (`shared/pointer-path.ts`): about 160–480 ms depending on distance (Natural), about
-half that (Fast), or an immediate jump (Instant). Every step checks Stop and the window.
+The cursor travels to clicks and scrolls along an eased, slightly curved path
+(`shared/pointer-path.ts`): about 160–480 ms depending on distance (Natural), about half that
+(Fast), or an immediate jump (Instant). With background input only the overlay moves; with
+real input the real pointer follows the same path. Every step checks Stop and the window.
 
 ## Faster settling and screenshots
 
@@ -127,6 +151,16 @@ Together this saves roughly a second on each input action that returns a screens
 0.3 s on each `look_at_screen` of an uncovered window. Timings depend on the machine and the
 number of monitors.
 
+- **Smaller images.** Images are billed by pixel area, not file size. A `look_at_screen`
+  overview stays at most 1280×960; the automatic image after input is a glance of at most
+  1024×768 (on a 1920×1080 window about 787 instead of 1229 Claude tokens, 36% fewer). Region
+  close-ups keep native detail, and a region after a glance is read in that glance's pixels.
+  JPEG quality is 75 instead of 88: a 1280×720 desktop drops from 43 KB to 29 KB with no
+  change in tokens. Marks keep quality 85 for their small digits.
+- **Fewer looks.** The prompt asks for batches: everything one look already shows (several
+  fields to click and type, boxes to tick) goes into one `input_batch` (up to 30 steps), with
+  one image at the end, instead of an image after every field.
+
 ## Validation
 
 - `npm run smoke:agents` (offline suite): scoped concurrent runs, limits and stops; input
@@ -134,6 +168,13 @@ number of monitors.
   session flow — router relay with the main task's reply, parallel worker, spawned agent with
   `check_agents`, add-to-task, agent thread messages and stop, the off switch, chat-wide stop
   and deletion. The model is scripted.
+- `node scripts/smoke-background-input.cjs` (offline suite): which windows and steps use
+  background input, popups, covering windows and overlays, raise or fall back, routing of
+  clicks, typing, keys and batches without focus or pointer moves, the real fallback that
+  returns the pointer, and per-task working windows.
+- `npm run smoke:background-input:native`: a real Edge window in a disposable profile, covered
+  by a window of another process, receives a click, right click, typing, Backspace, Enter and
+  scrolling while focus stays with the window in front and the real pointer does not move.
 - `npm run smoke:agents:native`: on the real desktop, without a model or pointer movement, the
   window sampler and direct copy read real pixels, the direct copy matches the monitor capture,
   the cursor overlay draws, neither copy nor capture includes it, and both probes are timed.

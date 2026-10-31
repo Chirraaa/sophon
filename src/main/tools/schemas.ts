@@ -488,7 +488,8 @@ export const toolSchemas = [
       description:
         'Move, resize, snap, maximize, minimize or restore an open window, optionally on a specific monitor. ' +
         'Use "position" for presets, "monitor" to send it to another screen, or x/y/width/height ' +
-        '(absolute pixels) for exact placement. For the right half of the current monitor use {"title":"window name","position":"right_half"}; omit monitor. A position preset is never a monitor name.',
+        '(absolute pixels) for exact placement. For the right half of the current monitor use {"title":"window name","position":"right_half"}; omit monitor. A position preset is never a monitor name. ' +
+        'To give several windows their own space without overlap, tile them: halves for 2, left/center/right_third for 3, the quarters for 4, and top_/bottom_ left/center/right_third for 5-6.',
       parameters: {
         type: 'object',
         properties: {
@@ -602,7 +603,7 @@ export const toolSchemas = [
     function: {
       name: 'click',
       description:
-        'Click a numbered mark, or x,y pixels, from the most recent look_at_screen image. Prefer mark when the target is marked. Input invalidates those coordinates and marks. With look_at_screen Always allow, the click returns a fresh image of the window once it settles, so no separate look_at_screen is needed. A click being accepted is not proof of success.',
+        'Click a numbered mark, or x,y pixels, from the most recent look_at_screen image. Prefer mark when the target is marked. To click a field and then type, or to click several targets visible in the same image, use one input_batch instead of separate calls. Input invalidates those coordinates and marks. With look_at_screen Always allow, the click returns a fresh image of the window once it settles, so no separate look_at_screen is needed. A click being accepted is not proof of success.',
       parameters: {
         type: 'object',
         properties: {
@@ -651,7 +652,7 @@ export const toolSchemas = [
           steps: {
             type: 'array',
             minItems: 1,
-            maxItems: 20,
+            maxItems: 30,
             description:
               'Ordered steps. click needs mark or x,y; move_mouse needs dx and/or dy; press_keys needs keys; type_text needs text; scroll needs direction; wait needs ms. Repeat a step to do it several times.',
             items: {
@@ -794,7 +795,8 @@ export const toolSchemas = [
     type: 'function',
     function: {
       name: 'type_text',
-      description: 'Type text into the focused control of the active or named app.',
+      description:
+        'Type text into the focused control of the active or named app (default: the window this task last worked in). To fill several fields, use one input_batch of click and type_text steps.',
       parameters: {
         type: 'object',
         properties: {

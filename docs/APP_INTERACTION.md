@@ -98,7 +98,11 @@ Validation: `npm run smoke:controls`, `npm run smoke:controls:native`,
 `look_at_screen` remains the fallback for canvas/custom controls, inaccessible
 apps and visual questions. It captures one exact window, caps images at native
 size and 1280×960, and supports higher-detail crops in full-overview image
-coordinates. `if_changed: true` still takes a fresh capture but omits a duplicate
+coordinates. The automatic post-input image is a glance of at most 1024×768;
+a region requested after it uses that glance's pixels. Images are JPEG quality 75.
+In Chromium-based windows, clicks, scrolling, typing and single keys are sent as
+window messages without moving the real pointer or activating the window (see
+[Parallel agents](../PARALLEL_AGENTS.md#background-input)). `if_changed: true` still takes a fresh capture but omits a duplicate
 image when the same target, bounds, dimensions and encoded pixels match. Use it
 only while the preceding image remains in context; the default always returns
 an image. Identical pixels are evidence about the screen, not proof of success.

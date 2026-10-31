@@ -61,6 +61,17 @@ const StretchBlt = gdi32.func(
 const GetDIBits = gdi32.func(
   'int __stdcall GetDIBits(intptr hdc, intptr bmp, uint32 start, uint32 lines, void *bits, void *info, uint32 usage)'
 )
+// Registers the POINT type passed by value below.
+koffi.struct('POINT', { x: 'int32', y: 'int32' })
+const WindowFromPoint = user32.func('intptr __stdcall WindowFromPoint(POINT point)')
+const GetAncestor = user32.func('intptr __stdcall GetAncestor(intptr hwnd, uint32 flags)')
+const GetWindow = user32.func('intptr __stdcall GetWindow(intptr hwnd, uint32 cmd)')
+const ScreenToClient = user32.func(
+  'bool __stdcall ScreenToClient(intptr hwnd, _Inout_ int32_t *pt)'
+)
+const GetClassNameW = user32.func(
+  'int __stdcall GetClassNameW(intptr hwnd, _Out_ uint16_t *buf, int max)'
+)
 const SHQueryUserNotificationState = shell32.func(
   'int __stdcall SHQueryUserNotificationState(_Out_ int32_t *state)'
 )
@@ -257,6 +268,66 @@ export function mouseInput(flags: number, wheel = 0, dx = 0, dy = 0): boolean {
     data.writeInt32LE(wheel, 8)
     data.writeUInt32LE(flags, 12)
   })
+}
+// A click-through window (Sophon's cursor and glow overlays) never receives pointer input.
+export const isClickThrough = (h: number): boolean => (GetWindowLongW(h, GWL_EXSTYLE) & 0x20) !== 0
+export function className(h: number): string {
+  const buf = new Uint16Array(256)
+  const n = GetClassNameW(h, buf, 256)
+  return Buffer.from(buf.buffer, 0, n * 2).toString('utf16le')
+}
+// The top-level window that owns the visible pixel at a screen point (physical pixels).
+export function rootWindowAt(x: number, y: number): number {
+  const hwnd = Number(WindowFromPoint({ x, y }))
+  return hwnd ? Number(GetAncestor(hwnd, 2)) || hwnd : 0
+}
+// Whether a window is owned by another, directly or through its owners (an app's menus,
+// dropdowns and popups are owned by the window that opened them).
+export function ownedBy(h: number, owner: number): boolean {
+  let current = h
+  for (let depth = 0; depth < 4 && current; depth++) {
+    current = Number(GetWindow(current, 4))
+    if (current === owner) return true
+  }
+  return false
+}
+// Raises a window to the top of the normal z-order without activating it, so it is visible
+// for input and capture while the user's window keeps keyboard focus.
+// A plain raise is refused while another process owns the foreground, so the window goes
+// topmost for a moment and straight back.
+export function raiseWindow(h: number): boolean {
+  const flags = 0x0013 // SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE
+  const raised = SetWindowPos(h, -1, 0, 0, 0, 0, flags)
+  return SetWindowPos(h, -2, 0, 0, 0, 0, flags) && raised
+}
+// Posts a mouse message to a window at a screen point, converted to its client coordinates.
+// Wheel messages carry screen coordinates.
+export function postMouse(
+  h: number,
+  message: number,
+  wParam: number,
+  x: number,
+  y: number
+): boolean {
+  let px = x
+  let py = y
+  if (message !== 0x020a) {
+    const point = new Int32Array([x, y])
+    if (!ScreenToClient(h, point)) return false
+    px = point[0]
+    py = point[1]
+  }
+  return PostMessageW(h, message, wParam, (((py & 0xffff) << 16) | (px & 0xffff)) >>> 0)
+}
+// Posts a typed character (one UTF-16 unit) to a window, as WM_CHAR.
+export const postChar = (h: number, code: number): boolean => PostMessageW(h, 0x0102, code, 1)
+// Posts a key press (down then up) to a window; the app's message loop translates it into
+// characters as it would for a physical key. Modifiers are not part of a posted key.
+export function postKey(h: number, key: number, up: boolean): boolean {
+  const scan = MapVirtualKeyW(key, 0)
+  const extended = key >= 0x21 && key <= 0x2e
+  const flags = (1 | (scan << 16) | (extended ? 1 << 24 : 0) | (up ? 0xc0000000 : 0)) >>> 0
+  return PostMessageW(h, up ? 0x0101 : 0x0100, key, flags)
 }
 export function placeWindow(h: number, x: number, y: number, w: number, hgt: number): boolean {
   const outer = getRect(h)

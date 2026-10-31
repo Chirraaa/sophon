@@ -236,7 +236,15 @@ function load(file, dependencies = {}) {
       if (!Object.hasOwn(dependencies, name) && name === '../desktop/arbiter')
         return {
           withDesktop: (_run, _options, fn) => fn(),
+          withInputTurn: (_run, fn) => fn(),
           WindowBusyError: class WindowBusyError extends Error {}
+        }
+      // Desktop fixtures use real input unless they exercise background input themselves.
+      if (!Object.hasOwn(dependencies, name) && name === '../desktop/background-input')
+        return {
+          backgroundInput: () => false,
+          backgroundStep: () => false,
+          backgroundAction: () => false
         }
       if (
         !Object.hasOwn(dependencies, name) &&
@@ -260,18 +268,24 @@ function load(file, dependencies = {}) {
         file === 'src/main/tools/interact.ts'
       )
         return { getSettings: () => ({ agents: { pointer: 'instant' } }) }
-      // Screen fixtures have no fullscreen app in front.
+      // Screen and input fixtures have no fullscreen app in front.
       if (
         !Object.hasOwn(dependencies, name) &&
         name === '../services/fullscreen' &&
-        file === 'src/main/tools/screen.ts'
+        ['src/main/tools/screen.ts', 'src/main/tools/interact.ts'].includes(file)
       )
         return { fullscreenApp: () => null }
       // Chat fixtures that do not exercise parallel agents see none available.
       if (!Object.hasOwn(dependencies, name) && name === '../chat/agents')
         return {
           AGENT_INSTRUCTIONS: '',
-          AGENT_TOOLS: ['spawn_agent', 'message_agent', 'check_agents', 'stop_agent', 'show_cursor'],
+          AGENT_TOOLS: [
+            'spawn_agent',
+            'message_agent',
+            'check_agents',
+            'stop_agent',
+            'show_cursor'
+          ],
           agentRolePrompt: () => '',
           agentRoster: () => undefined,
           agentToolNames: () => [],

@@ -38,6 +38,7 @@ import {
   listWindows,
   moveWindow,
   rememberEditedWindow,
+  rememberWorkingWindow,
   type MoveArgs
 } from './windows'
 import {
@@ -62,6 +63,7 @@ import {
 } from './interact'
 import { inspectApp, actOnControl, observationBounds, controlPoint } from './automation/controls'
 import { withDesktop, WindowBusyError } from '../desktop/arbiter'
+import { backgroundAction } from '../desktop/background-input'
 import { cursorMove, cursorPosition, cursorPulse, cursorState } from '../desktop/cursors'
 import { glideCurve, glideDuration } from '../../shared/pointer-path'
 import { commandOutcome, toolOutcome, type ToolOutcome } from '../workflow/tool-outcome'
@@ -123,7 +125,8 @@ const handlers: Record<
 }
 // Tools that send real input or change focus, z-order or window geometry take turns at the
 // desktop with other agents. act_on_control works through accessibility without the pointer
-// or focus, so it runs in parallel and only claims its window.
+// or focus, and background input goes straight to a browser or Electron window, so those run
+// in parallel and only claim their window.
 const DESKTOP_TURN = new Set([
   ...INPUT_TOOLS,
   'focus_window',
@@ -132,6 +135,8 @@ const DESKTOP_TURN = new Set([
   'close_app',
   'open_app'
 ])
+// Tools whose window becomes the task's working window (see rememberWorkingWindow).
+const WORKING = new Set([...INPUT_TOOLS, 'focus_window', 'move_window', 'act_on_control'])
 export async function executeTool(
   name: string,
   args: unknown,
@@ -139,14 +144,19 @@ export async function executeTool(
   scope: ExecutionScope = {},
   onOutput?: (output: string) => void
 ): Promise<string | CapturedScreen | ToolOutcome> {
-  if (!DESKTOP_TURN.has(name) && name !== 'act_on_control')
-    return dispatchTool(name, args, run, scope, onOutput)
+  if (!DESKTOP_TURN.has(name) && name !== 'act_on_control') {
+    const result = await dispatchTool(name, args, run, scope, onOutput)
+    if (name === 'look_at_screen' && scope.window) rememberWorkingWindow(scope.window)
+    return result
+  }
   try {
     return await withDesktop(
       run,
       {
         hwnd: scope.window?.hwnd,
-        input: DESKTOP_TURN.has(name),
+        input:
+          DESKTOP_TURN.has(name) &&
+          !backgroundAction(name, (args ?? {}) as Record<string, unknown>, scope.window),
         onWait: (busy) => {
           cursorState(run, 'waiting')
           onOutput?.(
@@ -156,7 +166,9 @@ export async function executeTool(
       },
       async () => {
         if (name === 'act_on_control') showControlAction(run, args)
-        return dispatchTool(name, args, run, scope, onOutput)
+        const result = await dispatchTool(name, args, run, scope, onOutput)
+        if (scope.window && WORKING.has(name)) rememberWorkingWindow(scope.window)
+        return result
       }
     )
   } catch (error) {
@@ -451,7 +463,11 @@ async function dispatchTool(
         if (!window) throw new Error('Original window closed.')
         await settle(window, scope.guard)
         const captured = await captureScreen(
-          { region: parameters.readback_region as CaptureArgs['region'], if_changed: true },
+          {
+            region: parameters.readback_region as CaptureArgs['region'],
+            if_changed: true,
+            glance: true
+          },
           scope.guard,
           window
         )
@@ -459,7 +475,7 @@ async function dispatchTool(
         return toolOutcome(
           'reported',
           result +
-            '\nInput acceptance is not proof of success. Post-action observation, captured after the window settled; do not call look_at_screen again unless this is insufficient:\n' +
+            '\nInput acceptance is not proof of success. Post-action observation at glance size, captured after the window settled; plan the next batch from it and do not call look_at_screen again unless it is insufficient (use a region to read small text):\n' +
             (typeof captured === 'string' ? captured : captured.text),
           typeof captured === 'string' ? {} : { image: captured.image }
         )

@@ -37,7 +37,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   motion: 'full',
   showResponseDiagnostics: false,
   screenGlow: { enabled: true, color: '#a78bfa' },
-  agents: { enabled: true, maxConcurrent: 3, route: 'auto', cursors: true, pointer: 'natural' },
+  agents: {
+    enabled: true,
+    maxConcurrent: 3,
+    route: 'auto',
+    cursors: true,
+    pointer: 'natural',
+    input: 'background'
+  },
   closeToTray: true,
   dockNotify: true,
   dockAlwaysVisible: false,
@@ -219,7 +226,8 @@ function sanitize(raw: unknown, base: AppSettings): AppSettings {
       maxConcurrent: num(agents.maxConcurrent, 1, 6, base.agents.maxConcurrent, true),
       route: oneOf(agents.route, ['auto', 'steer', 'parallel'], base.agents.route),
       cursors: bool(agents.cursors, base.agents.cursors),
-      pointer: oneOf(agents.pointer, ['natural', 'fast', 'instant'], base.agents.pointer)
+      pointer: oneOf(agents.pointer, ['natural', 'fast', 'instant'], base.agents.pointer),
+      input: oneOf(agents.input, ['background', 'pointer'], base.agents.input)
     },
     closeToTray: bool(r.closeToTray, base.closeToTray),
     dockNotify: bool(r.dockNotify, base.dockNotify),

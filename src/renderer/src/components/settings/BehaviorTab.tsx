@@ -135,8 +135,21 @@ export function BehaviorTab({ settings }: { settings: AppSettings }): React.JSX.
           </>
         )}
         <Row
-          label="Pointer movement"
-          hint="How the real pointer travels to a click. Natural glides briefly like a hand on a mouse; Fast halves that; Instant jumps straight there."
+          label="Mouse and keyboard"
+          hint="Sophon's cursor sends clicks, scrolling and typing straight to browsers and Electron apps, so your mouse and keyboard stay yours and agents in separate windows work at the same time. Other apps, games and shortcuts still use the real pointer and keyboard, and the pointer returns to where you left it. Your pointer always moves the real pointer, as before."
+        >
+          <Segmented
+            value={a.input}
+            options={[
+              { value: 'background', label: "Sophon's cursor" },
+              { value: 'pointer', label: 'Your pointer' }
+            ]}
+            onChange={(input) => void save({ agents: { input } })}
+          />
+        </Row>
+        <Row
+          label="Cursor movement"
+          hint="How the cursor travels to a click. Natural glides briefly like a hand on a mouse; Fast halves that; Instant jumps straight there."
         >
           <Segmented
             value={a.pointer}
@@ -150,9 +163,11 @@ export function BehaviorTab({ settings }: { settings: AppSettings }): React.JSX.
         </Row>
         <div className="mt-3">
           <Notice>
-            Windows has one pointer and keyboard, so agents take turns for each click or keystroke,
-            and an agent keeps the window it is working in until it pauses. Accessibility actions
-            run at the same time. Messages between agents never grant permissions.
+            Agents working in browsers and Electron apps act in their own windows at the same time.
+            Windows has one real pointer and keyboard, so in other apps agents take turns for each
+            click or keystroke. An agent keeps the window it is working in until it pauses.
+            Accessibility actions run at the same time. Messages between agents never grant
+            permissions.
           </Notice>
         </div>
       </Section>
